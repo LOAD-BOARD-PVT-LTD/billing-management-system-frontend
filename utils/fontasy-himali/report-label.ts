@@ -1,0 +1,24 @@
+import { formatFontasyExcelText } from '@/lib/excel/nepali-date-text';
+
+const normalizedLabelByText: Record<string, string> = {
+  '\u0915\u094d\u0930. \u0938.': '\u0915\u094d\u0930.\u0938\u0902.',
+  '\u0915\u094d\u0930.\u0938.': '\u0915\u094d\u0930.\u0938\u0902.',
+  '\u092c\u093f \u0928\u0902': '\u092c\u093f. \u0928\u0902.',
+  '\u092c\u093f. \u0928\u0902': '\u092c\u093f. \u0928\u0902.',
+  '\u092c\u093f \u0928\u0902.': '\u092c\u093f. \u0928\u0902.',
+  '\u0917\u093e\u0921\u0940 \u0928\u0902': '\u0917\u093e\u0921\u0940 \u0928\u0902.',
+  '\u0938\u0935\u093e\u0930\u0940 \u0928\u0902': '\u0938\u0935\u093e\u0930\u0940 \u0928\u0902.',
+  '\u092e\u094b\u092c\u093e\u0907\u0932 \u0928\u0902': '\u092e\u094b\u092c\u093e\u0907\u0932 \u0928\u0902.',
+  '\u092b\u094b\u0928 \u0928\u0902': '\u092b\u094b\u0928 \u0928\u0902.',
+  '\u0905\u0928\u094d\u0924\u093f\u092e \u092c\u093f\u0932 \u0928\u0902': '\u0905\u0928\u094d\u0924\u093f\u092e \u092c\u093f\u0932 \u0928\u0902.',
+  '\u0915\u093e\u0917\u091c\u093e\u0924 \u0928\u0902': '\u0915\u093e\u0917\u091c\u093e\u0924 \u0928\u0902.',
+};
+
+export function fontasyReportLabelFromUnicode(text: string): string {
+  const normalized = normalizedLabelByText[text] ?? text;
+  if (normalized === '\u0915\u094d\u0930.\u0938\u0902.') {
+    return 'qm=;+=';
+  }
+
+  return formatFontasyExcelText(normalized);
+}

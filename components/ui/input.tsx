@@ -1,0 +1,116 @@
+import * as React from 'react';
+
+import {
+  createFontasyChangeEvent,
+  hasFontasyHimaliInputClass,
+  isFontasyCompatibleInputType,
+  isNoFontasyField,
+  useFontasyClassInput,
+} from '@/utils/fontasy-himali';
+import { cn } from '@/utils/cn';
+
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  error?: boolean;
+  success?: boolean;
+  selectOnFocus?: boolean;
+}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, error, success, onFocus, onKeyDown, onPaste, onChange, value, selectOnFocus, ...props }, ref) => {
+    const fontasyActive =
+      value !== undefined &&
+      onChange !== undefined &&
+      hasFontasyHimaliInputClass(className) &&
+      !isNoFontasyField((props as Record<string, unknown>)['data-no-fontasy']) &&
+      isFontasyCompatibleInputType(type) &&
+      !props.readOnly &&
+      !props.disabled;
+
+    const fontasyInput = useFontasyClassInput<HTMLInputElement>(
+      fontasyActive ? String(value ?? '') : '',
+      fontasyActive
+        ? (nextValue, sourceEvent) => {
+            onChange(
+              sourceEvent
+                ? createFontasyChangeEvent(sourceEvent, nextValue)
+                : ({ target: { value: nextValue } } as React.ChangeEvent<HTMLInputElement>),
+            );
+          }
+        : () => {},
+      fontasyActive,
+    );
+
+    const handleKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (event) => {
+      if (type === 'number' && ['e', 'E', '+', '-'].includes(event.key)) {
+        event.preventDefault();
+      }
+      onKeyDown?.(event);
+    };
+
+    const handlePaste: React.ClipboardEventHandler<HTMLInputElement> = (event) => {
+      if (type === 'number') {
+        const pastedText = event.clipboardData.getData('text');
+        if (/[eE+-]/.test(pastedText)) {
+          event.preventDefault();
+          return;
+        }
+      }
+      onPaste?.(event);
+    };
+
+    const handleFocus: React.FocusEventHandler<HTMLInputElement> = (event) => {
+      if (selectOnFocus) {
+        const input = event.currentTarget;
+        window.setTimeout(() => {
+          try {
+            input.select();
+          } catch {
+                                                             
+          }
+        }, 0);
+      }
+      onFocus?.(event);
+    };
+
+    const handleChange: React.ChangeEventHandler<HTMLInputElement> = (event) => {
+      if (!fontasyActive) {
+        onChange?.(event);
+        return;
+      }
+
+      fontasyInput.handleChange({
+        nextDisplayValue: event.target.value,
+        selectionStart: event.target.selectionStart,
+        selectionEnd: event.target.selectionEnd,
+        sourceEvent: event,
+      });
+    };
+
+    return (
+      <input
+        type={type}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        onChange={handleChange}
+        value={fontasyActive ? fontasyInput.displayValue : value}
+        className={cn(
+          'flex h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200',
+          error && 'border-red-500 focus-visible:ring-red-500',
+          success && 'border-emerald-400/60 focus-visible:ring-emerald-500/20',
+          className
+        )}
+        ref={(node) => {
+          fontasyInput.registerElement(node);
+          if (typeof ref === 'function') ref(node);
+          else if (ref) ref.current = node;
+        }}
+        {...props}
+      />
+    );
+  }
+);
+Input.displayName = 'Input';
+
+export { Input };
+
