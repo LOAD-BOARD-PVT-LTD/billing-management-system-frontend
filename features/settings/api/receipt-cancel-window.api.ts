@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 
 export interface ReceiptCancelWindow {
 	enabled: boolean;
@@ -67,7 +68,7 @@ function parseDocument(value: ResourceRecord): ReceiptCancelWindowDocument | nul
 export async function fetchReceiptCancelWindow(): Promise<ReceiptCancelWindowDocument> {
 	let values: unknown;
 	try {
-		values = await apiClient.get<unknown>('read/SettingResource/all');
+		values = await apiClient.get<unknown>(endpoints.resources.setting.list());
 	} catch (error) {
 		if (isMissingSettingError(error)) {
 			return { resourceId: null, policy: DEFAULT_RECEIPT_CANCEL_WINDOW };
@@ -93,13 +94,13 @@ export async function saveReceiptCancelWindow(
 	};
 	if (current.resourceId) {
 		const id = /^\d+$/u.test(current.resourceId) ? Number(current.resourceId) : current.resourceId;
-		await apiClient.put<void>(`update/SettingResource/${encodeURIComponent(current.resourceId)}`, {
+		await apiClient.put<void>(endpoints.resources.setting.update(current.resourceId), {
 			...request,
 			id,
 		});
 		return { ...current, policy };
 	}
-	const created = asRecord(await apiClient.post<unknown>('create/SettingResource', request));
+	const created = asRecord(await apiClient.post<unknown>(endpoints.resources.setting.create(), request));
 	const id = created?.id ?? created?.resourceId ?? created?.resource_id;
 	if (typeof id !== 'string' && typeof id !== 'number') {
 		throw new Error('The created receipt cancellation setting did not return a resource ID.');

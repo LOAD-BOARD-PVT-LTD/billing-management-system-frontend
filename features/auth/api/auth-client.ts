@@ -1,8 +1,8 @@
 // features/auth/api/auth-client.ts
 import type { LoginCredentials, User } from '@/types/auth';
+import { endpoints } from '@/lib/api/endpoints';
+import { buildApiUrl } from '@/lib/api/request';
 import { getAccessToken, removeAccessToken, setAccessToken } from './token-storage';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/u, '') ?? '';
 
 type BackendLoginResponse = {
   email: string;
@@ -11,14 +11,6 @@ type BackendLoginResponse = {
   message?: string;
   error?: { message?: string };
 };
-
-function authEndpoint(path: 'login'): string {
-  if (!API_BASE_URL) {
-    throw new Error('NEXT_PUBLIC_API_URL is not configured');
-  }
-
-  return `${API_BASE_URL}/auth/${path}`;
-}
 
 function normalizeRole(role: string): User['role'] {
   const normalizedRole = role.trim().toLowerCase();
@@ -66,7 +58,7 @@ export async function loginRequest(
 ): Promise<{ user: User }> {
   removeAccessToken();
 
-  const response = await fetch(authEndpoint('login'), {
+  const response = await fetch(buildApiUrl(endpoints.auth.login), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -99,6 +99,25 @@ export function parseUser(value: unknown): UserRecord {
   };
 }
 
+export function parseUserPassword(value: unknown): string {
+  const parsed = parseJson(value);
+  if (typeof parsed !== 'object' || parsed === null || !('inner_content' in parsed)) {
+    throw new Error('Could not preserve user password: missing inner_content.');
+  }
+
+  const innerContent = parseJson(parsed.inner_content);
+  if (typeof innerContent !== 'object' || innerContent === null || !('password' in innerContent)) {
+    throw new Error('Could not preserve user password: the user resource did not include a password.');
+  }
+
+  const password = innerContent.password;
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('Could not preserve user password: the stored password is invalid.');
+  }
+
+  return password;
+}
+
 export function parseUserList(value: unknown): UserRecord[] {
   const parsed = parseJson(value);
   if (!Array.isArray(parsed)) {
@@ -124,13 +143,13 @@ export function toUserRequest(fields: UserFields) {
   };
 }
 
-export function toUserUpdateRequest(fields: UserUpdateFields) {
+export function toUserUpdateRequest(fields: UserUpdateFields, id?: string) {
   const parsed = userUpdateSchema.parse({
     ...fields,
     password: fields.password || undefined,
     confirmPassword: fields.password ? fields.password : undefined,
   });
-  return {
+  const request = {
     resource_name: 'UserResource' as const,
     inner_content: {
       name: parsed.name,
@@ -141,5 +160,15 @@ export function toUserUpdateRequest(fields: UserUpdateFields) {
       status: parsed.status,
     },
     external_content: null,
+  };
+
+  if (id === undefined) return request;
+
+  const normalizedId = id.trim();
+  if (!normalizedId) throw new Error('A user ID is required.');
+
+  return {
+    id: /^\d+$/u.test(normalizedId) ? Number(normalizedId) : normalizedId,
+    ...request,
   };
 }

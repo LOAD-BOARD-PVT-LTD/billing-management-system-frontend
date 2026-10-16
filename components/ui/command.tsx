@@ -7,11 +7,11 @@ import * as React from "react"
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
-  hasFontasyHimaliInputClass,
   isNoFontasyField,
   useFontasyClassInput,
 } from "@/utils/fontasy-himali"
 import { cn } from "@/utils/cn"
+import { useFontasyHimali } from "@/contexts/fontasy-himali-context"
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -58,10 +58,11 @@ const CommandInput = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, value, onValueChange, disabled, readOnly, ...props }, ref) => {
   const inputRef = React.useRef<React.ElementRef<typeof CommandPrimitive.Input> | null>(null)
+  const { enabled: fontasyEnabled } = useFontasyHimali()
   const fontasyActive =
+    fontasyEnabled &&
     value !== undefined &&
     onValueChange !== undefined &&
-    hasFontasyHimaliInputClass(className) &&
     !isNoFontasyField((props as Record<string, unknown>)['data-no-fontasy']) &&
     !readOnly &&
     !disabled
@@ -97,6 +98,7 @@ const CommandInput = React.forwardRef<
         }}
         className={cn(
           "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          fontasyActive && "font-fontasy-himali-tt-input",
           className
         )}
         value={fontasyActive ? fontasyInput.displayValue : value}

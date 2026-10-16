@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 
 import type { TqmsVehicleTypeOption } from '@/features/vehicle/mappings/tqms-vehicle-type/types/tqms-vehicle-type.types';
 
@@ -104,12 +105,11 @@ function normalizeTqmsVehicleTypeList(payload: unknown): TqmsVehicleTypeOption[]
 }
 
 export async function fetchTqmsVehicleTypes(): Promise<TqmsVehicleTypeOption[]> {
-  const payload = await apiClient.get<unknown>('read_all/VehicleTypes');
+  const payload = await apiClient.get<unknown>(endpoints.tqms.vehicleTypes);
   return normalizeTqmsVehicleTypeList(payload);
 }
 
 export async function syncTqmsVehicleTypes(): Promise<void> {
-  await apiClient.get<void>('tqms/sync');
+  await apiClient.get<void>(endpoints.tqms.syncVehicleTypes);
 }
-
 

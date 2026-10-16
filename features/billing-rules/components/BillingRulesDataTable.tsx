@@ -27,6 +27,7 @@ export interface BillingRulesDataTableProps {
   onSortChange: (column: BillingRuleSortColumn, direction: SortDirection) => void;
   onView: (rule: BillingRule) => void;
   onEdit: (rule: BillingRule) => void;
+  onDeleteRule: (rule: BillingRule) => void;
   onBillingEntityChange: (rule: BillingRule, billingEntityId: string) => void;
   onUpdatePolicy: (rule: BillingRule) => void;
   onToggleStatus: (rule: BillingRule) => void;
@@ -68,6 +69,7 @@ export function BillingRulesDataTable({
   onSortChange,
   onView,
   onEdit,
+  onDeleteRule,
   onToggleStatus,
   emptyState,
 }: BillingRulesDataTableProps) {
@@ -153,25 +155,27 @@ export function BillingRulesDataTable({
         id: 'actions',
         header: <span className="block text-right">कार्यहरू</span>,
         cell: (group) => {
+          const rule = group.rules[0];
+          if (!rule) return null;
+
+          const feeHeadName = feeHeadMap.get(rule.feeHeadId)?.name ?? rule.feeHeadId;
+          const ruleLabel = `${feeHeadName} · ${rule.frequency === 'PERIODIC' ? 'आवधिक' : 'एकपटक'} · ${rule.period === 'MONTH' ? 'महिना' : rule.period === 'FISCAL_YEAR' ? 'आर्थिक वर्ष' : 'लागू हुँदैन'}`;
           return (
-            <div className="flex min-w-24 flex-col items-end gap-2">
-              {group.rules.map((rule) => {
-                const feeHeadName = feeHeadMap.get(rule.feeHeadId)?.name ?? rule.feeHeadId;
-                const ruleLabel = `${feeHeadName} · ${rule.frequency === 'PERIODIC' ? 'आवधिक' : 'एकपटक'} · ${rule.period === 'MONTH' ? 'महिना' : rule.period === 'FISCAL_YEAR' ? 'आर्थिक वर्ष' : 'लागू हुँदैन'}`;
-                return (
-                  <div key={rule.id} className="flex gap-1">
-                    <TableActionIconButton aria-label={`${ruleLabel} — विवरण हेर्नुहोस्`} title={`${ruleLabel} — विवरण हेर्नुहोस्`} onClick={() => onView(rule)}>
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                    </TableActionIconButton>
-                    <TableActionIconButton aria-label={`${ruleLabel} — सम्पादन गर्नुहोस्`} title={`${ruleLabel} — सम्पादन गर्नुहोस्`} onClick={() => onEdit(rule)}>
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </TableActionIconButton>
-                    <TableActionIconButton aria-label={`${ruleLabel} — स्थिति परिवर्तन गर्नुहोस्`} title={`${ruleLabel} — स्थिति परिवर्तन गर्नुहोस्`} onClick={() => onToggleStatus(rule)}>
-                      <Power className="h-4 w-4" aria-hidden="true" />
-                    </TableActionIconButton>
-                  </div>
-                );
-              })}
+            <div className="flex min-w-24 flex-row flex-nowrap items-center justify-end gap-2">
+              <TableActionIconButton aria-label={`${ruleLabel} — विवरण हेर्नुहोस्`} title={`${ruleLabel} — विवरण हेर्नुहोस्`} onClick={() => onView(rule)}>
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              </TableActionIconButton>
+              <TableActionIconButton aria-label={`${ruleLabel} — सम्पादन गर्नुहोस्`} title={`${ruleLabel} — सम्पादन गर्नुहोस्`} onClick={() => onEdit(rule)}>
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </TableActionIconButton>
+              <TableActionIconButton
+                tone="destructive"
+                aria-label={`${ruleLabel} — सवारी प्रकारको नियम हटाउनुहोस्`}
+                title="सवारी प्रकारको नियम हटाउनुहोस्"
+                onClick={() => onDeleteRule(rule)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </TableActionIconButton>
             </div>
           );
         },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { ShieldCheck, UserRound } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -73,6 +73,8 @@ export function UserForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const availableBranches = branches.filter((branch) => (
     branch.status === 'ACTIVE' || branch.id === user?.branchId
   ));
@@ -195,32 +197,60 @@ export function UserForm({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="user-password">{user ? t('users.newPassword') : t('users.fields.password')}</Label>
-                <Input
-                  id="user-password"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={user && !form.password ? undefined : 8}
-                  maxLength={128}
-                  placeholder={user ? t('users.passwordUnchanged') : undefined}
-                  value={form.password}
-                  aria-invalid={Boolean(errors.password)}
-                  aria-describedby={errors.password ? 'user-password-error' : 'user-password-hint'}
-                  onChange={(event) => update('password', event.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="user-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    minLength={user && !form.password ? undefined : 8}
+                    maxLength={128}
+                    placeholder={user ? t('users.passwordUnchanged') : undefined}
+                    value={form.password}
+                    aria-invalid={Boolean(errors.password)}
+                    aria-describedby={errors.password ? 'user-password-error' : 'user-password-hint'}
+                    onChange={(event) => update('password', event.target.value)}
+                    className="pr-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={t(showPassword ? 'auth.hidePassword' : 'auth.showPassword')}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword
+                      ? <EyeOff className="h-4 w-4" aria-hidden="true" />
+                      : <Eye className="h-4 w-4" aria-hidden="true" />}
+                  </button>
+                </div>
                 {errors.password ? fieldError('password') : <p id="user-password-hint" className="text-xs text-muted-foreground">{user ? t('users.passwordUpdateHint') : t('users.passwordHint')}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="user-confirm-password">पासवर्ड पुष्टि</Label>
-                <Input
-                  id="user-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  maxLength={128}
-                  value={form.confirmPassword}
-                  aria-invalid={Boolean(errors.confirmPassword)}
-                  aria-describedby={errors.confirmPassword ? 'user-confirmPassword-error' : undefined}
-                  onChange={(event) => update('confirmPassword', event.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="user-confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    maxLength={128}
+                    value={form.confirmPassword}
+                    aria-invalid={Boolean(errors.confirmPassword)}
+                    aria-describedby={errors.confirmPassword ? 'user-confirmPassword-error' : undefined}
+                    onChange={(event) => update('confirmPassword', event.target.value)}
+                    className="pr-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((visible) => !visible)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={t(showConfirmPassword ? 'auth.hidePassword' : 'auth.showPassword')}
+                    aria-pressed={showConfirmPassword}
+                  >
+                    {showConfirmPassword
+                      ? <EyeOff className="h-4 w-4" aria-hidden="true" />
+                      : <Eye className="h-4 w-4" aria-hidden="true" />}
+                  </button>
+                </div>
                 {fieldError('confirmPassword')}
               </div>
             </div>

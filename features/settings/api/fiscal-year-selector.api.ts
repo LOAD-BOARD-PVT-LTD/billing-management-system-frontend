@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import {
 	formatNepaliFiscalYearLabel,
 	parseFiscalYear,
@@ -105,7 +106,7 @@ function validateSettings(settings: FiscalYearSelectorSettings): FiscalYearSelec
 export async function fetchFiscalYearSelectorSettings(): Promise<FiscalYearSelectorSettingsDocument> {
 	let payload: unknown;
 	try {
-		payload = await apiClient.get<unknown>('read/SettingResource/all');
+		payload = await apiClient.get<unknown>(endpoints.resources.setting.list());
 	} catch (error) {
 		if (isMissingSettingError(error)) {
 			return { resourceId: null, settings: DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS };
@@ -137,11 +138,11 @@ export async function saveFiscalYearSelectorSettings(
 	};
 	if (current.resourceId) {
 		const id = /^\d+$/u.test(current.resourceId) ? Number(current.resourceId) : current.resourceId;
-		await apiClient.put<void>(`update/SettingResource/${encodeURIComponent(current.resourceId)}`, { ...request, id });
+		await apiClient.put<void>(endpoints.resources.setting.update(current.resourceId), { ...request, id });
 		return { resourceId: current.resourceId, settings: validatedSettings };
 	}
 
-	const created = asRecord(await apiClient.post<unknown>('create/SettingResource', request));
+	const created = asRecord(await apiClient.post<unknown>(endpoints.resources.setting.create(), request));
 	const resourceId = created ? getResourceId(created) : null;
 	if (!resourceId) throw new Error('The created fiscal year selector setting did not return a resource ID.');
 	return { resourceId, settings: validatedSettings };

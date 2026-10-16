@@ -32,14 +32,7 @@
   ],
   "exclude": [
     "node_modules",
-    // Exclude standalone, unimported UI demos and legacy helpers with dependencies not used by the app.
-    // Next.js still type-checks every module imported by application routes and components.
-    "components/ui/shadcn-io/**",
-    "components/ui/chart.tsx",
-    "components/ui/context-menu.tsx",
-    "components/ui/file-upload-simple.tsx",
-    "components/ui/scroll-area.tsx",
-    "components/ui/separator.tsx",
+    // Exclude legacy receipt helpers that are not imported by the app.
     "lib/receipts/owner-name.ts",
     "lib/receipts/period-selection.ts",
     "lib/receipts/period.ts",
@@ -47,7 +40,6 @@
     "lib/receipts/vehicle-number-change-confirmation-state.ts",
     "lib/receipts/vehicle-owner-resolution.ts",
     "lib/receipts/tqms-sync.ts",
-    "lib/receipts/normal-billing.ts",
     "lib/receipts/manual-receipt-override.ts",
     "utils/fontasy-himali/report-label.ts"
   ]

@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { receiptsKeys } from '@/lib/query/query-keys';
 import { formatBranchReceiptNumber } from '@/lib/receipts/receipt-number-display';
 import type { BillResourceContent, SavedBill } from '@/features/billing/model/bill.types';
@@ -188,7 +189,7 @@ async function updateReceiptResource(
   content: JsonRecord,
   externalContent: unknown = receipt.externalContent ?? null,
 ): Promise<void> {
-  await apiClient.put<void>(`update/BillResource/${encodeURIComponent(receipt.id)}`, {
+  await apiClient.put<void>(endpoints.resources.bill.update(receipt.id), {
     id: resourceIdValue(receipt.id),
     resource_name: 'BillResource',
     inner_content: content,
@@ -245,8 +246,20 @@ export async function correctReceipt(
   });
 }
 
-export async function fetchReceipts(): Promise<ReceiptRecord[]> {
-  const payload = await apiClient.get<unknown>('read/BillResource/all');
+export async function fetchReceipts(signal?: AbortSignal): Promise<ReceiptRecord[]> {
+  let payload: unknown;
+  try {
+    payload = await apiClient.get<unknown>(endpoints.resources.bill.list(), { signal });
+  } catch (error) {
+    if (
+      error instanceof Error
+      && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*BillResource\b/iu.test(error.message)
+    ) {
+      return [];
+    }
+    throw error;
+  }
+
   const [receipts, fiscalYearSettings] = await Promise.all([
     Promise.resolve(extractRows(payload).map(parseBillResource)),
     fetchFiscalYearManagement(),

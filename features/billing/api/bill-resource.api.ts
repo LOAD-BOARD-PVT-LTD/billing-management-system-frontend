@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { formatBranchReceiptNumber } from '@/lib/receipts/receipt-number-display';
 import type { CreateBillInput, BillResourceContent, BillResourcePayload, SavedBill } from '@/features/billing/model/bill.types';
 
@@ -66,7 +67,7 @@ export async function createBill(input: CreateBillInput): Promise<SavedBill> {
 		...resourceContent,
 		fiscalYearName: input.details.fiscalYearName,
 	};
-	const response = await apiClient.post<unknown>('create/BillResource', {
+	const response = await apiClient.post<unknown>(endpoints.resources.bill.create(), {
 		resource_name: 'BillResource',
 		inner_content: resourceContent,
 		external_content: null,

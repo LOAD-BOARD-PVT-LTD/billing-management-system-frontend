@@ -35,6 +35,7 @@ type VehicleBillingProps = {
 	onFiscalYearChange: (id: string) => void;
 	onReloadBillingRules: () => void;
 	onBillingDetailsChange: (details: BillDetails) => void;
+	assignedBranchId?: string | null;
 };
 
 export function VehicleBilling({
@@ -46,6 +47,7 @@ export function VehicleBilling({
 	onFiscalYearChange,
 	onReloadBillingRules,
 	onBillingDetailsChange,
+	assignedBranchId,
 }: VehicleBillingProps) {
 	const [billingDate, setBillingDate] = useState<Date | undefined>(() => parseDate(vehicle.billingDate) ?? new Date());
 	const [periodStart, setPeriodStart] = useState<Date | undefined>(() => parseDate(vehicle.periodStart) ?? new Date());
@@ -59,7 +61,8 @@ export function VehicleBilling({
 	const matchedBranch = activeBranches.find((branch) =>
 		[branch.name, branch.code].some((value) => value.trim().toLocaleLowerCase() === vehicleBranch),
 	);
-	const branchValue = selectedBranchId || matchedBranch?.id || '';
+	const assignedBranch = activeBranches.find((branch) => branch.id === assignedBranchId);
+	const branchValue = selectedBranchId || assignedBranch?.id || matchedBranch?.id || '';
 	const selectedBranch = activeBranches.find((branch) => branch.id === branchValue);
 	const toDateValue = (date: Date | undefined) => date
 		? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`

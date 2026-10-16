@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { parseTqmsVehicleSearchResponse } from '../schemas/tqms-vehicle-search.schema';
 import type { BillingVehicle } from '../model/types';
 
@@ -7,7 +8,7 @@ export async function searchTqmsVehicles(vehicleNumber: string, signal?: AbortSi
   if (!query) return [];
 
   const payload = await apiClient.post<unknown>(
-    'tqms/search',
+    endpoints.tqms.searchVehicles,
     { vehicle_number: query },
     { signal },
   );

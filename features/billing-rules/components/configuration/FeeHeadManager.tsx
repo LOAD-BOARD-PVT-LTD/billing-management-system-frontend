@@ -5,8 +5,9 @@ import { TableActionIconButton } from '@/components/ui/table-action-icon-button'
 import { useToast } from '@/components/ui/use-toast';
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import type { BillingRule, FiscalYear } from '@/features/billing-rules/model/types';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FeeHeadDialog } from '@/features/billing-rules/components/configuration/FeeHeadDialog';
 
 interface FeeHeadManagerProps {
@@ -20,6 +21,8 @@ interface FeeHeadManagerProps {
 export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdate }: FeeHeadManagerProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FeeHead | null>(null);
+  const [deactivating, setDeactivating] = useState<FeeHead | null>(null);
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
   const [emptyValue] = useState<FeeHead>(() => ({ id: '', code: '', fiscalYearId: null, name: '', status: 'ACTIVE' }));
   const { toast } = useToast();
   const fiscalYearNames = new Map(fiscalYears.map((year) => [year.id, year.name]));
@@ -41,15 +44,18 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
       {feeHeads.length === 0 ? (
         <p className="py-2 text-xs text-muted-foreground">कुनै शुल्क शीर्षक छैन।</p>
       ) : (
-        <ol className="inline-flex max-w-full flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
+        <ol className="flex max-w-full flex-row flex-wrap gap-2">
           {feeHeads.map((feeHead, index) => (
-            <li key={feeHead.id} className="flex w-fit max-w-full items-center gap-2 px-2 py-0.5 text-xs">
+            <li key={feeHead.id} className="flex max-w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs">
               <span className="shrink-0 text-muted-foreground">{index + 1}.</span>
               <span className="min-w-0 font-medium">
                 {feeHead.name}
                 <span className="ml-1 font-normal text-muted-foreground">
                   ({fiscalYearNames.get(feeHead.fiscalYearId ?? '') ?? 'तोकिएको छैन'})
                 </span>
+                {feeHead.status === 'INACTIVE' ? (
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 font-normal text-muted-foreground">निष्क्रिय</span>
+                ) : null}
               </span>
               <TableActionIconButton
                 className="h-7 w-7 shrink-0"
@@ -57,6 +63,34 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
                 onClick={() => { setEditing(feeHead); setOpen(true); }}
               >
                 <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              </TableActionIconButton>
+              <TableActionIconButton
+                className="h-7 w-7 shrink-0"
+                tone={feeHead.status === 'ACTIVE' ? 'destructive' : 'default'}
+                aria-label={feeHead.status === 'ACTIVE' ? `${feeHead.name} निष्क्रिय गर्नुहोस्` : `${feeHead.name} पुनः सक्रिय गर्नुहोस्`}
+                title={feeHead.status === 'ACTIVE' ? 'निष्क्रिय गर्नुहोस्' : 'पुनः सक्रिय गर्नुहोस्'}
+                onClick={() => {
+                  if (feeHead.status === 'ACTIVE') {
+                    setDeactivating(feeHead);
+                    return;
+                  }
+                  void (async () => {
+                    try {
+                      await onUpdate({ ...feeHead, status: 'ACTIVE' });
+                      toast({ title: 'शुल्क शीर्षक पुनः सक्रिय भयो', description: `${feeHead.name} फेरि प्रयोग गर्न सकिन्छ।` });
+                    } catch (error) {
+                      toast({
+                        title: 'शुल्क शीर्षक सक्रिय गर्न सकिएन',
+                        description: error instanceof Error ? error.message : 'कृपया फेरि प्रयास गर्नुहोस्।',
+                        variant: 'destructive',
+                      });
+                    }
+                  })();
+                }}
+              >
+                {feeHead.status === 'ACTIVE'
+                  ? <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  : <Power className="h-3.5 w-3.5" aria-hidden="true" />}
               </TableActionIconButton>
             </li>
           ))}
@@ -82,6 +116,31 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
             });
           }
         }}
+      />
+      <ConfirmDialog
+        open={Boolean(deactivating)}
+        onOpenChange={(nextOpen) => { if (!nextOpen) setDeactivating(null); }}
+        title="शुल्क शीर्षक निष्क्रिय गर्ने?"
+        description="यो शुल्क शीर्षक नयाँ बिलिङका लागि उपलब्ध हुने छैन। यससँग जोडिएका नियम र पुराना बिलिङ अभिलेख सुरक्षित रहनेछन्।"
+        confirmLabel="निष्क्रिय गर्नुहोस्"
+        confirmVariant="destructive"
+        isLoading={isChangingStatus}
+        onConfirm={async () => {
+          if (!deactivating) return;
+          setIsChangingStatus(true);
+          try {
+            await onUpdate({ ...deactivating, status: 'INACTIVE' });
+            toast({ title: 'शुल्क शीर्षक निष्क्रिय भयो', description: `${deactivating.name} नयाँ बिलिङका लागि उपलब्ध हुनेछैन।` });
+            setDeactivating(null);
+          } finally {
+            setIsChangingStatus(false);
+          }
+        }}
+        onError={(error) => toast({
+          title: 'शुल्क शीर्षक निष्क्रिय गर्न सकिएन',
+          description: error instanceof Error ? error.message : 'कृपया फेरि प्रयास गर्नुहोस्।',
+          variant: 'destructive',
+        })}
       />
     </section>
   );

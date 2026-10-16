@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/command';
 import { formatCurrency } from '@/utils/numbers';
 import { formatReceiptNumberWithFiscalYear } from '@/lib/receipts/receipt-number-display';
-import { organizationConfig } from '@/constants/organization';
+import { endpoints } from '@/lib/api/endpoints';
+import { useOrganization } from '@/contexts/organization-context';
 import { useTranslations } from '@/utils/translations';
 import { authenticatedFetch } from '@/lib/authentication/authenticated-fetch';
 import { globalSearchKeys } from '@/lib/query/query-keys';
@@ -138,7 +139,8 @@ function buildDateMeta(bsDate?: string | null, fiscalYear?: string | null, isoDa
 export function GlobalSearch() {
   const { t } = useTranslations();
   const router = useRouter();
-  const { currencySymbol } = organizationConfig;
+  const { organization } = useOrganization();
+  const { currencySymbol } = organization;
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const { shortcutText, shortcutLabel } = useKeyboardShortcut();
@@ -149,7 +151,7 @@ export function GlobalSearch() {
     enabled: open && trimmedSearch.length >= MIN_QUERY_LENGTH,
     queryFn: async ({ signal }) => {
       const response = await authenticatedFetch(
-        `/api/search?q=${encodeURIComponent(trimmedSearch)}`,
+        endpoints.internal.globalSearch(trimmedSearch),
         { signal },
       );
       const result = await response.json() as {

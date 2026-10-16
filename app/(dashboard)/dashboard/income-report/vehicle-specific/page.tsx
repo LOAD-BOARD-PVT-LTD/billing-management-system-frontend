@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { VehicleCategoryReportPage } from '@/features/reports/components/VehicleCategoryReportPage';
 
 export default function VehicleSpecificIncomeReportRoute() {
-  redirect('/dashboard/income-report');
+  return <VehicleCategoryReportPage />;
 }

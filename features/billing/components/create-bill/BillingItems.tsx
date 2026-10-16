@@ -5,6 +5,7 @@ import type { BillingEntityRecord } from '@/features/administration/billing-enti
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import { BillingItemRow } from '@/features/billing/components/create-bill/BIllingItemRow';
 import type { BillingLine } from '@/features/billing/model/types';
+import { formatCurrency } from '@/utils/numbers';
 
 type BillingItemsProps = {
 	items: BillingLine[];
@@ -16,7 +17,10 @@ type BillingItemsProps = {
 	billingMonths: number;
 	onBillingMonthsChange: (months: number) => void;
 	allowManualAmountOverride: boolean;
+	selectedItemIds: Set<string>;
 	onChange: (id: string, changes: Partial<BillingLine>) => void;
+	onSelectItemForReceipt: (id: string) => void;
+	onDeselectItemFromReceipt: (id: string) => void;
 	onAddManualItem: () => void;
 	onReloadRules: () => void;
 };
@@ -31,15 +35,20 @@ export function BillingItems({
 	billingMonths,
 	onBillingMonthsChange,
 	allowManualAmountOverride,
+	selectedItemIds,
 	onChange,
+	onSelectItemForReceipt,
+	onDeselectItemFromReceipt,
 	onAddManualItem,
 	onReloadRules,
 }: BillingItemsProps) {
 	const activeEntities = entities.filter((entity) => entity.status === 'ACTIVE');
+	const selectedItems = items.filter((item) => selectedItemIds.has(item.id));
+	const selectedTotal = selectedItems.reduce((total, item) => total + Math.max(0, item.amount), 0);
 
 	return (
 		<section className="overflow-hidden rounded-md border border-border bg-card">
-			<div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
+			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5">
 				<h2 className="text-sm font-semibold">बिलिङ नियम</h2>
 				{hasPeriodicRule && (
 					<label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -53,7 +62,7 @@ export function BillingItems({
 							value={billingMonths || ''}
 							onChange={(event) => onBillingMonthsChange(Number(event.target.value) || 0)}
 							aria-label="बिलिङ महिना"
-							className="h-8 w-20 rounded-md"
+							className="h-7 w-20 rounded-md"
 						/>
 					</label>
 				)}
@@ -63,14 +72,26 @@ export function BillingItems({
 					चयन गरिएको शाखामा Manual Amount Override अनुमति छैन। रकम परिवर्तन र Manual शुल्क थप्न मिल्दैन।
 				</p>
 			)}
-			<div className="grid grid-cols-[32px_minmax(0,1fr)_112px_minmax(150px,0.9fr)] gap-2 border-b border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground sm:gap-3">
+			{allowManualAmountOverride ? (
+				<div className="flex min-w-0 items-center gap-2 border-b border-sky-200 bg-sky-50/70 px-3 py-1 text-xs" aria-live="polite">
+					<p className="shrink-0 font-semibold text-sky-900">
+						रसीदमा समावेश: {selectedItems.length} शुल्क · रु {formatCurrency(selectedTotal)}
+					</p>
+					<p className="min-w-0 truncate text-sky-800" title={selectedItems.map((item) => item.title || 'शीर्षक चयन भएको छैन').join('、')}>
+						{selectedItems.length
+							? selectedItems.map((item) => item.title || 'शीर्षक चयन भएको छैन').join('、')
+							: 'कुनै शुल्क चयन गरिएको छैन।'}
+					</p>
+				</div>
+			) : null}
+			<div className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-b border-border bg-muted/40 px-3 py-1 text-[11px] font-semibold text-muted-foreground sm:grid-cols-[28px_minmax(0,1.2fr)_minmax(160px,0.9fr)_minmax(190px,1.1fr)] sm:gap-2">
 				<span>सि.नं.</span>
-				<span>शुल्क शीर्षक</span>
-				<span className="text-right">रकम</span>
-				<span>Billing Entity</span>
+				<span className="sm:col-start-2">शुल्क शीर्षक</span>
+				<span className="col-start-2 sm:col-start-3">रकम</span>
+				<span className="col-start-2 sm:col-start-4">Billing Entity</span>
 			</div>
 			{activeEntities.length === 0 ? (
-				<p role="alert" className="border-b border-border/70 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+				<p role="alert" className="border-b border-border/70 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
 					कुनै सक्रिय Billing Entity उपलब्ध छैन। शुल्कमा संस्था चयन गर्न Billing Entity सक्रिय गर्नुहोस्।
 				</p>
 			) : null}
@@ -82,27 +103,31 @@ export function BillingItems({
 					feeHeads={feeHeads}
 					entities={activeEntities}
 					allowManualAmountOverride={allowManualAmountOverride}
+					allowSelection={allowManualAmountOverride}
+					isSelected={selectedItemIds.has(item.id)}
 					onChange={onChange}
+					onSelectForReceipt={onSelectItemForReceipt}
+					onDeselectFromReceipt={onDeselectItemFromReceipt}
 				/>
 			)) : rulesError ? (
-				<p role="alert" className="px-3 py-6 text-center text-sm text-destructive">
+				<p role="alert" className="px-3 py-3 text-center text-sm text-destructive">
 					बिलिङ नियम लोड गर्न सकिएन: {rulesError}
 					<Button type="button" variant="link" size="xs" className="ml-2 h-auto p-0" onClick={onReloadRules}>
 						पुनः प्रयास
 					</Button>
 				</p>
 			) : isLoadingRules ? (
-				<p role="status" className="px-3 py-6 text-center text-sm text-muted-foreground">
+				<p role="status" className="px-3 py-3 text-center text-sm text-muted-foreground">
 					बिलिङ नियम लोड हुँदैछ...
 				</p>
 			) : (
-				<p className="px-3 py-6 text-center text-sm text-muted-foreground">
+				<p className="px-3 py-3 text-center text-sm text-muted-foreground">
 					छानिएको वित्तीय वर्ष र सवारी श्रेणीका लागि सक्रिय नियम भेटिएन। आवश्यक भए म्यानुअल शुल्क थप्नुहोस्।
 				</p>
 			)}
-			<div className="flex justify-end border-t border-border/70 px-3 py-2">
-				<Button type="button" variant="outline" size="sm" onClick={onAddManualItem} disabled={!allowManualAmountOverride}>
-					<Plus aria-hidden="true" className="mr-2 size-4" />
+			<div className="flex justify-end border-t border-border/70 px-3 py-1">
+				<Button type="button" variant="outline" size="xs" onClick={onAddManualItem} disabled={!allowManualAmountOverride}>
+					<Plus aria-hidden="true" className="mr-1.5 size-3.5" />
 					Manual शुल्क थप्नुहोस्
 				</Button>
 			</div>

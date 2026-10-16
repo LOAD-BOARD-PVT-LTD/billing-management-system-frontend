@@ -1,21 +1,18 @@
+export interface OrganizationConfig {
+  organizationId?: string;
+  nameNepali: string;
+  nameEnglish: string;
+  primaryColor: string;
+  secondaryColor?: string;
+  borderRadius?: 'compact' | 'comfortable' | 'rounded';
+  currencySymbol: string;
+}
+
 export const organizationConfig = {
-  nameNepali: 'नारायणी संघ',
+  nameNepali: 'नारायणी यातायात व्यवसायी संघ',
   nameEnglish: 'Narayani Test Billing',
   primaryColor: '#4F46E5',
+  secondaryColor: '#E0E7FF',
+  borderRadius: 'comfortable',
   currencySymbol: 'Rs.',
-  fileUploadSettings: {
-    meetingDocuments: {
-      maxFileSizeMb: 10,
-      maxFilesPerUpload: 5,
-      maxFilesTotal: 5,
-      allowedMimeTypes: [
-        'application/pdf',
-        'image/jpeg',
-        'image/png',
-        'image/webp',
-      ],
-    },
-  },
-} as const;
-
-export type OrganizationConfig = typeof organizationConfig;
+} as const satisfies OrganizationConfig;

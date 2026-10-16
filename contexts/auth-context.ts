@@ -64,10 +64,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refreshUser().finally(() => {
-      setAuthReady(true);
-    });
-  }, [refreshUser]);
+    let isMounted = true;
+
+    currentUserRequest()
+      .then((user) => {
+        if (!isMounted) return;
+        setState({
+          user,
+          isAuthenticated: Boolean(user),
+          isLoading: false,
+          error: null,
+        });
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+        });
+      })
+      .finally(() => {
+        if (isMounted) setAuthReady(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const login = useCallback(
     async (credentials: LoginCredentials): Promise<LoginResult> => {

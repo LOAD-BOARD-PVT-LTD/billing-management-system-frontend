@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/auth-context';
-import { organizationConfig } from '@/constants/organization';
+import { useOrganization } from '@/contexts/organization-context';
 import { buildPrimaryNav, buildQuickActions, isSidebarNavItemActive } from '@/components/common/layout/navigation/sidebar-config';
 import { getUserMenuLinks, type UserMenuLinkKey } from '@/components/common/layout/navigation/user-menu-links';
 import { Role } from '@/types/auth';
@@ -395,7 +395,8 @@ export function useSidebarNavData() {
   const searchParams = useSearchParams();
   const { t } = useTranslations();
 
-  const organizationName = organizationConfig.nameNepali || t('system.organizationFallback');
+  const { organization } = useOrganization();
+  const organizationName = organization.nameNepali || t('system.organizationFallback');
   const isAdmin = hasRole(Role.Admin);
 
   const { main: mainNavItems, reports: reportNavItems, admin: adminNavItems } = buildPrimaryNav(t, isAdmin);
@@ -461,4 +462,3 @@ export function SidebarNav() {
     </Sidebar>
   );
 }
-

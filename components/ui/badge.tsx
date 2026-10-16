@@ -11,9 +11,9 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          'border-transparent bg-slate-600 text-white shadow-sm hover:bg-slate-700 hover:shadow-md',
+          'border-transparent bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md',
         secondary:
-          'border-transparent bg-gray-300 text-gray-800 shadow-xs hover:bg-gray-400 hover:shadow-sm',
+          'border-transparent bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary-hover hover:shadow-sm',
         destructive:
           'border-transparent bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md',
         outline: 'text-foreground border-border hover:bg-accent hover:text-accent-foreground',
@@ -22,18 +22,18 @@ const badgeVariants = cva(
         warning:
           'border-transparent bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 hover:shadow-md',
         caution:
-          'border-transparent bg-amber-200 text-amber-950 shadow-sm hover:bg-amber-300 hover:shadow-md',
+          'border-transparent bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 hover:shadow-md',
         info:
           'border-transparent bg-info text-info-foreground shadow-sm hover:bg-info/90 hover:shadow-md',
                                                                 
         active:
           'border-transparent bg-success text-success-foreground shadow-md hover:bg-success/90',
         inactive:
-          'border-transparent bg-gray-400 text-gray-900 shadow-xs hover:bg-gray-500',
+          'border-transparent bg-muted text-muted-foreground shadow-xs hover:bg-muted/80',
         pending:
-          'border-transparent bg-yellow-400 text-gray-900 shadow-sm hover:bg-yellow-500 hover:shadow-md',
+          'border-transparent bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 hover:shadow-md',
         error:
-          'border-transparent bg-red-500 text-white shadow-md hover:bg-red-600 hover:shadow-lg',
+          'border-transparent bg-destructive text-destructive-foreground shadow-md hover:bg-destructive/90 hover:shadow-lg',
       },
       pulse: {
         true: 'animate-pulse',

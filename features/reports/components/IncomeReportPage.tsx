@@ -7,16 +7,17 @@ import { DataTablePagination } from '@/components/data-tables/DataTablePaginatio
 import { useToast } from '@/components/ui/use-toast';
 import { IncomeReportColumnMenu } from '@/features/reports/components/IncomeReportColumnMenu';
 import { IncomeReportFilters } from '@/features/reports/components/IncomeReportFilters';
+import { ReportHeader } from '@/features/reports/components/ReportHeader';
 import { IncomeReportTable, type IncomeReportSortKey } from '@/features/reports/components/IncomeReportTable';
 import { useIncomeReportColumns } from '@/features/reports/hooks/use-income-report-columns';
 import { useIncomeReport } from '@/features/reports/hooks/use-income-report';
 import { useIncomeReportFilters } from '@/features/reports/hooks/use-income-report-filters';
+import { useReportHeaderDetails } from '@/features/reports/hooks/use-report-header-details';
 import { downloadIncomeReportCsv, openIncomeReportPrintView } from '@/features/reports/services/income-report.service';
 import { filterIncomeReportRows, getIncomeReportDateLabel, getIncomeReportExportLabel, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
 import type { IncomeReportFilters as IncomeReportFilterValues, IncomeReportRow } from '@/features/reports/types/income-report';
 import type { SortDirection } from '@/components/data-tables/DataTableColumnHeader';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
-import { convertADtoBS } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 
 const PAGE_SIZE = 15;
 
@@ -37,17 +38,6 @@ function summaryTransactions(rows: IncomeReportRow[]): number {
   return new Set(rows.filter((row) => row.status === 'PAID').map((row) => row.receiptId)).size;
 }
 
-function dateInput(value: string): string {
-  if (!value) return '';
-  const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return value;
-  try {
-    return toNepaliDigits(convertADtoBS(parsed).replaceAll('-', '/'));
-  } catch {
-    return value;
-  }
-}
-
 function SummaryCard({ label, value, description, accent }: { label: string; value: string; description: string; accent: string }) {
   return (
     <article className="rounded-xl border border-border/80 bg-card p-4 shadow-sm">
@@ -66,14 +56,17 @@ function SummaryCard({ label, value, description, accent }: { label: string; val
 export function IncomeReportPage() {
   const { rows, isLoading, error, reload } = useIncomeReport();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
+  const header = useReportHeaderDetails('मिति अनुसार दैनिक आम्दानी', filters.dateFrom, filters.dateTo);
   const { visibleColumns, applyColumns } = useIncomeReportColumns();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
+  const [includeHeaderDetails, setIncludeHeaderDetails] = useState(false);
   const [sortColumn, setSortColumn] = useState<IncomeReportSortKey>('paymentDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
   const filteredRows = useMemo(() => filterIncomeReportRows(rows, filters), [rows, filters]);
+  const exportHeader = header.details;
   const sortedRows = useMemo(() => {
     if (!sortDirection) return filteredRows;
     const direction = sortDirection === 'asc' ? 1 : -1;
@@ -104,9 +97,18 @@ export function IncomeReportPage() {
     setPage(1);
   };
 
-  const exportExcel = () => downloadIncomeReportCsv(sortedRows, getIncomeReportExportLabel(filters), visibleColumns);
+  const exportExcel = () => downloadIncomeReportCsv(
+    sortedRows,
+    getIncomeReportExportLabel(filters),
+    visibleColumns,
+    includeHeaderDetails ? exportHeader : undefined,
+  );
   const exportPdf = () => {
-    if (!openIncomeReportPrintView(sortedRows, getIncomeReportDateLabel(filters))) {
+    if (!openIncomeReportPrintView(
+      sortedRows,
+      getIncomeReportDateLabel(filters),
+      includeHeaderDetails ? exportHeader : undefined,
+    )) {
       toast({
         title: 'PDF निर्यात सुरु गर्न सकिएन',
         description: 'ब्राउजरमा नयाँ विन्डो खोल्ने अनुमति दिनुहोस्।',
@@ -124,20 +126,21 @@ export function IncomeReportPage() {
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">आम्दानी रिपोर्ट</h1>
             <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">छानिएको अवधिको रसिद-आधारित आम्दानी तथा सङ्कलन विवरण हेर्नुहोस्।</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <IncomeReportColumnMenu visibleColumns={visibleColumns} onApply={applyColumns} />
-            <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportExcel} disabled={isLoading || Boolean(error) || sortedRows.length === 0}>
-              <Download className="h-4 w-4" aria-hidden="true" />Excel मा निर्यात
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportPdf} disabled={isLoading || Boolean(error)}>
-              <FileDown className="h-4 w-4" aria-hidden="true" />PDF मा निर्यात
-            </Button>
-          </div>
+          <ReportHeader
+            details={header.details}
+            includeInExport={includeHeaderDetails}
+            onIncludeInExportChange={setIncludeHeaderDetails}
+            detailsError={header.error}
+          />
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-sky-100 pt-3 text-xs text-muted-foreground">
-          <span>स्रोत: BillResource रसिद विवरण</span>
-          <span>मिति आधार: {filters.dateBasis === 'paymentDate' ? 'भुक्तानी मिति' : 'बिलिङ मिति'}</span>
-          <span>अवधि: {dateInput(filters.dateFrom) || '—'} {filters.dateTo ? `देखि ${dateInput(filters.dateTo)}` : 'देखि हालसम्म'}</span>
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sky-100 pt-3">
+          <IncomeReportColumnMenu visibleColumns={visibleColumns} onApply={applyColumns} />
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportExcel} disabled={isLoading || Boolean(error) || sortedRows.length === 0}>
+            <Download className="h-4 w-4" aria-hidden="true" />Excel मा निर्यात
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportPdf} disabled={isLoading || Boolean(error)}>
+            <FileDown className="h-4 w-4" aria-hidden="true" />PDF मा निर्यात
+          </Button>
         </div>
       </header>
 
@@ -198,10 +201,6 @@ export function IncomeReportPage() {
         />
         <DataTablePagination page={currentPage} pageSize={PAGE_SIZE} total={sortedRows.length} onPageChange={setPage} className="mt-3" />
       </section>
-
-      <aside className="rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-5 text-amber-950">
-        रिपोर्ट हालको BillResource/रसिद API बाट तयार हुन्छ; छुट्टै आम्दानी रिपोर्ट endpoint वा बिलिङ प्रकारको field उपलब्ध छैन। शुल्क रकम item मा रहेको छुट-अघिको रकम हो, जबकि summary ले मिल्ने paid receipt को जम्मा देखाउँछ; bill-level छुटलाई शीर्षकअनुसार बाँड्ने backend field छैन। paidAt नहुँदा भुक्तानी मिति बिलिङ मितिमा fallback हुन्छ। status नआएमा हालको receipt parser ले PAID मान्ने भएकाले backend बाट status उपलब्ध नभएका रेकर्डमा सफल सङ्कलन गलत रूपमा देखिन सक्छ। हालको `all` response parser ले पृष्ठहरू छुट्टाछुट्टै माग्दैन; API ले pagination दिएमा पछिल्ला पृष्ठ यहाँ समेटिँदैनन्।
-      </aside>
     </section>
   );
 }

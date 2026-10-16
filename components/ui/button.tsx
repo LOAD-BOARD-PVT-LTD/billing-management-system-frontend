@@ -29,7 +29,7 @@ const buttonVariants = cva(
           'bg-warning text-warning-foreground shadow-sm hover:bg-warning/90 hover:shadow-md',
         info: 'bg-info text-info-foreground shadow-sm hover:bg-info/90 hover:shadow-md',
         gradient:
-          'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:from-blue-700 hover:to-indigo-700 hover:scale-[1.02] transition-all duration-200',
+          'bg-gradient-to-r from-primary to-primary-hover text-primary-foreground shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:from-primary-hover hover:to-primary-active hover:scale-[1.02] transition-all duration-200',
         'primary-enhanced':
           'bg-primary text-primary-foreground shadow-md hover:bg-primary-hover hover:shadow-lg active:bg-primary-active',
       },
@@ -114,4 +114,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 
 export { Button, buttonVariants };
-

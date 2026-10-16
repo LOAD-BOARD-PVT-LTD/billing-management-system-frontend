@@ -1,6 +1,7 @@
 import {
   createBillingRuleFeeHead,
   createBillingRuleResource,
+  deleteBillingRuleResource,
   listBillingRuleResources,
   updateBillingRuleFeeHead,
   updateBillingRuleResource,
@@ -130,6 +131,13 @@ export const billingRulesApi = {
         ? await updateBillingRuleResource(rule.id, savedConfig, rule)
         : await createBillingRuleResource(savedConfig, rule);
       savedRules.push(document.config.rules[0] ?? rule);
+    }
+
+    const savedRuleIds = new Set(savedConfig.rules.map((rule) => rule.id));
+    for (const rule of previousConfig.rules) {
+      if (!savedRuleIds.has(rule.id)) {
+        await deleteBillingRuleResource(rule.id);
+      }
     }
 
     return {

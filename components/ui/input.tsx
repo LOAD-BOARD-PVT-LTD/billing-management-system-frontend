@@ -2,12 +2,12 @@ import * as React from 'react';
 
 import {
   createFontasyChangeEvent,
-  hasFontasyHimaliInputClass,
   isFontasyCompatibleInputType,
   isNoFontasyField,
   useFontasyClassInput,
 } from '@/utils/fontasy-himali';
 import { cn } from '@/utils/cn';
+import { useFontasyHimali } from '@/contexts/fontasy-himali-context';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: boolean;
@@ -17,10 +17,11 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, error, success, onFocus, onKeyDown, onPaste, onChange, value, selectOnFocus, ...props }, ref) => {
+    const { enabled: fontasyEnabled } = useFontasyHimali();
     const fontasyActive =
+      fontasyEnabled &&
       value !== undefined &&
       onChange !== undefined &&
-      hasFontasyHimaliInputClass(className) &&
       !isNoFontasyField((props as Record<string, unknown>)['data-no-fontasy']) &&
       isFontasyCompatibleInputType(type) &&
       !props.readOnly &&
@@ -96,8 +97,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         value={fontasyActive ? fontasyInput.displayValue : value}
         className={cn(
           'flex h-10 w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200',
-          error && 'border-red-500 focus-visible:ring-red-500',
-          success && 'border-emerald-400/60 focus-visible:ring-emerald-500/20',
+          error && 'border-destructive focus-visible:ring-destructive',
+          success && 'border-success/60 focus-visible:ring-success/20',
+          fontasyActive && 'font-fontasy-himali-tt-input',
           className
         )}
         ref={(node) => {
@@ -113,4 +115,3 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 Input.displayName = 'Input';
 
 export { Input };
-

@@ -28,8 +28,8 @@ const branchResourceSchema = z.object({
   external_content: z.unknown().nullable().optional(),
 });
 
-export function toBranchRequest(fields: BranchFields) {
-  return {
+export function toBranchRequest(fields: BranchFields, id?: string) {
+  const request = {
     resource_name: 'BranchResource' as const,
     inner_content: {
       name: fields.name.trim(),
@@ -42,6 +42,13 @@ export function toBranchRequest(fields: BranchFields) {
       status: fields.status,
     },
     external_content: null,
+  };
+
+  if (id === undefined) return request;
+
+  return {
+    id: /^\d+$/u.test(id) ? Number(id) : id,
+    ...request,
   };
 }
 

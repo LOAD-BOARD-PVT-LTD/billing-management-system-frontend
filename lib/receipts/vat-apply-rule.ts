@@ -1,4 +1,4 @@
-import { normalizeBillingEntityKey } from '@/lib/billing-entities';
+import { normalizeBillingEntityKey } from '@/lib/receipts/billing-entities';
 
 type VatConfigLike = {
   enabled?: unknown;

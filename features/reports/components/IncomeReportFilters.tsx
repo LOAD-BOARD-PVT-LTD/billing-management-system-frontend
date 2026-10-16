@@ -33,6 +33,7 @@ type IncomeReportFiltersProps = {
   isFiltered: boolean;
   onUpdate: (key: keyof IncomeReportFilterValues, value: string) => void;
   onClear: () => void;
+  onGenerate?: () => void;
 };
 
 function FilterSelect({
@@ -71,6 +72,7 @@ export function IncomeReportFilters({
   isFiltered,
   onUpdate,
   onClear,
+  onGenerate,
 }: IncomeReportFiltersProps) {
   const fiscalYearOptions = fiscalYears.map((value) => ({ value, label: toNepaliDigits(value) }));
 
@@ -131,6 +133,11 @@ export function IncomeReportFilters({
             </SelectContent>
           </Select>
         </div>
+        {onGenerate ? (
+          <Button type="button" size="sm" onClick={onGenerate} className="gap-2 sm:ml-auto">
+            रिपोर्ट तयार गर्नुहोस्
+          </Button>
+        ) : null}
       </div>
     </section>
   );

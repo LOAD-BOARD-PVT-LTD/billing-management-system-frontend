@@ -9,6 +9,15 @@ export interface DataTablePaginationProps {
 	total: number;
 	onPageChange: (page: number) => void;
 	className?: string;
+	labels?: {
+		ariaLabel?: string;
+		showing?: string;
+		of?: string;
+		page?: string;
+		previousPage?: string;
+		nextPage?: string;
+	};
+	formatNumber?: (value: number) => string;
 }
 
 export function DataTablePagination({
@@ -17,6 +26,8 @@ export function DataTablePagination({
 	total,
 	onPageChange,
 	className,
+	labels,
+	formatNumber = String,
 }: DataTablePaginationProps) {
 	const pageCount = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
 	const currentPage = Math.min(Math.max(1, page), pageCount);
@@ -26,21 +37,23 @@ export function DataTablePagination({
 	return (
 		<nav
 			className={cn('flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between', className)}
-			aria-label="Table pagination"
+			aria-label={labels?.ariaLabel ?? 'Table pagination'}
 		>
 			<p className="text-sm text-muted-foreground" aria-live="polite">
-				Showing <span className="font-medium text-foreground">{firstItem}-{lastItem}</span> of{' '}
-				<span className="font-medium text-foreground">{total}</span>
+				{labels?.showing ?? 'Showing'}{' '}
+				<span className="font-medium text-foreground">{formatNumber(firstItem)}-{formatNumber(lastItem)}</span>{' '}
+				{labels?.of ?? 'of'}{' '}
+				<span className="font-medium text-foreground">{formatNumber(total)}</span>
 			</p>
 			<div className="flex items-center gap-2">
 				<span className="min-w-20 text-center text-sm text-muted-foreground">
-					Page {currentPage} of {pageCount}
+					{labels?.page ?? 'Page'} {formatNumber(currentPage)} {labels?.of ?? 'of'} {formatNumber(pageCount)}
 				</span>
 				<Button
 					type="button"
 					variant="outline"
 					size="icon-sm"
-					aria-label="Previous page"
+					aria-label={labels?.previousPage ?? 'Previous page'}
 					disabled={currentPage <= 1}
 					onClick={() => onPageChange(currentPage - 1)}
 				>
@@ -50,7 +63,7 @@ export function DataTablePagination({
 					type="button"
 					variant="outline"
 					size="icon-sm"
-					aria-label="Next page"
+					aria-label={labels?.nextPage ?? 'Next page'}
 					disabled={currentPage >= pageCount}
 					onClick={() => onPageChange(currentPage + 1)}
 				>

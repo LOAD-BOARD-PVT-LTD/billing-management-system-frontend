@@ -5,6 +5,7 @@ import type {
   VehicleCategoryUpdateInput,
 } from '@/features/vehicle/type/types/vehicle-type.types';
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import {
   parseVehicleCategoryCreateResponse,
   parseVehicleCategoryListResponse,
@@ -13,7 +14,7 @@ import {
 } from '@/features/vehicle/type/schemas/vehicle-type.schema';
 
 export async function fetchVehicleTypes(): Promise<VehicleTypeRecord[]> {
-  const payload = await apiClient.get<unknown>('read/VehicleCategoryResource/all');
+  const payload = await apiClient.get<unknown>(endpoints.resources.vehicleCategory.list());
   return parseVehicleCategoryListResponse(payload);
 }
 
@@ -25,7 +26,7 @@ export async function createVehicleType(payload: VehicleCategoryCreateInput): Pr
     },
   });
 
-  const payloadFromServer = await apiClient.post<unknown>('create/VehicleCategoryResource', requestBody);
+  const payloadFromServer = await apiClient.post<unknown>(endpoints.resources.vehicleCategory.create(), requestBody);
   const resource = parseVehicleCategoryCreateResponse(payloadFromServer);
 
   return {
@@ -47,5 +48,5 @@ export async function updateVehicleType(id: string | number, payload: VehicleCat
     external_content: null,
   });
 
-  await apiClient.put<void>(`update/VehicleCategoryResource/${encodeURIComponent(String(id))}`, requestBody);
+  await apiClient.put<void>(endpoints.resources.vehicleCategory.update(id), requestBody);
 }

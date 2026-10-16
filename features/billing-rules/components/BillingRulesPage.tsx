@@ -68,6 +68,7 @@ export function BillingRulesPage() {
   const [editingRule, setEditingRule] = useState<BillingRule | null>(null);
   const [viewingRule, setViewingRule] = useState<BillingRule | null>(null);
   const [statusRule, setStatusRule] = useState<BillingRule | null>(null);
+  const [deletingRule, setDeletingRule] = useState<BillingRule | null>(null);
 
   const selectorSettings = fiscalYearSelectorSettings ?? DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS;
   const availableFiscalYears = useMemo(() => {
@@ -93,11 +94,14 @@ export function BillingRulesPage() {
   const activeVehicleCategoryFilter = vehicleCategoryIds.includes(vehicleCategoryFilter) ? vehicleCategoryFilter : 'all';
   const hasSearch = search.trim().length > 0;
   const contextRules = config.rules.filter((rule) => fiscalYearFilter === 'all' || rule.fiscalYearId === fiscalYearFilter);
-  const contextVehicleGroups = groupVehicleTypeRules(contextRules.filter((rule) => rule.scope === 'VEHICLE_TYPE'));
+  const contextVehicleGroups = groupVehicleTypeRules(contextRules.filter((rule) =>
+    rule.scope === 'VEHICLE_TYPE' && rule.status === 'ACTIVE',
+  ));
   const contextCommonRules = contextRules.filter((rule) => rule.scope === 'COMMON');
   const vehicleTypeFeeHeadIds = Array.from(new Set(
     config.rules
       .filter((rule) => rule.scope === 'VEHICLE_TYPE'
+        && rule.status === 'ACTIVE'
         && (fiscalYearFilter === 'all' || rule.fiscalYearId === fiscalYearFilter))
       .map((rule) => rule.feeHeadId),
   ));
@@ -107,7 +111,12 @@ export function BillingRulesPage() {
   const activeRules = contextVehicleGroups.filter((group) => group.every((rule) => rule.status === 'ACTIVE')).length
     + contextCommonRules.filter((rule) => rule.status === 'ACTIVE').length;
 
-  const filteredRules = useMemo(() => filterBillingRules(config.rules, config, {
+  const activeFeeHeadIds = new Set(config.feeHeads.filter((feeHead) => feeHead.status === 'ACTIVE').map((feeHead) => feeHead.id));
+  const rulesForDisplay = config.rules.filter((rule) =>
+    activeFeeHeadIds.has(rule.feeHeadId)
+    && (scope !== 'VEHICLE_TYPE' || rule.status === 'ACTIVE'),
+  );
+  const filteredRules = useMemo(() => filterBillingRules(rulesForDisplay, config, {
     scope,
     fiscalYearId: fiscalYearFilter,
     feeHeadId: scope === 'VEHICLE_TYPE' ? 'all' : feeHeadFilter,
@@ -117,6 +126,7 @@ export function BillingRulesPage() {
     status: statusFilter,
     search,
   }, vehicleCategories, billingEntities), [
+    rulesForDisplay,
     config,
     scope,
     fiscalYearFilter,
@@ -239,8 +249,6 @@ export function BillingRulesPage() {
 
   const handleSaveVehicleRules = async ({
     fiscalYearId,
-    effectiveDate,
-    meetingReference,
     editingVehicleCategoryId,
     entries,
   }: VehicleRuleSubmission) => {
@@ -264,16 +272,10 @@ export function BillingRulesPage() {
     for (const rule of config.rules) {
       if (rule.scope === 'VEHICLE_TYPE'
         && rule.fiscalYearId === fiscalYearId
-        && rule.status === 'ACTIVE'
         && editingVehicleCategoryId
         && rule.vehicleCategoryId === editingVehicleCategoryId
         && !submittedRuleIds.has(rule.id)) {
-        rulesById.set(rule.id, {
-          ...rule,
-          status: 'INACTIVE',
-          effectiveDate,
-          meetingReference,
-        });
+        rulesById.delete(rule.id);
       }
     }
 
@@ -287,7 +289,7 @@ export function BillingRulesPage() {
         title: editingRule ? 'बिलिङ नियम परिवर्तन सुरक्षित भयो' : 'बिलिङ नियम सिर्जना भयो',
         description: entries.length > 0
           ? `${entries.length} सवारी शुल्क नियम सुरक्षित भयो।`
-          : 'खाली रकम भएका सवारी शुल्क नियम निष्क्रिय गरियो।',
+          : 'खाली रकम भएका सवारी शुल्क नियम हटाइयो।',
       });
       setRuleEditorOpen(false);
       setEditingRule(null);
@@ -340,12 +342,7 @@ export function BillingRulesPage() {
   const handleToggleStatus = async () => {
     if (!statusRule) return;
     const nextStatus: RuleStatus = statusRule.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    const targetRules = statusRule.scope === 'VEHICLE_TYPE'
-      ? config.rules.filter((rule) => rule.scope === 'VEHICLE_TYPE'
-        && rule.vehicleCategoryId === statusRule.vehicleCategoryId
-        && rule.fiscalYearId === statusRule.fiscalYearId)
-      : [statusRule];
-    const updatedRules = targetRules.map((rule) => ({ ...rule, status: nextStatus }));
+    const updatedRules = [{ ...statusRule, status: nextStatus }];
     const duplicate = updatedRules.find((rule) => findDuplicateRule(config.rules, rule));
     if (duplicate) {
       toast({
@@ -366,6 +363,25 @@ export function BillingRulesPage() {
       description: 'नियमको इतिहास सुरक्षित राखिएको छ।',
     });
     setStatusRule(null);
+  };
+
+  const handleDeleteVehicleRule = async () => {
+    if (!deletingRule || deletingRule.scope !== 'VEHICLE_TYPE') return;
+    const nextConfig = {
+      ...config,
+      rules: config.rules.filter((rule) => rule.id !== deletingRule.id),
+    };
+    await save(nextConfig);
+    const feeHeadName = config.feeHeads.find((feeHead) => feeHead.id === deletingRule.feeHeadId)?.name
+      ?? deletingRule.feeHeadId;
+    const vehicleCategoryName = vehicleCategories.find((category) => category.id === deletingRule.vehicleCategoryId)?.category
+      ?? deletingRule.vehicleCategoryId
+      ?? '';
+    toast({
+      title: 'सवारी प्रकारको नियम हटाइयो',
+      description: `${feeHeadName} को ${vehicleCategoryName} सवारी प्रकारसँगको शुल्क नियम हटाइयो। शुल्क शीर्षक सुरक्षित छ।`,
+    });
+    setDeletingRule(null);
   };
 
   const handleSortChange = (column: BillingRuleSortColumn, direction: 'asc' | 'desc' | null) => {
@@ -580,6 +596,7 @@ export function BillingRulesPage() {
           onSortChange={handleSortChange}
           onView={setViewingRule}
           onEdit={(rule) => { setEditingRule(rule); setScope(rule.scope); setRuleEditorOpen(true); }}
+          onDeleteRule={setDeletingRule}
           onBillingEntityChange={(rule, billingEntityId) => void handleBillingEntityChange(rule, billingEntityId)}
           onUpdatePolicy={handleUpdatePolicy}
           onToggleStatus={setStatusRule}
@@ -625,6 +642,21 @@ export function BillingRulesPage() {
         confirmVariant={statusRule?.status === 'ACTIVE' ? 'destructive' : 'default'}
         isLoading={isSaving}
         onConfirm={handleToggleStatus}
+      />
+      <ConfirmDialog
+        open={Boolean(deletingRule)}
+        onOpenChange={(open) => { if (!open) setDeletingRule(null); }}
+        title="सवारी प्रकारको नियम हटाउने?"
+        description="यो सवारी प्रकारका लागि सेट गरिएको रकम, Billing Entity र नियम विवरण हट्नेछ। शुल्क शीर्षक र पहिलेका बिलिङ अभिलेख सुरक्षित रहनेछन्।"
+        confirmLabel="नियम हटाउनुहोस्"
+        confirmVariant="destructive"
+        isLoading={isSaving}
+        onConfirm={handleDeleteVehicleRule}
+        onError={(deleteError) => toast({
+          title: 'सवारी प्रकारको नियम हटाउन सकिएन',
+          description: deleteError instanceof Error ? deleteError.message : 'कृपया फेरि प्रयास गर्नुहोस्।',
+          variant: 'destructive',
+        })}
       />
     </div>
   );

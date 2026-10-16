@@ -37,6 +37,11 @@ export const tqmsMemberRegistryKeys = {
   lists: () => [...tqmsMemberRegistryKeys.all, 'vehicles'] as const,
 };
 
+export const vehicleBlacklistKeys = {
+  all: ['vehicle-blacklist'] as const,
+  list: () => [...vehicleBlacklistKeys.all, 'list'] as const,
+};
+
 export const globalSearchKeys = {
   all: ['global-search'] as const,
   search: (term: string) => [...globalSearchKeys.all, term] as const,
@@ -50,5 +55,6 @@ export const queryKeys = {
   vehicleTypes: vehicleTypeKeys,
   tqmsVehicleTypes: tqmsVehicleTypeKeys,
   tqmsMemberRegistry: tqmsMemberRegistryKeys,
+  vehicleBlacklist: vehicleBlacklistKeys,
   globalSearch: globalSearchKeys,
 };

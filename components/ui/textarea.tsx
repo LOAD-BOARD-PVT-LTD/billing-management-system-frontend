@@ -2,20 +2,21 @@ import * as React from 'react';
 
 import {
   createFontasyChangeEvent,
-  hasFontasyHimaliInputClass,
   isNoFontasyField,
   useFontasyClassInput,
 } from '@/utils/fontasy-himali';
 import { cn } from '@/utils/cn';
+import { useFontasyHimali } from '@/contexts/fontasy-himali-context';
 
 export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, onChange, value, ...props }, ref) => {
+    const { enabled: fontasyEnabled } = useFontasyHimali();
     const fontasyActive =
+      fontasyEnabled &&
       value !== undefined &&
       onChange !== undefined &&
-      hasFontasyHimaliInputClass(className) &&
       !isNoFontasyField((props as Record<string, unknown>)['data-no-fontasy']) &&
       !props.readOnly &&
       !props.disabled;
@@ -52,6 +53,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         className={cn(
           'flex min-h-[80px] w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          fontasyActive && 'font-fontasy-himali-tt-input',
           className,
         )}
         ref={(node) => {

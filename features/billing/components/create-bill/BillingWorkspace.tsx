@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
 import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 import { buildBillResourceContent } from '@/features/billing/api/bill-resource.api';
@@ -64,7 +66,11 @@ function getBillValidationMessages(input: {
   if (hasPeriodicBillingRule && (!Number.isInteger(billingMonths) || billingMonths < 1 || billingMonths > 12)) {
     messages.push('आवधिक बिलिङका लागि १ देखि १२ सम्मको बिलिङ महिना छान्नुहोस्।');
   }
-  if (items.length === 0) messages.push('बिलमा कम्तीमा एउटा शुल्क थप्नुहोस्।');
+  if (items.length === 0) {
+    messages.push(details?.allowManualReceiptAmountOverride
+      ? 'रसीदमा समावेश गर्न कम्तीमा एउटा शुल्क चयन गर्नुहोस् वा Manual शुल्क थप्नुहोस्।'
+      : 'बिलमा कम्तीमा एउटा शुल्क थप्नुहोस्।');
+  }
   if (items.some((item) => !item.title.trim())) messages.push('सबै शुल्कका लागि शीर्षक छान्नुहोस्।');
   if (items.some((item) => !item.entityId)) messages.push('सबै शुल्कका लागि Billing Entity छान्नुहोस्।');
   if (items.some((item) => !Number.isFinite(item.amount) || item.amount < 0)) {
@@ -86,12 +92,15 @@ function getBillValidationMessages(input: {
 }
 
 export function BillingWorkspace() {
+  const { user: authUser } = useAuth();
+  const { records: users } = useUsers();
   const billingRules = useBillingRules();
   const { settings: fiscalYearSelectorSettings } = useFiscalYearSelectorSettings();
   const { records: billingEntities } = useBillingEntities();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
   const [manualItems, setManualItems] = useState<BillingLine[]>([]);
   const [itemOverrides, setItemOverrides] = useState<Record<string, Partial<BillingLine>>>({});
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [billingMonths, setBillingMonths] = useState(1);
   const [discount, setDiscount] = useState(0);
@@ -124,6 +133,9 @@ export function BillingWorkspace() {
   const fiscalYearId = availableFiscalYears.some((year) => year.id === selectedFiscalYearId)
     ? selectedFiscalYearId
     : defaultFiscalYear?.id ?? '';
+  const assignedBranchId = users.find((user) =>
+    user.email.toLocaleLowerCase() === authUser?.email.toLocaleLowerCase(),
+  )?.branchId;
 
   const updateItem = (id: string, changes: Partial<BillingLine>) => {
     if ('amount' in changes && !billingDetailsRef.current?.allowManualReceiptAmountOverride) return;
@@ -132,6 +144,18 @@ export function BillingWorkspace() {
       return;
     }
     setItemOverrides((current) => ({ ...current, [id]: { ...current[id], ...changes } }));
+  };
+
+  const selectItemForReceipt = (id: string) => {
+    setSelectedItemIds((current) => new Set(current).add(id));
+  };
+
+  const deselectItemFromReceipt = (id: string) => {
+    setSelectedItemIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   };
 
   const addManualItem = () => {
@@ -159,11 +183,15 @@ export function BillingWorkspace() {
     setSavedBill(null);
     setManualItems([]);
     setItemOverrides({});
+    setSelectedItemIds(new Set());
     setDiscount(0);
   };
 
   const handleBillingDetailsChange = useCallback((details: BillDetails) => {
     const previousDetails = billingDetailsRef.current;
+    if (previousDetails?.branchId !== details.branchId) {
+      setSelectedItemIds(new Set());
+    }
     if (previousDetails?.branchId !== details.branchId && !details.allowManualReceiptAmountOverride) {
       setItemOverrides((current) => Object.fromEntries(
         Object.entries(current).map(([id, changes]) => {
@@ -272,6 +300,7 @@ export function BillingWorkspace() {
           setBillingDetails(null);
           setManualItems([]);
           setItemOverrides({});
+          setSelectedItemIds(new Set());
           setDiscount(0);
           setDuplicateMatches([]);
           setPendingSubmit(null);
@@ -311,6 +340,7 @@ export function BillingWorkspace() {
           {(mappedCategoryId) => {
             const rules = billingRules.config.rules.filter((rule) =>
               rule.status === 'ACTIVE'
+              && billingRules.config.feeHeads.some((feeHead) => feeHead.id === rule.feeHeadId && feeHead.status === 'ACTIVE')
               && rule.fiscalYearId === fiscalYearId
               && (rule.scope !== 'COMMON'
                 || rule.amount !== 0
@@ -318,7 +348,6 @@ export function BillingWorkspace() {
               && (rule.scope === 'COMMON'
                 || (rule.scope === 'VEHICLE_TYPE' && rule.vehicleCategoryId === mappedCategoryId)),
             );
-            const hasPeriodicBillingRule = rules.some((rule) => rule.frequency === 'PERIODIC');
             const ruleItems: BillingLine[] = rules.flatMap((rule) => {
               const feeHead = billingRules.config.feeHeads.find((head) => head.id === rule.feeHeadId);
               if (!feeHead) return [];
@@ -337,12 +366,19 @@ export function BillingWorkspace() {
               ...item,
               ...itemOverrides[item.id],
             }))];
+            const includedItems = billingDetails?.allowManualReceiptAmountOverride
+              ? items.filter((item) => selectedItemIds.has(item.id))
+              : items;
+            const selectedRules = rules.filter((rule) =>
+              !billingDetails?.allowManualReceiptAmountOverride || selectedItemIds.has(rule.id),
+            );
+            const hasPeriodicBillingRule = selectedRules.some((rule) => rule.frequency === 'PERIODIC');
             const ruleAmounts = Object.fromEntries(rules.map((rule) => [rule.id, rule.amount]));
-            const subtotal = items.reduce((sum, item) => sum + Math.max(0, item.amount), 0);
+            const subtotal = includedItems.reduce((sum, item) => sum + Math.max(0, item.amount), 0);
             const saveValidationMessages = getBillValidationMessages({
               vehicle: selectedVehicle,
               details: billingDetails,
-              items,
+              items: includedItems,
               subtotal,
               discount,
               isLoadingRules: billingRules.isLoading,
@@ -363,12 +399,13 @@ export function BillingWorkspace() {
                   onFiscalYearChange={setSelectedFiscalYearId}
                   onReloadBillingRules={billingRules.load}
                   onBillingDetailsChange={handleBillingDetailsChange}
+                  assignedBranchId={assignedBranchId}
                 />
                 <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_250px]">
                   <div className="min-w-0 space-y-3">
                     <BillingItems
                       items={items}
-                      feeHeads={billingRules.config.feeHeads}
+                      feeHeads={billingRules.config.feeHeads.filter((feeHead) => feeHead.status === 'ACTIVE')}
                       entities={billingEntities}
                       isLoadingRules={billingRules.isLoading}
                       rulesError={billingRules.error}
@@ -376,7 +413,10 @@ export function BillingWorkspace() {
                       billingMonths={billingMonths}
                       onBillingMonthsChange={setBillingMonths}
                       allowManualAmountOverride={billingDetails?.allowManualReceiptAmountOverride ?? false}
+                      selectedItemIds={selectedItemIds}
                       onChange={updateItem}
+                      onSelectItemForReceipt={selectItemForReceipt}
+                      onDeselectItemFromReceipt={deselectItemFromReceipt}
                       onAddManualItem={addManualItem}
                       onReloadRules={billingRules.load}
                     />
@@ -385,7 +425,7 @@ export function BillingWorkspace() {
                       discount={discount}
                       onDiscountChange={setDiscount}
                       onSave={(paymentMethod, note) => void handleSaveBill(
-                        items,
+                        includedItems,
                         subtotal,
                         paymentMethod,
                         note,

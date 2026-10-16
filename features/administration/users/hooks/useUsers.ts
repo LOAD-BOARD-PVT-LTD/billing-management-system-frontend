@@ -9,7 +9,12 @@ const EMPTY_USERS: Awaited<ReturnType<typeof fetchUsers>> = [];
 
 export function useUsers() {
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: USERS_QUERY_KEY, queryFn: fetchUsers });
+  const query = useQuery({
+    queryKey: USERS_QUERY_KEY,
+    queryFn: fetchUsers,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
   const createMutation = useMutation({
     mutationFn: createUser,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY }),

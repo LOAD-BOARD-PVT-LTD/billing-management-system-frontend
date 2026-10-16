@@ -9,7 +9,12 @@ const EMPTY_BRANCHES: Awaited<ReturnType<typeof fetchBranches>> = [];
 
 export function useBranches() {
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: BRANCHES_QUERY_KEY, queryFn: fetchBranches });
+  const query = useQuery({
+    queryKey: BRANCHES_QUERY_KEY,
+    queryFn: fetchBranches,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
   const createMutation = useMutation({
     mutationFn: createBranch,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: BRANCHES_QUERY_KEY }),

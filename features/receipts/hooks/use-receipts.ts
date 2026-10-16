@@ -7,7 +7,9 @@ import { receiptsKeys } from '@/lib/query/query-keys';
 export function useReceipts() {
   const query = useQuery({
     queryKey: receiptsKeys.lists(),
-    queryFn: fetchReceipts,
+    queryFn: ({ signal }) => fetchReceipts(signal),
+    staleTime: 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   return {

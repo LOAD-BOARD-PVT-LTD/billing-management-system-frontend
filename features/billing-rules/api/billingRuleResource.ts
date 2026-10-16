@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { EMPTY_BILLING_RULE_CONFIG } from '@/features/billing-rules/model/defaults';
 import type { BillingRule, BillingRuleConfig, FeeHead, FiscalYear, Validity } from '@/features/billing-rules/model/types';
 
@@ -275,7 +276,7 @@ export function unwrapBillingRuleResource(value: unknown): BillingRuleConfig {
 }
 
 export async function listBillingRuleResources(): Promise<BillingRuleResourceDocument[]> {
-  const payload = await apiClient.get<unknown>('read/BillingRuleResource/all');
+  const payload = await apiClient.get<unknown>(endpoints.resources.billingRule.list());
   const documents = getResourceList(payload).map(mapBillingRuleResource);
   if (documents.some((document) => !(
     document.config.rules.length === 1
@@ -357,7 +358,7 @@ function fallbackFiscalYearDocument(fiscalYear: FiscalYear, id: string): Billing
 }
 
 export async function createBillingRuleFiscalYear(fiscalYear: FiscalYear): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.post<unknown>('create/BillingRuleResource', {
+  const payload = await apiClient.post<unknown>(endpoints.resources.billingRule.create(), {
     resource_name: 'BillingRuleResource',
     inner_content: toFiscalYearResourceContent(fiscalYear),
     external_content: null,
@@ -368,7 +369,7 @@ export async function createBillingRuleFiscalYear(fiscalYear: FiscalYear): Promi
 }
 
 export async function updateBillingRuleFiscalYear(id: string, fiscalYear: FiscalYear): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.put<unknown>(`update/BillingRuleResource/${encodeURIComponent(id)}`, {
+  const payload = await apiClient.put<unknown>(endpoints.resources.billingRule.update(id), {
     id: resourceIdValue(id),
     resource_name: 'BillingRuleResource',
     inner_content: toFiscalYearResourceContent(fiscalYear),
@@ -383,7 +384,7 @@ export async function updateBillingRuleFiscalYear(id: string, fiscalYear: Fiscal
 }
 
 export async function createBillingRuleFeeHead(feeHead: FeeHead): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.post<unknown>('create/BillingRuleResource', {
+  const payload = await apiClient.post<unknown>(endpoints.resources.billingRule.create(), {
     resource_name: 'BillingRuleResource',
     inner_content: toFeeHeadResourceContent(feeHead),
     external_content: null,
@@ -394,7 +395,7 @@ export async function createBillingRuleFeeHead(feeHead: FeeHead): Promise<Billin
 }
 
 export async function updateBillingRuleFeeHead(id: string, feeHead: FeeHead): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.put<unknown>(`update/BillingRuleResource/${encodeURIComponent(id)}`, {
+  const payload = await apiClient.put<unknown>(endpoints.resources.billingRule.update(id), {
     id: resourceIdValue(id),
     resource_name: 'BillingRuleResource',
     inner_content: toFeeHeadResourceContent(feeHead),
@@ -422,7 +423,7 @@ function fallbackDocument(config: BillingRuleConfig, rule: BillingRule, id: stri
 }
 
 export async function createBillingRuleResource(config: BillingRuleConfig, rule: BillingRule): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.post<unknown>('create/BillingRuleResource', {
+  const payload = await apiClient.post<unknown>(endpoints.resources.billingRule.create(), {
     resource_name: 'BillingRuleResource',
     inner_content: toResourceContent(config, rule),
     external_content: null,
@@ -438,7 +439,7 @@ export async function updateBillingRuleResource(
   config: BillingRuleConfig,
   rule: BillingRule,
 ): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.put<unknown>(`update/BillingRuleResource/${encodeURIComponent(id)}`, {
+  const payload = await apiClient.put<unknown>(endpoints.resources.billingRule.update(id), {
     id: resourceIdValue(id),
     resource_name: 'BillingRuleResource',
     inner_content: toResourceContent(config, rule),
@@ -451,5 +452,5 @@ export async function updateBillingRuleResource(
 }
 
 export async function deleteBillingRuleResource(id: string): Promise<void> {
-  await apiClient.delete<void>(`delete/BillingRuleResource/${encodeURIComponent(id)}`);
+  await apiClient.delete<void>(endpoints.resources.billingRule.delete(id));
 }

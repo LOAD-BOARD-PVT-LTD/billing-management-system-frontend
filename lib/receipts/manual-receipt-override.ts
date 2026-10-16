@@ -1,5 +1,5 @@
-import type { ReceiptPeriodEndStrategy } from '@/lib/receipts/period';
-import type { ReceiptPricingMode } from '@/lib/receipts/pricing-mode';
+import type { ReceiptPeriodEndStrategy } from '../../lib/receipts/period';
+import type { ReceiptPricingMode } from '../../lib/receipts/pricing-mode';
 
 type RuleAmountReconcileInput = {
   currentAmount: string;
@@ -112,7 +112,9 @@ export function buildRequestedRuleLineItem(
   item: RuleLineItemInput,
 ): RuleLineItemInput {
   const label = toPrintableVehicleRuleLabel(item);
-  const { ruleType: _ruleType, vehicleCategory: _vehicleCategory, ...lineItem } = item;
+  const lineItem = { ...item };
+  delete lineItem.ruleType;
+  delete lineItem.vehicleCategory;
   const overrideAmount = toNonNegativeNumber(item.requestedAmountOverride);
   if (overrideAmount === null) return { ...lineItem, label };
 

@@ -64,7 +64,7 @@ export const NAV_ITEMS: NavItemConfig[] = [
 
 export const REPORT_NAV_ITEMS: NavItemConfig[] = [
   { key: 'navigation.incomeReport', href: '/dashboard/income-report', icon: BarChart3 },
-  { key: 'navigation.mahasanghReport', href: '/dashboard/income-report?reportMode=mahasangh', icon: BarChart3 },
+  { key: 'navigation.mahasanghReport', href: '/dashboard/mahasang-report', icon: BarChart3 },
   { key: 'navigation.memberTransactionReport', href: '/dashboard/member-transaction-report', icon: Receipt },
   { key: 'navigation.titleWiseIncomeReport', href: '/dashboard/income-report/title-wise', icon: BarChart3 },
   { key: 'navigation.vehicleSpecificReport', href: '/dashboard/income-report/vehicle-specific', icon: BarChart3 },

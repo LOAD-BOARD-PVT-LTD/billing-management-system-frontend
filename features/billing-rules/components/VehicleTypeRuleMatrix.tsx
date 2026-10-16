@@ -591,7 +591,6 @@ export function VehicleTypeRuleMatrix({
                         onValueChange={(vehicleCategoryId) => setRows((current) => current.map((item) =>
                           item.id === row.id ? { ...item, vehicleCategoryId } : item,
                         ))}
-                        disabled={row.locked}
                       >
                         <SelectTrigger aria-label={`पङ्क्ति ${index + 1} सवारी प्रकार`}>
                           <SelectValue placeholder="सूचीबाट छान्नुहोस्" />

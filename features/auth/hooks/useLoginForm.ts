@@ -3,7 +3,7 @@
 import { useAuth } from '@/contexts/auth-context';
 import { t } from '@/utils/translations';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 interface LoginFormData {
   email: string;
@@ -30,7 +30,6 @@ interface UseLoginFormReturn {
   setIsSubmitting: (submitting: boolean) => void;
   setShowPassword: (show: boolean) => void;
   setCapsLockWarning: (warning: boolean) => void;
-  setRememberMe: (remember: boolean) => void;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: React.KeyboardEvent) => void;
   validateForm: () => boolean;
@@ -50,16 +49,17 @@ export function useLoginForm(): UseLoginFormReturn {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockWarning, setCapsLockWarning] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [dismissedQueryError, setDismissedQueryError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const error = searchParams.get('error');
-    if (!error) return;
-
-    setErrors((prev) => ({ ...prev, general: t(getLoginErrorTranslationKey(error)) }));
-  }, [searchParams]);
-
-                                                                                
+  const queryError = searchParams.get('error');
+  const queryErrorMessage =
+    queryError && queryError !== dismissedQueryError
+      ? t(getLoginErrorTranslationKey(queryError))
+      : undefined;
+  const visibleErrors =
+    queryErrorMessage && !errors.general
+      ? { ...errors, general: queryErrorMessage }
+      : errors;
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.getModifierState('CapsLock')) {
       setCapsLockWarning(true);
@@ -93,6 +93,7 @@ export function useLoginForm(): UseLoginFormReturn {
                                                                                 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (queryError) setDismissedQueryError(queryError);
 
     if (!validateForm()) {
       return;
@@ -103,7 +104,7 @@ export function useLoginForm(): UseLoginFormReturn {
 
     try {
       const result = await login({
-        email: formData.email.trim().toLowerCase(),
+        email: formData.email.trim(),
         password: formData.password,
       });
 
@@ -121,10 +122,11 @@ export function useLoginForm(): UseLoginFormReturn {
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, rememberMe, validateForm, login, router]);
+  }, [formData, queryError, validateForm, login, router]);
 
                                                                                 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (queryError) setDismissedQueryError(queryError);
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
 
@@ -135,14 +137,14 @@ export function useLoginForm(): UseLoginFormReturn {
       }
       return prev;
     });
-  }, []);
+  }, [queryError]);
 
   const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()) && !errors.email;
   const hasValidPassword = formData.password.length >= 3 && !errors.password;
 
   return {
     formData,
-    errors,
+    errors: visibleErrors,
     isSubmitting,
     showPassword,
     capsLockWarning,
@@ -153,7 +155,6 @@ export function useLoginForm(): UseLoginFormReturn {
     setIsSubmitting,
     setShowPassword,
     setCapsLockWarning,
-    setRememberMe,
     handleInputChange,
     handleKeyDown,
     validateForm,

@@ -10,6 +10,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_ENTRIES, type SettingsCategoryId } from '
 import { SettingsEntryCard } from '@/features/settings/components/SettingsEntryCard';
 import { FiscalYearManagement } from '@/features/settings/components/FiscalYearManagement';
 import { ReceiptCancelWindowControl } from '@/features/settings/components/ReceiptCancelWindowControl';
+import { FontasyHimaliControl } from '@/features/settings/components/FontasyHimaliControl';
 
 const DEFAULT_CATEGORY: SettingsCategoryId = 'billing-receipts';
 
@@ -64,6 +65,8 @@ export function AdminSettingsPage() {
           <p className="mt-1 text-sm text-muted-foreground">प्रणालीका सेटिङ्स, बिलिङ नीतिहरू तथा एकीकृत सेवाहरू व्यवस्थापन गर्नुहोस्।</p>
         </div>
       </header>
+
+      <FontasyHimaliControl />
 
       <div className="relative max-w-lg">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />

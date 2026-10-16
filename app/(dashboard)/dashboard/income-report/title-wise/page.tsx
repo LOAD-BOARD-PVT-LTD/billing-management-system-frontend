@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { FeeHeadWiseReportPage } from '@/features/reports/components/FeeHeadWiseReportPage';
 
 export default function TitleWiseIncomeReportRoute() {
-  redirect('/dashboard/income-report');
+  return <FeeHeadWiseReportPage />;
 }

@@ -1,5 +1,5 @@
-import { getFiscalYearBsRange } from '@/lib/nepali-fiscal-year';
-import { getDaysInBikramSambatMonth, parseBikramSambatDate } from '@/utils/nepali-calender-dates/nepali-date';
+import { getFiscalYearBsRange } from '../../utils/nepali-calender-dates/nepali-fiscal-year';
+import { getDaysInBikramSambatMonth, parseBikramSambatDate } from '../../utils/nepali-calender-dates/nepali-date';
 
 const MIN_BILLING_MONTHS = 1;
 const MAX_BILLING_MONTHS = 24;

@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { listBillingRuleResources } from '@/features/billing-rules/api/billingRuleResource';
 import type { FiscalYear } from '@/features/billing-rules/model/types';
 
@@ -148,7 +149,7 @@ function isMissingSettingError(error: unknown): boolean {
 async function readFiscalYearSetting(): Promise<FiscalYearManagementDocument | null> {
 	let payload: unknown;
 	try {
-		payload = await apiClient.get<unknown>('read/SettingResource/all');
+		payload = await apiClient.get<unknown>(endpoints.resources.setting.list());
 	} catch (error) {
 		if (isMissingSettingError(error)) return null;
 		throw error;
@@ -194,10 +195,10 @@ export async function saveFiscalYearManagement(
 	};
 	if (current.resourceId) {
 		const id = /^\d+$/u.test(current.resourceId) ? Number(current.resourceId) : current.resourceId;
-		await apiClient.put<void>(`update/SettingResource/${encodeURIComponent(current.resourceId)}`, { ...request, id });
+		await apiClient.put<void>(endpoints.resources.setting.update(current.resourceId), { ...request, id });
 		return { resourceId: current.resourceId, fiscalYears: validatedYears };
 	}
-	const created = await apiClient.post<unknown>('create/SettingResource', request);
+	const created = await apiClient.post<unknown>(endpoints.resources.setting.create(), request);
 	const resourceId = getNestedResourceId(created);
 	if (!resourceId) throw new Error('The created fiscal year setting did not return a resource ID.');
 	return { resourceId, fiscalYears: validatedYears };
@@ -212,7 +213,7 @@ export async function deleteFiscalYear(
 	if (year.status === 'ACTIVE') throw new Error('सक्रिय आर्थिक वर्ष हटाउनुअघि अर्को वर्ष सक्रिय गर्नुहोस्।');
 	const [billingResources, billResources] = await Promise.all([
 		listBillingRuleResources(),
-		apiClient.get<unknown>('read/BillResource/all'),
+		apiClient.get<unknown>(endpoints.resources.bill.list()),
 	]);
 	const referencedByRules = billingResources.some(({ config }) =>
 		config.rules.some((rule) => rule.fiscalYearId === id)

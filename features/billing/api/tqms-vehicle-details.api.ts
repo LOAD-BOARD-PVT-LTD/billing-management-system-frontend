@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import { parseTqmsVehicleDetailsResponse } from '../schemas/tqms-vehicle-details.schema';
 import type { TqmsVehicleDetails } from '../schemas/tqms-vehicle-details.schema';
 
@@ -12,7 +13,7 @@ export async function getTqmsVehicleDetails(
 	}
 
 	const payload = await apiClient.get<unknown>(
-		`tqms/vehicle_details/${encodeURIComponent(normalizedVehicleNumber)}`,
+		endpoints.tqms.vehicleDetails(normalizedVehicleNumber),
 		{ signal },
 	);
 	return parseTqmsVehicleDetailsResponse(payload);

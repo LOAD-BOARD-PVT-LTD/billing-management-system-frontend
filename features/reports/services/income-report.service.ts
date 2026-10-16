@@ -1,6 +1,7 @@
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type { IncomeReportRow } from '@/features/reports/types/income-report';
 import type { IncomeReportColumnId } from '@/features/reports/utils/income-report-columns';
+import type { ReportHeaderDetails } from '@/features/reports/types/report-header';
 import { formatCurrency } from '@/utils/numbers';
 
 export function mapIncomeReportRows(receipts: ReceiptRecord[]): IncomeReportRow[] {
@@ -53,6 +54,7 @@ export function downloadIncomeReportCsv(
   rows: IncomeReportRow[],
   fileLabel: string,
   visibleColumns: IncomeReportColumnId[],
+  headerDetails?: ReportHeaderDetails,
 ): void {
   const allColumns: Record<IncomeReportColumnId, [string, (row: IncomeReportRow) => string]> = {
     receiptNumber: ['रसिद नं.', (row) => row.receiptNumber],
@@ -69,7 +71,18 @@ export function downloadIncomeReportCsv(
     status: ['स्थिति', (row) => row.status],
   };
   const columns = visibleColumns.map((id) => allColumns[id]);
+  const headerRows = headerDetails
+    ? [
+        ['संघ', headerDetails.organizationName],
+        ['प्रयोग भइरहेको शाखा', headerDetails.branchName],
+        ['कार्यालय', headerDetails.officeAddress],
+      [headerDetails.reportTitle, headerDetails.reportDateRange],
+        ['मिति', headerDetails.reportDateLine],
+      ].map((values) => values.map(csvCell).join(','))
+    : [];
   const csv = [
+    ...headerRows,
+    ...(headerRows.length > 0 ? [''] : []),
     columns.map(([label]) => csvCell(label)).join(','),
     ...rows.map((row) => columns.map(([, getValue]) => csvCell(getValue(row))).join(',')),
   ].join('\r\n');
@@ -81,7 +94,11 @@ export function downloadIncomeReportCsv(
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export function openIncomeReportPrintView(rows: IncomeReportRow[], reportRange: string): boolean {
+export function openIncomeReportPrintView(
+  rows: IncomeReportRow[],
+  reportRange: string,
+  headerDetails?: ReportHeaderDetails,
+): boolean {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return false;
 
@@ -112,6 +129,9 @@ export function openIncomeReportPrintView(rows: IncomeReportRow[], reportRange: 
           body { color: #111827; font: 12px system-ui, sans-serif; }
           h1 { margin: 0 0 4px; font-size: 20px; }
           p { margin: 0 0 14px; color: #4b5563; }
+          .report-header-details { margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid #d1d5db; text-align: right; line-height: 1.6; }
+          .report-header-details p { margin: 0; }
+          .report-header-organization { color: #111827; font-size: 16px; font-weight: 700; }
           table { width: 100%; border-collapse: collapse; }
           th, td { padding: 6px 5px; border: 1px solid #d1d5db; text-align: left; vertical-align: top; }
           th { background: #f3f4f6; }
@@ -120,6 +140,13 @@ export function openIncomeReportPrintView(rows: IncomeReportRow[], reportRange: 
         </style>
       </head>
       <body>
+        ${headerDetails ? `<div class="report-header-details">
+          <p class="report-header-organization">${escapeHtml(headerDetails.organizationName)}</p>
+          <p>प्रयोग भइरहेको शाखा: ${escapeHtml(headerDetails.branchName)}</p>
+          <p>कार्यालय: ${escapeHtml(headerDetails.officeAddress)}</p>
+          <p>${escapeHtml(headerDetails.reportTitle)} (${escapeHtml(headerDetails.reportDateRange)})</p>
+          <p>मिति: ${escapeHtml(headerDetails.reportDateLine)}</p>
+        </div>` : ''}
         <h1>आम्दानी रिपोर्ट</h1>
         <p>अवधि: ${escapeHtml(reportRange)} · शुल्क विवरण: ${rows.length}</p>
         <table>

@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api/client';
+import { endpoints } from '@/lib/api/endpoints';
 import type { TqmsRegistryVehicle } from '@/features/vehicle/tqms/model/tqms-member-registry';
 
 type JsonRecord = Record<string, unknown>;
@@ -72,7 +73,7 @@ export function parseTqmsMemberRegistry(payload: unknown): TqmsRegistryVehicle[]
 
 export async function fetchTqmsMemberRegistry(signal?: AbortSignal): Promise<TqmsRegistryVehicle[]> {
   const payload = await apiClient.get<unknown>(
-    'search/vehicleresource/SanghBranch/Narayani Sangh Hetauda/all',
+    endpoints.resources.vehicle.search('SanghBranch', 'Narayani Sangh Hetauda'),
     { signal },
   );
   return parseTqmsMemberRegistry(payload);
