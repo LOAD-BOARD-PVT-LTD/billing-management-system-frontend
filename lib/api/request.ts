@@ -1,15 +1,7 @@
 import { authenticatedFetch } from '@/lib/authentication/authenticated-fetch';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/u, '') ?? '';
-
 export function buildApiUrl(path: string): string {
-  const base = API_BASE_URL.replace(/\/+$/u, '');
-
-  if (!base) {
-    return `/api/v1/${path}`;
-  }
-
-  return /\/api\/v1$/iu.test(base) ? `${base}/${path}` : `${base}/api/v1/${path}`;
+  return `/backend-api/${path.replace(/^\/+/, '')}`;
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {

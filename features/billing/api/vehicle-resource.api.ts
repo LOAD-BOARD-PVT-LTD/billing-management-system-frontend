@@ -49,7 +49,7 @@ function parseExternalContent(value: unknown): Record<string, unknown> {
 }
 
 function extractResourceRows(payload: unknown): unknown[] {
-	if (Array.isArray(payload)) return payload;
+	if (Array.isArray(payload)) return payload.flatMap(extractResourceRows);
 	const record = asRecord(payload);
 	if (!record) return [];
 	if (record.resource_name === 'VehicleResource' || record.resourceName === 'VehicleResource') {
@@ -57,7 +57,7 @@ function extractResourceRows(payload: unknown): unknown[] {
 	}
 	for (const key of ['items', 'Items', 'records', 'Records', 'resources', 'Resources', 'data', 'Data', 'result', 'Result']) {
 		const nested = record[key];
-		if (Array.isArray(nested)) return nested;
+		if (Array.isArray(nested)) return nested.flatMap(extractResourceRows);
 		if (asRecord(nested)) {
 			const rows = extractResourceRows(nested);
 			if (rows.length) return rows;
@@ -84,7 +84,7 @@ export async function readVehicleResource(
 	const tqmsVehicleId = matchingVehicle.tqmsVehicleId;
 
 	const payload = await apiClient.get<unknown>(
-		endpoints.resources.vehicle.search('VehicleId', tqmsVehicleId),
+		endpoints.resources.vehicle.search('VehicleId', tqmsVehicleId, 1),
 	);
 	const matches = extractResourceRows(payload).filter((value) => {
 		const candidate = asRecord(unwrapResource(value));

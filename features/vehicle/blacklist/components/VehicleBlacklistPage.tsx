@@ -62,7 +62,11 @@ export function VehicleBlacklistPage() {
   };
 
   const handleEdit = async (record: VehicleBlacklistRecord, metadata: VehicleStatusMetadata) => {
-    await updateRecord({ vehicleId: record.vehicleId, vehicleNumber: record.vehicleNumber, metadata });
+    await updateRecord({
+      vehicleId: record.vehicleId,
+      vehicleNumber: record.vehicleNumber,
+      metadata,
+    });
     toast({ title: t('vehicleBlacklist.updated') });
     setEditing(null);
   };
@@ -90,7 +94,6 @@ export function VehicleBlacklistPage() {
 
       <VehicleBlacklistCreateForm
         isSaving={isSaving}
-        isBlacklistUnavailable={isLoading || Boolean(error)}
         errorMessage={error}
         onSubmit={handleCreate}
       />

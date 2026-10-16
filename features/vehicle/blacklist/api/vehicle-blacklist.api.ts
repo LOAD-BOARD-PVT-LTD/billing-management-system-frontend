@@ -77,7 +77,11 @@ function mapResourceToStatusRecord(value: unknown): VehicleBlacklistRecord {
     throw new Error('Vehicle status search returned a resource other than VehicleResource.');
   }
   const externalContent = parseExternalContent(root.external_content ?? root.externalContent);
-  const metadata = parseMetadata(externalContent.metadata);
+  const metadata = parseMetadata({
+    ...asRecord(externalContent.metadata),
+    ...asRecord(root.metadata),
+    ...asRecord(innerContent.metadata),
+  });
   const vehicleId = asText(innerContent.VehicleId);
   const resourceId = asText(root.id);
   if (!vehicleId || !resourceId) {
@@ -119,7 +123,7 @@ async function searchBlacklistedVehicles(): Promise<VehicleBlacklistRecord[]> {
   let payload: unknown;
   try {
     payload = await apiClient.get<unknown>(
-      endpoints.resources.vehicle.search('external_content.metadata.isBlacklisted', 'true'),
+      endpoints.resources.vehicle.search('isBlacklisted', 'true', 'all'),
     );
   } catch (error) {
     if (error instanceof Error && /Request failed \(404\).*No resources found for search query/iu.test(error.message)) {
@@ -150,16 +154,19 @@ async function saveMetadata(
   metadataInput: VehicleStatusMetadata,
 ): Promise<void> {
   const metadata = parseMetadata(metadataInput);
-  const externalContent = { ...resource.externalContent };
-  delete externalContent.vehicleBlacklist;
-  const existingMetadata = asRecord(externalContent.metadata) ?? {};
+  const innerContent = { ...resource.innerContent };
+  const existingMetadata = {
+    ...asRecord(resource.externalContent.metadata),
+    ...asRecord(resource.resource.metadata),
+    ...asRecord(innerContent.metadata),
+  };
   const tags = updateManagedTags(metadata.tags, metadata.isBlacklisted);
-  externalContent.metadata = {
+  innerContent.metadata = {
     ...existingMetadata,
     ...metadata,
     tags,
   };
-  await updateVehicleResource(resource, resource.innerContent, externalContent);
+  await updateVehicleResource(resource, innerContent, resource.externalContent);
 }
 
 export async function createVehicleBlacklist(input: {
@@ -174,8 +181,11 @@ export async function createVehicleBlacklist(input: {
     throw new Error('A blacklisting reason is required.');
   }
   const resource = await readVehicleResource(vehicleId, input.vehicle.vehicleNumber);
-  const currentExternalContent = resource.externalContent;
-  const currentMetadata = parseMetadata(currentExternalContent.metadata);
+  const currentMetadata = parseMetadata({
+    ...asRecord(resource.externalContent.metadata),
+    ...asRecord(resource.resource.metadata),
+    ...asRecord(resource.innerContent.metadata),
+  });
   if (currentMetadata.isBlacklisted) throw new Error('This vehicle is already blacklisted.');
   await saveMetadata(resource, {
     ...currentMetadata,
@@ -193,7 +203,11 @@ export async function updateVehicleBlacklist(input: {
 }): Promise<void> {
   if (!input.vehicleId.trim()) throw new Error('A TQMS VehicleId is required to update vehicle metadata.');
   const resource = await readVehicleResource(input.vehicleId, input.vehicleNumber);
-  const existingMetadata = parseMetadata(resource.externalContent.metadata);
+  const existingMetadata = parseMetadata({
+    ...asRecord(resource.externalContent.metadata),
+    ...asRecord(resource.resource.metadata),
+    ...asRecord(resource.innerContent.metadata),
+  });
   const metadata = { ...existingMetadata, ...input.metadata };
   if (!metadata.isBlacklisted) {
     metadata.blacklistedReason = null;

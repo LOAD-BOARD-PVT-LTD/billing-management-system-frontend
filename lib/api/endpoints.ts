@@ -18,9 +18,9 @@ export function resourceEndpoints(resourceName: string): ResourceEndpoints {
     create: () => `create/${pathName}`,
     update: (id) => `update/${pathName}/${encodeURIComponent(String(id))}`,
     delete: (id) => `delete/${pathName}/${encodeURIComponent(String(id))}`,
-    search: (field, value, limit = 'all') => [
+    search: (field, value, limit = 'all' ) => [
       'search',
-      encodeURIComponent(resourceName.toLowerCase()),
+      encodeURIComponent(resourceName),
       encodeURIComponent(field),
       encodeURIComponent(value),
       encodeURIComponent(String(limit)),

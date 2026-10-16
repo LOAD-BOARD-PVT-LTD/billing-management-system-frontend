@@ -20,14 +20,12 @@ export type VehicleBlacklistCreateInput = {
 
 type VehicleBlacklistCreateFormProps = {
   isSaving: boolean;
-  isBlacklistUnavailable: boolean;
   errorMessage: string | null;
   onSubmit: (input: VehicleBlacklistCreateInput) => Promise<void>;
 };
 
 export function VehicleBlacklistCreateForm({
   isSaving,
-  isBlacklistUnavailable,
   errorMessage,
   onSubmit,
 }: VehicleBlacklistCreateFormProps) {
@@ -139,7 +137,7 @@ export function VehicleBlacklistCreateForm({
             <Button
               type="button"
               className="w-full"
-              disabled={!selectedVehicle || isSaving || isBlacklistUnavailable}
+              disabled={!selectedVehicle || isSaving}
               loading={isSaving}
               onClick={() => void handleSubmit()}
             >
@@ -152,7 +150,6 @@ export function VehicleBlacklistCreateForm({
         <div className="flex flex-col gap-2 border-t pt-3 text-xs sm:flex-row sm:items-center sm:justify-between">
           <p className="text-muted-foreground">{t('vehicleBlacklist.membershipUnknownNotice')}</p>
           {errorMessage || formError ? <p role="alert" className="text-destructive">{formError ?? errorMessage}</p> : null}
-          {isBlacklistUnavailable && !errorMessage ? <p className="text-destructive">{t('vehicleBlacklist.cannotAddWhileUnavailable')}</p> : null}
         </div>
       </CardContent>
     </Card>
