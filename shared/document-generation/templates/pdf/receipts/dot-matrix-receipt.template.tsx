@@ -1,33 +1,24 @@
 import Image from 'next/image';
-import type { SavedBill } from '@/features/billing/model/bill.types';
-import { formatReceiptNumberWithFiscalYear } from '@/lib/receipts/receipt-number-display';
 import { toNepaliDigits } from '@/utils/numbers';
 import { DEFAULT_COMPANY_BRANDING } from '../../../components/CompanyBranding';
+import { DocumentContacts } from '../../../components/DocumentContacts';
+import { PageNumber } from '../../../components/PageNumber';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '../../../utils/format-currency';
 import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import type { BillTemplateProps } from '../../../types/template.types';
 import { dotMatrixReceiptStyles } from './dot-matrix-receipt.styles';
 
-function contactLines(bill: SavedBill): string[] {
-  const { branch } = bill.content;
-  return [branch.contactPerson, branch.phone, branch.address]
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
-
 export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
-  const contacts = contactLines(bill);
-  const receiptNumber = formatReceiptNumberWithFiscalYear(bill.receiptNumber, content.fiscalYearName);
 
   return (
     <>
       <style>{dotMatrixReceiptStyles}</style>
       <article className="dot-matrix-receipt">
         <div className="dot-matrix-topline">
-          <span>नगदी रसिद</span>
-          <span>र.नं. {toNepaliDigits(receiptNumber || bill.receiptNumber)}</span>
+          <PageNumber value={branding.registrationNumber ?? ''} />
+          <span />
         </div>
 
         <header className="dot-matrix-header">
@@ -38,19 +29,15 @@ export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: 
             <h1>{branding.name}</h1>
             <p>{branding.officeAddress}</p>
             <p>{branding.regionalOfficeText}</p>
-            {branding.registrationNumber ? <p>दर्ता नं. {toNepaliDigits(branding.registrationNumber)}</p> : null}
-            {branding.panNumber ? <p>PAN नं. {toNepaliDigits(branding.panNumber)}</p> : null}
             <h2>नगदी रसिद</h2>
           </div>
-          <div className="dot-matrix-contact">
-            <strong>सम्पर्क</strong>
-            {contacts.map((line, index) => <div key={`${line}-${index}`}>{line}</div>)}
-          </div>
+          <DocumentContacts />
         </header>
 
         <div className="dot-matrix-identifiers">
-          <span>शाखा: <strong>{content.branch.name || '—'}</strong>{content.branch.BranchCode ? ` (${content.branch.BranchCode})` : ''}</span>
-          <span>मिति: <strong>{formatDocumentNepaliDate(content.billingDate)}</strong></span>
+          <span>बिल नं. <strong>{bill.receiptNumber}</strong> ({content.branch.name || '—'})</span>
+          <span>{branding.panNumber ? <>पान नं. <strong>{toNepaliDigits(branding.panNumber)}</strong></> : null}</span>
+          <span>मिति: <strong>{formatDocumentNepaliDate(content.billingDate)} ({formatDocumentTime(bill.createdAt)})</strong></span>
         </div>
 
         <section className="dot-matrix-party">

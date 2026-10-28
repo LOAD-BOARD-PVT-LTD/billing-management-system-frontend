@@ -8,10 +8,13 @@ import {
 import { cn } from '@/utils/cn';
 import { useFontasyHimali } from '@/contexts/fontasy-himali-context';
 
-export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  error?: boolean;
+  success?: boolean;
+}
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, onChange, value, ...props }, ref) => {
+  ({ className, onChange, value, error, success, 'aria-invalid': ariaInvalid, ...props }, ref) => {
     const { enabled: fontasyEnabled } = useFontasyHimali();
     const fontasyActive =
       fontasyEnabled &&
@@ -52,7 +55,9 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <textarea
         className={cn(
-          'flex min-h-[80px] w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150',
+          error && 'border-destructive focus-visible:ring-destructive',
+          success && 'border-success/60 focus-visible:ring-success',
           fontasyActive && 'font-fontasy-himali-tt-input',
           className,
         )}
@@ -61,6 +66,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           if (typeof ref === 'function') ref(node);
           else if (ref) ref.current = node;
         }}
+        aria-invalid={ariaInvalid ?? (error || undefined)}
         onChange={handleChange}
         value={fontasyActive ? fontasyInput.displayValue : value}
         {...props}

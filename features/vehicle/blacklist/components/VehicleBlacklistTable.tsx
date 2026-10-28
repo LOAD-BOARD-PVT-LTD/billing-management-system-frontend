@@ -3,7 +3,9 @@
 import { Eye, Pencil, ShieldOff } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/data-tables/DataTable';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TableActionIconButton } from '@/components/ui/table-action-icon-button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { VehicleBlacklistRecord } from '@/features/vehicle/blacklist';
 import { useTranslations } from '@/utils/translations';
 import { toNepaliDigits } from '@/utils/numbers';
@@ -34,13 +36,13 @@ export function VehicleBlacklistTable({
   const columns: DataTableColumn<VehicleBlacklistRecord>[] = [
     {
       id: 'vehicleNumber',
-      header: t('vehicleBlacklist.vehicleLabel'),
+      header: 'सवारी नं.',
       cell: (record) => <span className="font-semibold">{record.vehicleNumber || '—'}</span>,
       headerClassName: 'min-w-36',
     },
     {
       id: 'owner',
-      header: t('vehicleBlacklist.ownerLabel'),
+      header: 'धनीको नाम',
       cell: (record) => (
         <div className="min-w-36">
           <p>{record.ownerName || '—'}</p>
@@ -50,67 +52,106 @@ export function VehicleBlacklistTable({
       headerClassName: 'min-w-40',
     },
     {
-      id: 'statuses',
+      id: 'vehicleType',
+      header: 'सवारी प्रकार',
+      cell: (record) => record.vehicleType || '—',
+      headerClassName: 'min-w-40',
+    },
+    {
+      id: 'membership',
+      header: 'Billing सदस्यता सम्बन्ध',
+      cell: (record) => (
+        <Badge variant="secondary" className="whitespace-nowrap">
+          {record.blacklistSource === 'billing-member'
+            ? t('vehicleBlacklist.membershipBillingMember')
+            : t('vehicleBlacklist.membershipNoBilling')}
+        </Badge>
+      ),
+      headerClassName: 'min-w-48',
+    },
+    {
+      id: 'status',
       header: 'स्थिति',
-      cell: () => <Badge variant="destructive" className="rounded-full">कालोसूची</Badge>,
+      cell: () => <Badge variant="destructive">{t('vehicleBlacklist.blacklistedStatus')}</Badge>,
       headerClassName: 'min-w-28',
     },
     {
-      id: 'reasons',
-      header: 'कारण',
+      id: 'updatedAt',
+      header: t('vehicleBlacklist.updatedLabel'),
+      cell: (record) => displayDate(record.blacklistedAt),
+      headerClassName: 'min-w-36',
+    },
+    {
+      id: 'performedBy',
+      header: t('vehicleBlacklist.performedByLabel'),
+      cell: (record) => record.performedBy ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="max-w-48 truncate" tabIndex={0}>{record.performedBy}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{record.performedBy}</TooltipContent>
+        </Tooltip>
+      ) : <span className="text-muted-foreground">—</span>,
+      headerClassName: 'min-w-44',
+    },
+    {
+      id: 'reason',
+      header: t('vehicleBlacklist.reasonLabel'),
       cell: (record) => <span className="line-clamp-2 min-w-40 max-w-64">{record.blacklistedReason || '—'}</span>,
       headerClassName: 'min-w-44',
     },
     {
-      id: 'dates',
-      header: 'मिति',
-      cell: (record) => displayDate(record.blacklistedAt),
-      headerClassName: 'min-w-28',
-    },
-    {
-      id: 'tags',
-      header: 'Tags',
-      cell: (record) => <span className="max-w-48 whitespace-normal text-xs">{record.tags.join(', ') || '—'}</span>,
-      headerClassName: 'min-w-28',
-    },
-    {
       id: 'actions',
-      header: t('vehicleBlacklist.actionsLabel'),
+      header: 'कार्य',
       cell: (record) => (
-        <div className="flex items-center gap-1">
-          <Button type="button" size="icon-sm" variant="ghost" aria-label={t('vehicleBlacklist.viewAction')} onClick={() => onView(record)}>
-            <Eye className="size-4" aria-hidden="true" />
-          </Button>
-          <Button type="button" size="icon-sm" variant="ghost" aria-label={t('vehicleBlacklist.editAction')} onClick={() => onEdit(record)}>
-            <Pencil className="size-4" aria-hidden="true" />
-          </Button>
-          {record.isBlacklisted ? (
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              aria-label={t('vehicleBlacklist.removeAction')}
-              onClick={() => onRemove(record)}
-            >
-              <ShieldOff className="size-4" aria-hidden="true" />
-            </Button>
-          ) : null}
-        </div>
+        <TooltipProvider delayDuration={200}>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TableActionIconButton aria-label={t('vehicleBlacklist.viewAction')} onClick={() => onView(record)}>
+                  <Eye className="size-4" aria-hidden="true" />
+                </TableActionIconButton>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t('vehicleBlacklist.viewAction')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <TableActionIconButton aria-label={t('vehicleBlacklist.editAction')} onClick={() => onEdit(record)}>
+                  <Pencil className="size-4" aria-hidden="true" />
+                </TableActionIconButton>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t('vehicleBlacklist.editAction')}</TooltipContent>
+            </Tooltip>
+            {record.isBlacklisted ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <TableActionIconButton
+                    tone="destructive"
+                    aria-label={t('vehicleBlacklist.removeAction')}
+                    onClick={() => onRemove(record)}
+                  >
+                    <ShieldOff className="size-4" aria-hidden="true" />
+                  </TableActionIconButton>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t('vehicleBlacklist.removeAction')}</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        </TooltipProvider>
       ),
       headerClassName: 'min-w-28',
     },
   ];
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="bg-muted/60 px-4 py-3">
-        <h2 className="font-semibold">{t('vehicleBlacklist.listTitle')}</h2>
+    <Card className="overflow-hidden rounded-xl shadow-sm hover:shadow-sm">
+      <CardHeader className="space-y-1 border-b bg-muted/40 px-4 py-3">
+        <CardTitle className="text-base">{t('vehicleBlacklist.listTitle')}</CardTitle>
         <p className="text-xs text-muted-foreground">
           {t('vehicleBlacklist.listDescription', { count: toNepaliDigits(records.length) })}
         </p>
-      </div>
-      <div className="overflow-x-auto p-3">
+      </CardHeader>
+      <CardContent className="p-3">
         <DataTable
           columns={columns}
           data={records}
@@ -120,7 +161,7 @@ export function VehicleBlacklistTable({
           ariaLabel={t('vehicleBlacklist.listTitle')}
           emptyState={{ title: t('vehicleBlacklist.emptyState') }}
         />
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

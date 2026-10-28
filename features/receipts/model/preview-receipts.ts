@@ -55,6 +55,7 @@ function previewReceipt(input: {
     ...input,
     status: input.status ?? 'PAID',
     fiscalYear: '2083/84',
+    printedCopyCount: 0,
     finalDigits,
     billingDate: input.paymentDate,
     bill,

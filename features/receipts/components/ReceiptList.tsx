@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
@@ -16,16 +15,12 @@ import { useReceiptFilters } from '@/features/receipts/hooks/use-receipt-filters
 import type { ReceiptRecord, ReceiptSortDirection } from '@/features/receipts/model/receipt';
 import { RECEIPT_COLUMN_OPTIONS, type ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
-import { createReceiptPdfBlob } from '@/features/receipts/services/receipt-document.service';
 import { cancelReceipt, correctReceipt, type ReceiptCorrection } from '@/features/receipts/api/bill-resource.api';
+import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
+import { usePrintReceipt } from '@/features/receipts/hooks/use-print-receipt';
 import { useReceiptCancelWindow } from '@/features/settings/hooks/useReceiptCancelWindow';
 
 const PAGE_SIZE = 10;
-
-type ReceiptPreview = {
-	receipt: ReceiptRecord;
-	url: string;
-};
 
 function sortValue(receipt: ReceiptRecord, column: string): string | number {
 	switch (column) {
@@ -72,6 +67,7 @@ function downloadCsv(rows: ReceiptRecord[], columns: ReceiptColumnId[], fiscalYe
 
 export function ReceiptList() {
 	const { records, isLoading, error, reload } = useReceipts();
+	const { downloadReceipt: downloadReceiptFile } = useDownloadReceipt();
 	const { policy: cancelWindow, error: cancelWindowError } = useReceiptCancelWindow();
 	const { toast } = useToast();
 	const fiscalYears = Array.from(new Set(records.map((receipt) => receipt.fiscalYear).filter(Boolean)));
@@ -80,13 +76,9 @@ export function ReceiptList() {
 	const [sortColumn, setSortColumn] = useState('paymentDate');
 	const [sortDirection, setSortDirection] = useState<ReceiptSortDirection>('desc');
 	const [copyCount, setCopyCount] = useState(1);
-	const [preview, setPreview] = useState<ReceiptPreview | null>(null);
+	const { printReceipt, printingReceiptId } = usePrintReceipt();
 	const { visibleColumns, applyColumns } = useReceiptColumns();
 	const { filters, updateFilter, clearFilters, filteredRecords, isFiltered } = useReceiptFilters(records, fiscalYear);
-
-	useEffect(() => () => {
-		if (preview) URL.revokeObjectURL(preview.url);
-	}, [preview]);
 
 	const sortedRecords = useMemo(() => {
 		if (!sortDirection) return filteredRecords;
@@ -104,45 +96,12 @@ export function ReceiptList() {
 		updateFilter(key, value);
 		setPage(1);
 	};
+	const printSelectedReceipt = (receipt: ReceiptRecord) => printReceipt(receipt, copyCount);
 	const handleSort = (column: string, direction: ReceiptSortDirection) => {
 		setSortColumn(column);
 		setSortDirection(direction);
 	};
-	const previewReceipt = async (receipt: ReceiptRecord) => {
-		try {
-			const blob = await createReceiptPdfBlob(receipt.bill, copyCount, { voided: receipt.status === 'CANCELLED' });
-			if (blob.type !== 'application/pdf' || blob.size === 0) {
-				throw new Error('रसिदको PDF तयार भएन। कृपया पुनः प्रयास गर्नुहोस्।');
-			}
-			setPreview({ receipt, url: URL.createObjectURL(blob) });
-		} catch (cause) {
-			toast({
-				title: 'रसिद पूर्वावलोकन खोल्न सकिएन',
-				description: cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
-				variant: 'destructive',
-			});
-		}
-	};
-	const downloadReceipt = async (receipt: ReceiptRecord) => {
-		try {
-			const blob = await createReceiptPdfBlob(receipt.bill, copyCount, { voided: receipt.status === 'CANCELLED' });
-			if (blob.type !== 'application/pdf' || blob.size === 0) {
-				throw new Error('रसिदको PDF तयार भएन। कृपया पुनः प्रयास गर्नुहोस्।');
-			}
-			const url = URL.createObjectURL(blob);
-			const link = document.createElement('a');
-			link.href = url;
-			link.download = `receipt-${receipt.receiptNumber.replace(/[^\w.-]+/gu, '-')}.pdf`;
-			link.click();
-			window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-		} catch (cause) {
-			toast({
-				title: 'रसिद डाउनलोड गर्न सकिएन',
-				description: cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
-				variant: 'destructive',
-			});
-		}
-	};
+	const downloadReceipt = (receipt: ReceiptRecord) => downloadReceiptFile(receipt);
 	const cancelReceiptRecord = async (receipt: ReceiptRecord, reason: string) => {
 		try {
 			if (!canCancel(receipt)) {
@@ -223,7 +182,8 @@ export function ReceiptList() {
 					sortColumn={sortColumn}
 					sortDirection={sortDirection}
 					onSort={handleSort}
-					onPreview={previewReceipt}
+					onPrint={printSelectedReceipt}
+					printingReceiptId={printingReceiptId}
 					onDownload={downloadReceipt}
 					onCancel={cancelReceiptRecord}
 					onCorrect={correctReceiptRecord}
@@ -234,25 +194,6 @@ export function ReceiptList() {
 				<DataTablePagination page={currentPage} pageSize={PAGE_SIZE} total={sortedRecords.length} onPageChange={setPage} className="mt-3" />
 			</section>
 
-			<Dialog open={preview !== null} onOpenChange={(open) => {
-				if (!open && preview) {
-					setPreview(null);
-				}
-			}}>
-				<DialogContent className="flex h-[min(92vh,900px)] max-w-6xl flex-col gap-3 p-4 sm:p-5">
-					<DialogHeader>
-						<DialogTitle>रसिद पूर्वावलोकन</DialogTitle>
-						<DialogDescription>{preview?.receipt.receiptNumber}</DialogDescription>
-					</DialogHeader>
-					{preview ? (
-						<iframe
-							title={`Receipt PDF ${preview.receipt.receiptNumber}`}
-							src={preview.url}
-							className="min-h-0 w-full flex-1 rounded-md border border-border bg-muted"
-						/>
-					) : null}
-				</DialogContent>
-			</Dialog>
 		</section>
 	);
 }

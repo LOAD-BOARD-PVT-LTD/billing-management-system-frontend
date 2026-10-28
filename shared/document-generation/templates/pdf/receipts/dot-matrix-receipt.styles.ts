@@ -42,15 +42,16 @@ export const dotMatrixReceiptStyles = `
     color: #fff;
     font-size: 13px;
   }
-  .dot-matrix-contact { border-left: 1px solid #aebbd2; padding-left: 10px; font-size: 10px; }
-  .dot-matrix-contact strong { display: block; margin-bottom: 3px; color: #294f9b; }
+  .document-contact-list { display:flex; flex-direction:column; align-self:center; border-left:1px solid #aebbd2; padding-left:10px; font-family:"Fontasy_Himali_TT", sans-serif; font-size:10px; line-height:1.35; }
+  .document-contact-list strong { margin-bottom:3px; color:#294f9b; font-size:11px; }
   .dot-matrix-identifiers {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto 1fr;
     gap: 8px;
     border-bottom: 1px solid #aebbd2;
     padding: 7px 4px;
   }
+  .dot-matrix-identifiers span:nth-child(2) { text-align: center; }
   .dot-matrix-identifiers span:last-child { text-align: right; }
   .dot-matrix-party {
     display: grid;

@@ -6,19 +6,23 @@ import { GlobalSearch } from '@/components/common/GlobalSearch';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { NepaliDateDisplay } from '@/components/common/NepaliDateDisplay';
 import { SidebarNav } from '@/components/common/layout/SidebarNav';
+import { Button } from '@/components/ui/button';
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/auth-context';
+import { useFontasyHimali } from '@/contexts/fontasy-himali-context';
 import { canAccessDashboardPath } from '@/components/common/layout/navigation/sidebar-config';
 import { Role } from '@/types/auth';
 import { useTranslations } from '@/utils/translations';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Languages } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 
 function DashboardHeader() {
   const { state } = useSidebar();
   const { t } = useTranslations();
+  const { enabled, setEnabled } = useFontasyHimali();
   const isCollapsed = state === 'collapsed';
 
   return (
@@ -41,6 +45,26 @@ function DashboardHeader() {
           <div className="w-full md:max-w-md">
             <GlobalSearch />
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={enabled ? 'secondary' : 'outline'}
+                size="sm"
+                className="shrink-0 gap-2"
+                aria-pressed={enabled}
+                aria-label={`फन्टासी हिमाली TT नेपाली टाइपिङ ${enabled ? 'चालू' : 'बन्द'}`}
+                onClick={() => setEnabled(!enabled)}
+              >
+                <Languages className="h-4 w-4" aria-hidden="true" />
+                <span>नेपाली टाइपिङ</span>
+                <span className="text-xs text-muted-foreground">{enabled ? 'चालू' : 'बन्द'}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              फन्टासी हिमाली TT नेपाली टाइपिङ चालू/बन्द गर्नुहोस्
+            </TooltipContent>
+          </Tooltip>
           <div className="hidden sm:block">
             <NepaliDateDisplay />
           </div>
@@ -156,9 +180,9 @@ export default function DashboardRouteLayout({ children }: { children: ReactNode
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -20 }}
               transition={{ duration: shouldReduceMotion ? 0 : 0.3, ease: 'easeOut' }}
-              className="flex-1 p-4 lg:p-6"
+              className={isBillingHeaderToggleRoute ? 'flex-1 p-2 lg:p-3' : 'flex-1 p-4 lg:p-6'}
             >
-              <div className="mx-auto max-w-7xl">{children}</div>
+              <div className={isBillingHeaderToggleRoute ? 'w-full' : 'mx-auto max-w-7xl'}>{children}</div>
             </motion.main>
           </AnimatePresence>
         </Suspense>

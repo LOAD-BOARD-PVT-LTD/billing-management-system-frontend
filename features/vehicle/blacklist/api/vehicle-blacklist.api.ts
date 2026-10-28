@@ -14,6 +14,7 @@ const EMPTY_METADATA: VehicleStatusMetadata = {
   isBlacklisted: false,
   blacklistedReason: null,
   blacklistedAt: null,
+  blacklistSource: 'tqms',
   tags: [],
 };
 
@@ -58,7 +59,9 @@ function parseMetadata(value: unknown): VehicleStatusMetadata {
     isBlacklisted: metadata.isBlacklisted === true,
     blacklistedReason: asText(metadata.blacklistedReason) || null,
     blacklistedAt: asText(metadata.blacklistedAt) || null,
+    blacklistSource: metadata.blacklistSource === 'billing-member' ? 'billing-member' : 'tqms',
     tags: [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))],
+    performedBy: asText(metadata.performedBy) || null,
   };
 }
 
@@ -96,6 +99,7 @@ function mapResourceToStatusRecord(value: unknown): VehicleBlacklistRecord {
     ownerName: asText(owner?.Name),
     phone: asText(owner?.Phone),
     branch: asText(owner?.SanghBranch),
+    performedBy: metadata.performedBy ?? null,
     ...metadata,
   };
 }
@@ -119,11 +123,12 @@ function unwrapResourceRows(payload: unknown): unknown[] {
   return [];
 }
 
-async function searchBlacklistedVehicles(): Promise<VehicleBlacklistRecord[]> {
+async function searchBlacklistedVehicles(signal?: AbortSignal): Promise<VehicleBlacklistRecord[]> {
   let payload: unknown;
   try {
     payload = await apiClient.get<unknown>(
       endpoints.resources.vehicle.search('isBlacklisted', 'true', 'all'),
+      { signal },
     );
   } catch (error) {
     if (error instanceof Error && /Request failed \(404\).*No resources found for search query/iu.test(error.message)) {
@@ -134,8 +139,8 @@ async function searchBlacklistedVehicles(): Promise<VehicleBlacklistRecord[]> {
   return unwrapResourceRows(payload).map(mapResourceToStatusRecord);
 }
 
-export async function fetchVehicleBlacklist(): Promise<VehicleBlacklistRecord[]> {
-  const records = await searchBlacklistedVehicles();
+export async function fetchVehicleBlacklist(signal?: AbortSignal): Promise<VehicleBlacklistRecord[]> {
+  const records = await searchBlacklistedVehicles(signal);
   return records
     .filter((record) => record.isBlacklisted)
     .sort((left, right) => (right.blacklistedAt ?? '').localeCompare(left.blacklistedAt ?? ''));
@@ -169,18 +174,21 @@ async function saveMetadata(
   await updateVehicleResource(resource, innerContent, resource.externalContent);
 }
 
-export async function createVehicleBlacklist(input: {
-  vehicle: BillingVehicle;
+async function addVehicleToBlacklist(input: {
+  vehicleId: string;
+  vehicleNumber: string;
   blacklistedReason: string;
   tags: string[];
   at: string;
+  performedBy: string | null;
+  blacklistSource: 'billing-member' | 'tqms';
 }): Promise<void> {
-  const vehicleId = input.vehicle.tqmsVehicleId.trim();
+  const vehicleId = input.vehicleId.trim();
   if (!vehicleId) throw new Error('The selected vehicle is missing its TQMS VehicleId.');
   if (!input.blacklistedReason.trim()) {
     throw new Error('A blacklisting reason is required.');
   }
-  const resource = await readVehicleResource(vehicleId, input.vehicle.vehicleNumber);
+  const resource = await readVehicleResource(vehicleId, input.vehicleNumber);
   const currentMetadata = parseMetadata({
     ...asRecord(resource.externalContent.metadata),
     ...asRecord(resource.resource.metadata),
@@ -193,6 +201,40 @@ export async function createVehicleBlacklist(input: {
     blacklistedReason: input.blacklistedReason.trim(),
     blacklistedAt: input.at,
     tags: [...currentMetadata.tags, ...input.tags],
+    performedBy: input.performedBy,
+    blacklistSource: input.blacklistSource,
+  });
+}
+
+export async function createVehicleBlacklist(input: {
+  vehicle: BillingVehicle;
+  blacklistedReason: string;
+  tags: string[];
+  at: string;
+  performedBy: string | null;
+}): Promise<void> {
+  await addVehicleToBlacklist({
+    vehicleId: input.vehicle.tqmsVehicleId,
+    vehicleNumber: input.vehicle.vehicleNumber,
+    blacklistedReason: input.blacklistedReason,
+    tags: input.tags,
+    at: input.at,
+    performedBy: input.performedBy,
+    blacklistSource: 'tqms',
+  });
+}
+
+export async function createMemberVehicleBlacklist(input: {
+  vehicleId: string;
+  vehicleNumber: string;
+  blacklistedReason: string;
+  at: string;
+  performedBy: string | null;
+}): Promise<void> {
+  await addVehicleToBlacklist({
+    ...input,
+    tags: [],
+    blacklistSource: 'billing-member',
   });
 }
 
@@ -200,6 +242,7 @@ export async function updateVehicleBlacklist(input: {
   vehicleId: string;
   vehicleNumber: string;
   metadata: VehicleStatusMetadata;
+  performedBy: string | null;
 }): Promise<void> {
   if (!input.vehicleId.trim()) throw new Error('A TQMS VehicleId is required to update vehicle metadata.');
   const resource = await readVehicleResource(input.vehicleId, input.vehicleNumber);
@@ -208,7 +251,7 @@ export async function updateVehicleBlacklist(input: {
     ...asRecord(resource.resource.metadata),
     ...asRecord(resource.innerContent.metadata),
   });
-  const metadata = { ...existingMetadata, ...input.metadata };
+  const metadata = { ...existingMetadata, ...input.metadata, performedBy: input.performedBy };
   if (!metadata.isBlacklisted) {
     metadata.blacklistedReason = null;
     metadata.blacklistedAt = null;

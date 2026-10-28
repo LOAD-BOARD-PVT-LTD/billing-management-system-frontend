@@ -1,7 +1,10 @@
 'use client';
 
+import 'regenerator-runtime/runtime';
 import { useEffect, useMemo, useState } from 'react';
-import { Download, RefreshCw, Search } from 'lucide-react';
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { Download, FileDown, RefreshCw, Search } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/data-tables/DataTable';
 import { ErrorState } from '@/components/feedback/ErrorState';
 import { Button } from '@/components/ui/button';
@@ -14,6 +17,166 @@ import { toNepaliDigits } from '@/utils/numbers';
 
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const PDF_PAGE_WIDTH = 595.28;
+const PDF_PAGE_HEIGHT = 841.89;
+const PDF_MARGIN = 42;
+const DEVANAGARI_SCRIPT = /\p{Script=Devanagari}/u;
+
+type VehicleNumberFonts = {
+  devanagari: PDFFont;
+  latin: PDFFont;
+};
+
+async function fetchPdfFont(path: string): Promise<Uint8Array> {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`सवारी नम्बर PDF फन्ट लोड गर्न सकिएन (${response.status})।`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+function drawVehicleNumber(
+  page: PDFPage,
+  value: string,
+  x: number,
+  top: number,
+  fonts: VehicleNumberFonts,
+): void {
+  const size = 12;
+  let cursorX = x;
+  let segment = '';
+  let segmentIsDevanagari: boolean | null = null;
+
+  const drawSegment = () => {
+    if (!segment || segmentIsDevanagari === null) return;
+    const font = segmentIsDevanagari ? fonts.devanagari : fonts.latin;
+    page.drawText(segment, {
+      x: cursorX,
+      y: page.getHeight() - top - size,
+      size,
+      font,
+      color: rgb(0.12, 0.16, 0.22),
+    });
+    cursorX += font.widthOfTextAtSize(segment, size);
+  };
+
+  for (const character of value) {
+    const isDevanagari = DEVANAGARI_SCRIPT.test(character);
+    if (segmentIsDevanagari !== null && isDevanagari !== segmentIsDevanagari) {
+      drawSegment();
+      segment = '';
+    }
+    segment += character;
+    segmentIsDevanagari = isDevanagari;
+  }
+  drawSegment();
+}
+
+async function downloadUniqueVehicleNumbersPdf(rows: TqmsRegistryVehicle[]): Promise<void> {
+  const numberGroups = new Map<string, { number: string; count: number }>();
+  rows.forEach((row) => {
+    const number = row.vehicleNumber.trim();
+    const key = (row.normalizedVehicleNumber || number).trim().toLocaleLowerCase();
+    if (!key || !number || number === '—') return;
+    const existing = numberGroups.get(key);
+    if (existing) existing.count += 1;
+    else numberGroups.set(key, { number, count: 1 });
+  });
+  const groupedNumbers = [...numberGroups.values()].sort((left, right) => left.number.localeCompare(right.number, 'ne'));
+  const uniqueNumbers = groupedNumbers.map(({ number }) => number);
+  const duplicateNumbers = groupedNumbers.filter(({ count }) => count > 1);
+
+  if (uniqueNumbers.length === 0) throw new Error('डाउनलोड गर्न सवारी नम्बर उपलब्ध छैन।');
+
+  const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
+  const [devanagariFontBytes, latinFontBytes] = await Promise.all([
+    fetchPdfFont('/fonts/noto-sans-devanagari-devanagari-400-normal.woff'),
+    fetchPdfFont('/fonts/noto-sans-devanagari-latin-400-normal.woff'),
+  ]);
+  const fonts = {
+    devanagari: await pdf.embedFont(devanagariFontBytes, { subset: true }),
+    latin: await pdf.embedFont(latinFontBytes, { subset: true }),
+  };
+
+  const title = 'सवारी नम्बर';
+  const titleSize = 16;
+  const totalLabel = `जम्मा अद्वितीय सवारी: ${toNepaliDigits(uniqueNumbers.length)}`;
+  const titleHeight = 48;
+  const rowHeight = 24;
+  const rowsPerPage = Math.floor((PDF_PAGE_HEIGHT - PDF_MARGIN * 2 - titleHeight) / rowHeight);
+
+  for (let start = 0; start < uniqueNumbers.length; start += rowsPerPage) {
+    const page = pdf.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+    page.drawText(title, {
+      x: PDF_MARGIN,
+      y: PDF_PAGE_HEIGHT - PDF_MARGIN - titleSize,
+      size: titleSize,
+      font: fonts.devanagari,
+      color: rgb(0.08, 0.16, 0.3),
+    });
+    page.drawText(totalLabel, {
+      x: PDF_MARGIN,
+      y: PDF_PAGE_HEIGHT - PDF_MARGIN - titleSize - 18,
+      size: 11,
+      font: fonts.devanagari,
+      color: rgb(0.32, 0.38, 0.46),
+    });
+
+    const pageNumbers = uniqueNumbers.slice(start, start + rowsPerPage);
+    pageNumbers.forEach((number, index) => {
+      const top = PDF_MARGIN + titleHeight + index * rowHeight;
+      drawVehicleNumber(page, number, PDF_MARGIN, top, fonts);
+      page.drawLine({
+        start: { x: PDF_MARGIN, y: PDF_PAGE_HEIGHT - top - rowHeight + 5 },
+        end: { x: PDF_PAGE_WIDTH - PDF_MARGIN, y: PDF_PAGE_HEIGHT - top - rowHeight + 5 },
+        thickness: 0.4,
+        color: rgb(0.86, 0.89, 0.93),
+      });
+    });
+  }
+
+  if (duplicateNumbers.length > 0) {
+    const duplicateTitle = 'दोहोरो सवारी नम्बर';
+    const duplicateTotalLabel = `दोहोरो नम्बर भएका सवारी: ${toNepaliDigits(duplicateNumbers.length)}`;
+    for (let start = 0; start < duplicateNumbers.length; start += rowsPerPage) {
+      const page = pdf.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+      page.drawText(duplicateTitle, {
+        x: PDF_MARGIN,
+        y: PDF_PAGE_HEIGHT - PDF_MARGIN - titleSize,
+        size: titleSize,
+        font: fonts.devanagari,
+        color: rgb(0.08, 0.16, 0.3),
+      });
+      page.drawText(duplicateTotalLabel, {
+        x: PDF_MARGIN,
+        y: PDF_PAGE_HEIGHT - PDF_MARGIN - titleSize - 18,
+        size: 11,
+        font: fonts.devanagari,
+        color: rgb(0.32, 0.38, 0.46),
+      });
+
+      duplicateNumbers.slice(start, start + rowsPerPage).forEach(({ number, count }, index) => {
+        const top = PDF_MARGIN + titleHeight + index * rowHeight;
+        drawVehicleNumber(page, `${number} — ${toNepaliDigits(count)} पटक`, PDF_MARGIN, top, fonts);
+        page.drawLine({
+          start: { x: PDF_MARGIN, y: PDF_PAGE_HEIGHT - top - rowHeight + 5 },
+          end: { x: PDF_PAGE_WIDTH - PDF_MARGIN, y: PDF_PAGE_HEIGHT - top - rowHeight + 5 },
+          thickness: 0.4,
+          color: rgb(0.86, 0.89, 0.93),
+        });
+      });
+    }
+  }
+
+  const bytes = await pdf.save();
+  const blobBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(blobBuffer).set(bytes);
+  const url = URL.createObjectURL(new Blob([blobBuffer], { type: 'application/pdf' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'tqms-unique-vehicle-numbers.pdf';
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 function downloadCsv(rows: TqmsRegistryVehicle[]) {
   const columns: Array<[string, (row: TqmsRegistryVehicle) => string]> = [
@@ -85,6 +248,8 @@ export function TqmsMemberRegistryPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim().toLocaleLowerCase()), 250);
@@ -163,6 +328,18 @@ export function TqmsMemberRegistryPage() {
     setPage(1);
   };
 
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      await downloadUniqueVehicleNumbersPdf(filteredVehicles);
+    } catch (cause) {
+      setPdfError(cause instanceof Error ? cause.message : 'सवारी नम्बर PDF बनाउन सकिएन।');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <section className="space-y-5 pb-8">
       <header>
@@ -188,11 +365,16 @@ export function TqmsMemberRegistryPage() {
               <span className="hidden sm:inline">ताजा गर्नुहोस्</span>
               <span className="sm:hidden">ताजा</span>
             </Button>
+            <Button type="button" variant="outline" size="sm" className="h-10 gap-2" onClick={handleDownloadPdf} disabled={filteredVehicles.length === 0 || isDownloadingPdf}>
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              {isDownloadingPdf ? 'PDF बनाउँदैछ…' : 'सवारी नम्बर PDF'}
+            </Button>
             <Button type="button" size="sm" className="h-10 gap-2" onClick={() => downloadCsv(filteredVehicles)} disabled={filteredVehicles.length === 0}>
               <Download className="h-4 w-4" aria-hidden="true" />Excel निकाल्नुहोस्
             </Button>
           </div>
         </div>
+        {pdfError ? <p role="alert" className="text-sm text-destructive">{pdfError}</p> : null}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
           <p aria-live="polite">कुल दर्ता सवारी: <span className="font-semibold text-foreground">{toNepaliDigits(activeVehicles.length)}</span>{debouncedSearch ? ` · खोज नतिजा: ${toNepaliDigits(filteredVehicles.length)}` : ''}</p>
           <p>TQMS शाखा फिल्टर: Narayani Sangh Hetauda</p>

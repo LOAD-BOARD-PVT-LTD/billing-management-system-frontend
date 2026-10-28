@@ -17,6 +17,11 @@ export type BillDetails = {
 };
 
 export type BillResourceContent = {
+	createdBy?: {
+		id: string;
+		name: string;
+		username: string;
+	};
 	vehicle: {
 		id: string;
 		vehicleNumber: string;
@@ -59,6 +64,7 @@ export type BillResourcePayload = Omit<BillResourceContent, 'fiscalYearName'>;
 
 export type CreateBillInput = {
 	vehicle: BillingVehicle;
+	createdBy?: NonNullable<BillResourceContent['createdBy']>;
 	details: BillDetails;
 	items: BillingLine[];
 	subtotal: number;

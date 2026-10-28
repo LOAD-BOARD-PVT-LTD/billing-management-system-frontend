@@ -24,8 +24,8 @@ export const billTemplateStyles = `
   .document-organization p { margin:1px 0; font-size:13px; }
   .document-organization .document-purpose { font-size:15px; font-weight:600; }
   .document-organization h2 { margin:0; font-size:17px; font-weight:700; }
-  .document-contact { display:flex; flex-direction:column; align-self:center; font-size:11px; line-height:1.35; }
-  .document-contact strong { font-size:12px; }
+  .document-contact-list { display:flex; flex-direction:column; align-self:center; border-left:1px solid #aebbd2; padding-left:10px; font-family:"Fontasy_Himali_TT", sans-serif; font-size:10px; line-height:1.35; }
+  .document-contact-list strong { margin-bottom:3px; color:#294f9b; font-size:11px; }
   .document-identifiers { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:center; min-height:29px; border-bottom:2px solid #222; padding:3px 9px; }
   .document-identifiers span:nth-child(2) { text-align:center; }
   .document-identifiers span:last-child { text-align:right; }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
@@ -19,7 +19,11 @@ import type { BillingLine, BillingVehicle } from '@/features/billing/model/types
 import type { BillDetails, CreateBillInput, SavedBill } from '@/features/billing/model/bill.types';
 import { findDuplicateBillItems, type DuplicateBillMatch } from '@/features/billing/utils/duplicate-bill-check';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
+import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
+import { useLinkedFeeRules } from '@/features/settings/hooks/useLinkedFeeRules';
+import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehicleBlacklist';
 import { PrintableBillReceipt } from '@/features/receipts/components/PrintableBillReceipt';
+import { resolveBillBranding } from '@/shared/document-generation/utils/resolve-bill-branding';
 import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
 import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
 import {
@@ -35,9 +39,14 @@ function getBillValidationMessages(input: {
   subtotal: number;
   discount: number;
   isLoadingRules: boolean;
+  isLoadingLinkedFeeRules: boolean;
+  linkedFeeRulesError: string | null;
   hasPeriodicBillingRule: boolean;
   billingMonths: number;
   ruleAmounts: Record<string, number>;
+  isCheckingBlacklist: boolean;
+  blacklistError: string | null;
+  isBlacklisted: boolean;
 }): string[] {
   const {
     vehicle,
@@ -46,12 +55,20 @@ function getBillValidationMessages(input: {
     subtotal,
     discount,
     isLoadingRules,
+    isLoadingLinkedFeeRules,
+    linkedFeeRulesError,
     hasPeriodicBillingRule,
     billingMonths,
     ruleAmounts,
+    isCheckingBlacklist,
+    blacklistError,
+    isBlacklisted,
   } = input;
   const messages: string[] = [];
   if (!vehicle) messages.push('पहिले सवारी छान्नुहोस्।');
+  if (vehicle && isCheckingBlacklist) messages.push('सवारीको कालोसूची अवस्था जाँच हुँदैछ।');
+  if (vehicle && blacklistError) messages.push(`कालोसूची अवस्था जाँच गर्न सकिएन: ${blacklistError}`);
+  if (vehicle && isBlacklisted) messages.push('यो सवारी कालोसूचीमा छ। यसका लागि बिल बनाउन मिल्दैन।');
   if (!details?.branchId) messages.push('बिलिङ शाखा छान्नुहोस्।');
   if (!details?.branchCode.trim()) messages.push('शाखाको कोड उपलब्ध छैन। बिलिङ शाखाको विवरण जाँच्नुहोस्।');
   if (!details?.fiscalYearId) messages.push('वित्तीय वर्ष छान्नुहोस्।');
@@ -63,6 +80,8 @@ function getBillValidationMessages(input: {
     messages.push('अवधिको सुरु मिति अन्त्य मितिभन्दा पछि हुन मिल्दैन।');
   }
   if (isLoadingRules) messages.push('बिलिङ नियम लोड हुँदैछ।');
+  if (vehicle && isLoadingLinkedFeeRules) messages.push('जोडिएको शुल्क नियम लोड हुँदैछ।');
+  if (vehicle && linkedFeeRulesError) messages.push(`जोडिएको शुल्क नियम लोड गर्न सकिएन: ${linkedFeeRulesError}`);
   if (hasPeriodicBillingRule && (!Number.isInteger(billingMonths) || billingMonths < 1 || billingMonths > 12)) {
     messages.push('आवधिक बिलिङका लागि १ देखि १२ सम्मको बिलिङ महिना छान्नुहोस्।');
   }
@@ -95,12 +114,20 @@ export function BillingWorkspace() {
   const { user: authUser } = useAuth();
   const { records: users } = useUsers();
   const billingRules = useBillingRules();
+  const linkedFeeRuleSettings = useLinkedFeeRules();
   const { settings: fiscalYearSelectorSettings } = useFiscalYearSelectorSettings();
   const { records: billingEntities } = useBillingEntities();
+  const {
+    records: blacklistedVehicles,
+    isLoading: isLoadingBlacklist,
+    error: blacklistError,
+    reload: reloadBlacklist,
+  } = useVehicleBlacklist();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
   const [manualItems, setManualItems] = useState<BillingLine[]>([]);
   const [itemOverrides, setItemOverrides] = useState<Record<string, Partial<BillingLine>>>({});
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
+  const [suppressedLinkedItemIds, setSuppressedLinkedItemIds] = useState<Set<string>>(() => new Set());
   const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [billingMonths, setBillingMonths] = useState(1);
   const [discount, setDiscount] = useState(0);
@@ -113,6 +140,42 @@ export function BillingWorkspace() {
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const createBill = useCreateBill();
+  const { downloadReceipt, downloadingReceiptId } = useDownloadReceipt();
+  const selectedVehicleIsBlacklisted = Boolean(
+    selectedVehicle?.tqmsVehicleId
+    && blacklistedVehicles.some((record) => (
+      record.vehicleId.trim().toLocaleLowerCase()
+      === selectedVehicle.tqmsVehicleId.trim().toLocaleLowerCase()
+    )),
+  );
+  const verifyVehicleCanBeBilled = async (vehicle: BillingVehicle): Promise<boolean> => {
+    if (!vehicle.tqmsVehicleId.trim()) {
+      setDuplicateCheckError('TQMS सवारी ID उपलब्ध नभएकाले कालोसूची जाँच गर्न सकिएन।');
+      return false;
+    }
+    try {
+      const result = await reloadBlacklist();
+      if (result.error) throw result.error;
+      const isBlacklisted = result.data?.some((record) => (
+        record.vehicleId.trim().toLocaleLowerCase()
+        === vehicle.tqmsVehicleId.trim().toLocaleLowerCase()
+      ));
+      if (isBlacklisted) {
+        setDuplicateCheckError('यो सवारी कालोसूचीमा छ। यसका लागि बिल बनाउन मिल्दैन।');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      setDuplicateCheckError(
+        `कालोसूची अवस्था जाँच गर्न सकिएन: ${error instanceof Error ? error.message : 'पुनः प्रयास गर्नुहोस्।'}`,
+      );
+      return false;
+    }
+  };
+  const savedBillBranding = useMemo(
+    () => savedBill ? resolveBillBranding(savedBill, billingEntities) : {},
+    [savedBill, billingEntities],
+  );
   const selectorSettings = fiscalYearSelectorSettings ?? DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS;
   const normalFiscalYearOptions = new Set(generateNepaliFiscalYearOptions({
     yearsBack: selectorSettings.yearsBack,
@@ -133,9 +196,15 @@ export function BillingWorkspace() {
   const fiscalYearId = availableFiscalYears.some((year) => year.id === selectedFiscalYearId)
     ? selectedFiscalYearId
     : defaultFiscalYear?.id ?? '';
-  const assignedBranchId = users.find((user) =>
+  const currentUserRecord = users.find((user) =>
     user.email.toLocaleLowerCase() === authUser?.email.toLocaleLowerCase(),
-  )?.branchId;
+  );
+  const assignedBranchId = currentUserRecord?.branchId;
+  const billCreator = authUser ? {
+    id: currentUserRecord?.id ?? authUser.id,
+    name: currentUserRecord?.name.trim() || authUser.name?.trim() || authUser.email,
+    username: currentUserRecord?.email || authUser.email,
+  } : undefined;
 
   const updateItem = (id: string, changes: Partial<BillingLine>) => {
     if ('amount' in changes && !billingDetailsRef.current?.allowManualReceiptAmountOverride) return;
@@ -148,12 +217,36 @@ export function BillingWorkspace() {
 
   const selectItemForReceipt = (id: string) => {
     setSelectedItemIds((current) => new Set(current).add(id));
+    setSuppressedLinkedItemIds((current) => {
+      if (!current.has(id)) return current;
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   };
 
-  const deselectItemFromReceipt = (id: string) => {
+  const deselectItemFromReceipt = (id: string, isLinkedAutoSelected = false) => {
     setSelectedItemIds((current) => {
       const next = new Set(current);
       next.delete(id);
+      return next;
+    });
+    if (isLinkedAutoSelected) {
+      setSuppressedLinkedItemIds((current) => new Set(current).add(id));
+      return;
+    }
+
+    const sourceRule = billingRules.config.rules.find((rule) => rule.id === id);
+    if (!sourceRule) return;
+    const linkedFeeHeadIds = new Set(linkedFeeRuleSettings.settings?.rules
+      .filter((rule) => rule.active && rule.fiscalYearId === fiscalYearId && rule.sourceFeeHeadId === sourceRule.feeHeadId)
+      .map((rule) => rule.linkedFeeHeadId) ?? []);
+    const linkedRuleIds = new Set(billingRules.config.rules
+      .filter((rule) => rule.fiscalYearId === fiscalYearId && linkedFeeHeadIds.has(rule.feeHeadId))
+      .map((rule) => rule.id));
+    setSuppressedLinkedItemIds((current) => {
+      const next = new Set(current);
+      linkedRuleIds.forEach((linkedRuleId) => next.delete(linkedRuleId));
       return next;
     });
   };
@@ -184,6 +277,7 @@ export function BillingWorkspace() {
     setManualItems([]);
     setItemOverrides({});
     setSelectedItemIds(new Set());
+    setSuppressedLinkedItemIds(new Set());
     setDiscount(0);
   };
 
@@ -219,15 +313,27 @@ export function BillingWorkspace() {
       subtotal,
       discount,
       isLoadingRules: billingRules.isLoading,
+      isLoadingLinkedFeeRules: linkedFeeRuleSettings.isLoading,
+      linkedFeeRulesError: linkedFeeRuleSettings.error,
       hasPeriodicBillingRule,
       billingMonths,
       ruleAmounts,
+      isCheckingBlacklist: isLoadingBlacklist,
+      blacklistError,
+      isBlacklisted: selectedVehicleIsBlacklisted,
     });
     if (validationMessages.length > 0) return;
     if (!selectedVehicle || !billingDetails) return;
 
+    setDuplicateCheckError(null);
+    setIsCheckingDuplicates(true);
+    const canCreateBill = await verifyVehicleCanBeBilled(selectedVehicle);
+    setIsCheckingDuplicates(false);
+    if (!canCreateBill) return;
+
     const pendingInput: CreateBillInput = {
       vehicle: selectedVehicle,
+      ...(billCreator ? { createdBy: billCreator } : {}),
       details: {
         ...billingDetails,
         billingMonths: hasPeriodicBillingRule ? billingMonths : 0,
@@ -278,6 +384,7 @@ export function BillingWorkspace() {
     setDuplicateCheckError(null);
     setIsCheckingDuplicates(true);
     try {
+      if (!await verifyVehicleCanBeBilled(pendingSubmit.vehicle)) return;
       const bill = await createBill.create(pendingSubmit);
       setSavedBill(bill);
       setDuplicateMatches([]);
@@ -294,7 +401,8 @@ export function BillingWorkspace() {
     return (
       <PrintableBillReceipt
         bill={savedBill}
-        onCreateAnother={() => {
+        branding={savedBillBranding}
+        onBack={() => {
           setSavedBill(null);
           setSelectedVehicle(null);
           setBillingDetails(null);
@@ -325,7 +433,7 @@ export function BillingWorkspace() {
           void handleDuplicateConfirmation();
         }}
       />
-      <section className="mx-auto max-w-7xl space-y-3 pb-6">
+      <section className="w-full space-y-1 pb-1">
       <BillingHeader
         selectedVehicle={selectedVehicle}
         onSelectVehicle={handleSelectVehicle}
@@ -362,15 +470,41 @@ export function BillingWorkspace() {
               };
               return [{ ...baseItem, ...itemOverrides[rule.id] }];
             });
+            const selectedLinkedItemIds = new Set(selectedItemIds);
+            const autoLinkedItemIds = new Set<string>();
+            if (linkedFeeRuleSettings.settings?.enabled) {
+              const activeLinks = linkedFeeRuleSettings.settings.rules.filter((linkedRule) => (
+                linkedRule.active && linkedRule.fiscalYearId === fiscalYearId
+              ));
+              for (const linkedRule of activeLinks) {
+                const sourceSelected = rules.some((rule) => (
+                  rule.feeHeadId === linkedRule.sourceFeeHeadId && selectedItemIds.has(rule.id)
+                ));
+                if (!sourceSelected) continue;
+                const linkedFeeAlreadyPaid = linkedRule.oncePerFiscalYear && existingBills.some((receipt) => (
+                  receipt.status === 'PAID'
+                  && receipt.bill.content.vehicle.id === selectedVehicle.id
+                  && receipt.bill.content.fiscalYearId === fiscalYearId
+                  && receipt.bill.content.items.some((item) => item.feeHeadId === linkedRule.linkedFeeHeadId)
+                ));
+                if (linkedFeeAlreadyPaid) continue;
+                rules
+                  .filter((rule) => rule.feeHeadId === linkedRule.linkedFeeHeadId && !suppressedLinkedItemIds.has(rule.id))
+                  .forEach((rule) => {
+                    selectedLinkedItemIds.add(rule.id);
+                    autoLinkedItemIds.add(rule.id);
+                  });
+              }
+            }
             const items = [...ruleItems, ...manualItems.map((item) => ({
               ...item,
               ...itemOverrides[item.id],
             }))];
             const includedItems = billingDetails?.allowManualReceiptAmountOverride
-              ? items.filter((item) => selectedItemIds.has(item.id))
+              ? items.filter((item) => selectedLinkedItemIds.has(item.id))
               : items;
             const selectedRules = rules.filter((rule) =>
-              !billingDetails?.allowManualReceiptAmountOverride || selectedItemIds.has(rule.id),
+              !billingDetails?.allowManualReceiptAmountOverride || selectedLinkedItemIds.has(rule.id),
             );
             const hasPeriodicBillingRule = selectedRules.some((rule) => rule.frequency === 'PERIODIC');
             const ruleAmounts = Object.fromEntries(rules.map((rule) => [rule.id, rule.amount]));
@@ -382,13 +516,28 @@ export function BillingWorkspace() {
               subtotal,
               discount,
               isLoadingRules: billingRules.isLoading,
+              isLoadingLinkedFeeRules: linkedFeeRuleSettings.isLoading,
+              linkedFeeRulesError: linkedFeeRuleSettings.error,
               hasPeriodicBillingRule,
               billingMonths,
               ruleAmounts,
+              isCheckingBlacklist: isLoadingBlacklist,
+              blacklistError,
+              isBlacklisted: selectedVehicleIsBlacklisted,
             });
 
             return (
-              <div className="space-y-3 pt-1">
+              <div className="space-y-1 pt-0.5">
+                {selectedVehicleIsBlacklisted ? (
+                  <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    यो सवारी कालोसूचीमा छ। यसका लागि बिल बनाउन मिल्दैन।
+                  </div>
+                ) : null}
+                {blacklistError ? (
+                  <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    कालोसूची अवस्था जाँच गर्न सकिएन: {blacklistError}
+                  </div>
+                ) : null}
                 <VehicleBilling
                   key={selectedVehicle.id}
                   vehicle={selectedVehicle}
@@ -401,8 +550,8 @@ export function BillingWorkspace() {
                   onBillingDetailsChange={handleBillingDetailsChange}
                   assignedBranchId={assignedBranchId}
                 />
-                <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_250px]">
-                  <div className="min-w-0 space-y-3">
+                <div className="grid items-start gap-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+                  <div className="min-w-0 space-y-1">
                     <BillingItems
                       items={items}
                       feeHeads={billingRules.config.feeHeads.filter((feeHead) => feeHead.status === 'ACTIVE')}
@@ -413,10 +562,11 @@ export function BillingWorkspace() {
                       billingMonths={billingMonths}
                       onBillingMonthsChange={setBillingMonths}
                       allowManualAmountOverride={billingDetails?.allowManualReceiptAmountOverride ?? false}
-                      selectedItemIds={selectedItemIds}
+                      selectedItemIds={selectedLinkedItemIds}
+                      autoLinkedItemIds={autoLinkedItemIds}
                       onChange={updateItem}
                       onSelectItemForReceipt={selectItemForReceipt}
-                      onDeselectItemFromReceipt={deselectItemFromReceipt}
+                      onDeselectItemFromReceipt={(id) => deselectItemFromReceipt(id, autoLinkedItemIds.has(id))}
                       onAddManualItem={addManualItem}
                       onReloadRules={billingRules.load}
                     />
@@ -440,7 +590,16 @@ export function BillingWorkspace() {
                   </div>
                   <VehicleSummary vehicle={selectedVehicle} />
                 </div>
-                <MembershipHistory />
+                <MembershipHistory
+                  vehicleId={selectedVehicle.tqmsVehicleId}
+                  vehicleNumber={selectedVehicle.vehicleNumber}
+                  records={existingBills}
+                  isLoading={isLoadingExistingBills}
+                  error={existingBillsError}
+                  onReload={() => void reloadBills()}
+                  onDownloadReceipt={(receipt) => void downloadReceipt(receipt)}
+                  downloadingReceiptId={downloadingReceiptId}
+                />
               </div>
             );
           }}

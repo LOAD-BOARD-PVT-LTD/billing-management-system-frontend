@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Download, Plus, Printer, Settings2 } from 'lucide-react';
+import { Download, Plus, Settings2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,17 +39,16 @@ export function ReceiptHeader({ fiscalYear, fiscalYears, onFiscalYearChange, cop
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						{columnsMenu}
-						<Button type="button" variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={onExport} disabled={resultCount === 0}>
-							<Download className="h-4 w-4" aria-hidden="true" />Excel निकाल्नुहोस्
-						</Button>
 						<div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-2">
-							<Printer className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-							<label htmlFor="receipt-copy-count" className="text-[11px] text-muted-foreground">प्रतिलिपि</label>
+							<label htmlFor="receipt-copy-count" className="text-[11px] text-muted-foreground">प्रतिलिपि संख्या</label>
 							<Select value={String(copyCount)} onValueChange={(value) => onCopyCountChange(Number(value))}>
 								<SelectTrigger id="receipt-copy-count" className="h-7 w-14 border-0 px-1 text-xs shadow-none"><SelectValue /></SelectTrigger>
 								<SelectContent>{[1, 2, 3, 4, 5].map((count) => <SelectItem key={count} value={String(count)}>{toNepaliDigits(count)}</SelectItem>)}</SelectContent>
 							</Select>
 						</div>
+						<Button type="button" variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={onExport} disabled={resultCount === 0}>
+							<Download className="h-4 w-4" aria-hidden="true" />Excel निकाल्नुहोस्
+						</Button>
 						<Button asChild type="button" variant="outline" size="sm" className="h-9 gap-2 text-xs">
 							<Link href="/dashboard/settings?tab=billing-receipts"><Settings2 className="h-4 w-4" aria-hidden="true" />रसिद सेटिङ</Link>
 						</Button>

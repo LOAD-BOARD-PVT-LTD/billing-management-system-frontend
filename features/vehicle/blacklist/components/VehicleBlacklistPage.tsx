@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
+import { AlertCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 import type { VehicleBlacklistCreateInput } from '@/features/vehicle/blacklist/components/VehicleBlacklistCreateForm';
 import type { VehicleBlacklistRecord, VehicleStatusMetadata } from '@/features/vehicle/blacklist';
 import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehicleBlacklist';
@@ -20,6 +23,7 @@ const PAGE_SIZE = 15;
 
 export function VehicleBlacklistPage() {
   const { t } = useTranslations();
+  const { user } = useAuth();
   const { toast } = useToast();
   const { records, isLoading, isRefreshing, error, reload, createRecord, updateRecord, isSaving } = useVehicleBlacklist();
   const [search, setSearch] = useState('');
@@ -57,6 +61,7 @@ export function VehicleBlacklistPage() {
       blacklistedReason,
       tags,
       at: new Date().toISOString(),
+      performedBy: user?.email ?? null,
     });
     toast({ title: t('vehicleBlacklist.added') });
   };
@@ -66,6 +71,7 @@ export function VehicleBlacklistPage() {
       vehicleId: record.vehicleId,
       vehicleNumber: record.vehicleNumber,
       metadata,
+      performedBy: user?.email ?? null,
     });
     toast({ title: t('vehicleBlacklist.updated') });
     setEditing(null);
@@ -75,6 +81,7 @@ export function VehicleBlacklistPage() {
     await updateRecord({
       vehicleId: record.vehicleId,
       vehicleNumber: record.vehicleNumber,
+      performedBy: user?.email ?? null,
       metadata: {
         isBlacklisted: false,
         blacklistedReason: null,
@@ -110,9 +117,12 @@ export function VehicleBlacklistPage() {
       />
 
       {error ? (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
+        <Card role="alert" className="border-destructive/30 bg-destructive/5 shadow-none hover:shadow-none">
+          <CardContent className="flex items-start gap-2 p-4 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <p>{error}</p>
+          </CardContent>
+        </Card>
       ) : null}
 
       <VehicleBlacklistTable

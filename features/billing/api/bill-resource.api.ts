@@ -21,8 +21,9 @@ function resourceId(value: unknown): string | null {
 }
 
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload {
-	const { vehicle, details, items, subtotal, discount, paymentMethod, note } = input;
+	const { vehicle, createdBy, details, items, subtotal, discount, paymentMethod, note } = input;
 	return {
+		...(createdBy ? { createdBy } : {}),
 		vehicle: {
 			id: vehicle.tqmsVehicleId,
 			vehicleNumber: vehicle.vehicleNumber,

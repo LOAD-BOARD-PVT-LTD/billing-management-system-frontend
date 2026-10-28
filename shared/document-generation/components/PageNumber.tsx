@@ -1,3 +1,4 @@
 export function PageNumber({ value }: { value: string }) {
-  return <span className="document-reference">स.नं. {value}</span>;
+  if (!value.trim()) return null;
+  return <span className="document-reference">द.नं. {value}</span>;
 }

@@ -12,7 +12,8 @@ interface ReceiptTableProps {
 	sortColumn: string;
 	sortDirection: SortDirection;
 	onSort: (column: string, direction: SortDirection) => void;
-	onPreview: (receipt: ReceiptRecord) => Promise<void>;
+	onPrint: (receipt: ReceiptRecord) => Promise<void>;
+	printingReceiptId: string | null;
 	onDownload: (receipt: ReceiptRecord) => Promise<void>;
 	onCancel: (receipt: ReceiptRecord, reason: string) => Promise<void>;
 	onCorrect: (receipt: ReceiptRecord, correction: import('@/features/receipts/api/bill-resource.api').ReceiptCorrection, reason: string) => Promise<void>;
@@ -35,7 +36,7 @@ function heading(label: string, id: string, sortColumn: string, sortDirection: S
 	return <DataTableColumnHeader label={label} sortDirection={sortColumn === id ? sortDirection : null} onSortChange={(direction) => onSort(id, direction)} />;
 }
 
-export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, onSort, onPreview, onDownload, onCancel, onCorrect, canCancel, cancelUnavailableReason, isLoading = false }: ReceiptTableProps) {
+export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, onSort, onPrint, printingReceiptId, onDownload, onCancel, onCorrect, canCancel, cancelUnavailableReason, isLoading = false }: ReceiptTableProps) {
 	const allColumns: Record<ReceiptColumnId, DataTableColumn<ReceiptRecord>> = {
 		receiptNumber: {
 			id: 'receiptNumber',
@@ -102,7 +103,8 @@ export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, 
 		header: <span className="block text-right text-[10px]">कार्यहरू</span>,
 		cell: (receipt) => <ReceiptActions
 			receipt={receipt}
-			onPreview={onPreview}
+			onPrint={onPrint}
+			printing={printingReceiptId === receipt.id}
 			onDownload={onDownload}
 			onCancel={onCancel}
 			onCorrect={onCorrect}

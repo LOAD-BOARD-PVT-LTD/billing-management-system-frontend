@@ -1,46 +1,35 @@
-import type { BillResourceContent } from '@/features/billing/model/bill.types';
 import { CompanyBranding, DEFAULT_COMPANY_BRANDING } from '../../../components/CompanyBranding';
+import { DocumentContacts } from '../../../components/DocumentContacts';
 import { DocumentFooter } from '../../../components/DocumentFooter';
 import { DocumentHeader } from '../../../components/DocumentHeader';
 import { PageNumber } from '../../../components/PageNumber';
 import type { BillTemplateProps } from '../../../types/template.types';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '../../../utils/format-currency';
-import { formatDocumentNepaliDate } from '../../../utils/format-date';
+import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import { billTemplateStyles } from './bill.styles';
-
-function contactLines(content: BillResourceContent): string[] {
-  return [content.branch.contactPerson, content.branch.phone, content.branch.address, content.branch.name]
-    .map((value) => value.trim())
-    .filter(Boolean);
-}
 
 export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
-  const contacts = contactLines(content);
 
   return (
     <>
       <style>{billTemplateStyles}</style>
       <article className="document-page">
         <div className="document-topline">
-          <PageNumber value={bill.receiptNumber} />
+          <PageNumber value={branding.registrationNumber ?? ''} />
         </div>
         <DocumentHeader>
           <CompanyBranding branding={branding} />
-          <div className="document-contact">
-            <strong>सम्पर्क नम्बरहरू:</strong>
-            {contacts.map((line, index) => <span key={`${line}-${index}`}>{line}</span>)}
-          </div>
+          <DocumentContacts />
         </DocumentHeader>
 
         <div className="document-identifiers">
           <span>बिल नं. <strong>{bill.receiptNumber}</strong> {content.branch.name ? <strong>({content.branch.name})</strong> : null}</span>
           <span>
-            {branding.panNumber ? <>PAN नं. <strong>{branding.panNumber}</strong></> : null}
-            {branding.registrationNumber ? <> दर्ता नं. <strong>{branding.registrationNumber}</strong></> : null}
+            {branding.panNumber ? <>पान नं. <strong>{branding.panNumber}</strong></> : null}
           </span>
-          <span>मिति <strong>{formatDocumentNepaliDate(content.billingDate)}</strong></span>
+          <span>मिति <strong>{formatDocumentNepaliDate(content.billingDate)} ({formatDocumentTime(bill.createdAt)})</strong></span>
         </div>
 
         <section className="document-parties">

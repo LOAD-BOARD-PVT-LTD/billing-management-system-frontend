@@ -18,9 +18,10 @@ type BillingItemsProps = {
 	onBillingMonthsChange: (months: number) => void;
 	allowManualAmountOverride: boolean;
 	selectedItemIds: Set<string>;
+	autoLinkedItemIds: Set<string>;
 	onChange: (id: string, changes: Partial<BillingLine>) => void;
 	onSelectItemForReceipt: (id: string) => void;
-	onDeselectItemFromReceipt: (id: string) => void;
+	onDeselectItemFromReceipt: (id: string, isLinkedAutoSelected?: boolean) => void;
 	onAddManualItem: () => void;
 	onReloadRules: () => void;
 };
@@ -36,6 +37,7 @@ export function BillingItems({
 	onBillingMonthsChange,
 	allowManualAmountOverride,
 	selectedItemIds,
+	autoLinkedItemIds,
 	onChange,
 	onSelectItemForReceipt,
 	onDeselectItemFromReceipt,
@@ -48,7 +50,7 @@ export function BillingItems({
 
 	return (
 		<section className="overflow-hidden rounded-md border border-border bg-card">
-			<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+			<div className="flex flex-wrap items-center justify-between gap-1 border-b border-border px-1.5 py-0.5">
 				<h2 className="text-sm font-semibold">बिलिङ नियम</h2>
 				{hasPeriodicRule && (
 					<label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -68,12 +70,12 @@ export function BillingItems({
 				)}
 			</div>
 			{!allowManualAmountOverride && (
-				<p className="border-b border-border/70 bg-muted/30 px-3 py-2 text-xs text-muted-foreground" role="status">
+				<p className="border-b border-border/70 bg-muted/30 px-1.5 py-0.5 text-xs text-muted-foreground" role="status">
 					चयन गरिएको शाखामा Manual Amount Override अनुमति छैन। रकम परिवर्तन र Manual शुल्क थप्न मिल्दैन।
 				</p>
 			)}
 			{allowManualAmountOverride ? (
-				<div className="flex min-w-0 items-center gap-2 border-b border-sky-200 bg-sky-50/70 px-3 py-1 text-xs" aria-live="polite">
+				<div className="flex min-w-0 items-center gap-1 border-b border-sky-200 bg-sky-50/70 px-1.5 py-0.5 text-xs" aria-live="polite">
 					<p className="shrink-0 font-semibold text-sky-900">
 						रसीदमा समावेश: {selectedItems.length} शुल्क · रु {formatCurrency(selectedTotal)}
 					</p>
@@ -84,7 +86,7 @@ export function BillingItems({
 					</p>
 				</div>
 			) : null}
-			<div className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-b border-border bg-muted/40 px-3 py-1 text-[11px] font-semibold text-muted-foreground sm:grid-cols-[28px_minmax(0,1.2fr)_minmax(160px,0.9fr)_minmax(190px,1.1fr)] sm:gap-2">
+			<div className="grid grid-cols-[20px_minmax(0,1fr)] gap-x-1 border-b border-border bg-muted/40 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground sm:grid-cols-[20px_minmax(0,1fr)_minmax(130px,0.8fr)_minmax(160px,1fr)] sm:gap-1">
 				<span>सि.नं.</span>
 				<span className="sm:col-start-2">शुल्क शीर्षक</span>
 				<span className="col-start-2 sm:col-start-3">रकम</span>
@@ -105,27 +107,28 @@ export function BillingItems({
 					allowManualAmountOverride={allowManualAmountOverride}
 					allowSelection={allowManualAmountOverride}
 					isSelected={selectedItemIds.has(item.id)}
+					isLinkedAutoSelected={autoLinkedItemIds.has(item.id)}
 					onChange={onChange}
 					onSelectForReceipt={onSelectItemForReceipt}
-					onDeselectFromReceipt={onDeselectItemFromReceipt}
+					onDeselectFromReceipt={(id) => onDeselectItemFromReceipt(id, autoLinkedItemIds.has(id))}
 				/>
 			)) : rulesError ? (
-				<p role="alert" className="px-3 py-3 text-center text-sm text-destructive">
+				<p role="alert" className="px-3 py-2 text-center text-sm text-destructive">
 					बिलिङ नियम लोड गर्न सकिएन: {rulesError}
 					<Button type="button" variant="link" size="xs" className="ml-2 h-auto p-0" onClick={onReloadRules}>
 						पुनः प्रयास
 					</Button>
 				</p>
 			) : isLoadingRules ? (
-				<p role="status" className="px-3 py-3 text-center text-sm text-muted-foreground">
+				<p role="status" className="px-3 py-2 text-center text-sm text-muted-foreground">
 					बिलिङ नियम लोड हुँदैछ...
 				</p>
 			) : (
-				<p className="px-3 py-3 text-center text-sm text-muted-foreground">
+				<p className="px-3 py-2 text-center text-sm text-muted-foreground">
 					छानिएको वित्तीय वर्ष र सवारी श्रेणीका लागि सक्रिय नियम भेटिएन। आवश्यक भए म्यानुअल शुल्क थप्नुहोस्।
 				</p>
 			)}
-			<div className="flex justify-end border-t border-border/70 px-3 py-1">
+			<div className="flex justify-end border-t border-border/70 px-1 py-0.5">
 				<Button type="button" variant="outline" size="xs" onClick={onAddManualItem} disabled={!allowManualAmountOverride}>
 					<Plus aria-hidden="true" className="mr-1.5 size-3.5" />
 					Manual शुल्क थप्नुहोस्

@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
 	Table,
 	TableBody,
@@ -412,13 +413,13 @@ export function FiscalYearManagement() {
 							</div>
 							<div className="space-y-1.5 md:col-span-2 xl:col-span-1">
 								<Label htmlFor="fiscal-years-excluded">{t('fiscalYearSelectorArchivedYearsLabel')}</Label>
-								<textarea
+								<Textarea
 									id="fiscal-years-excluded"
 									value={currentPreferences.archivedYears.join('\n')}
 									onChange={(event) => { setPreferenceSaved(false); setPreferenceDraft((current) => ({ ...(current ?? currentPreferences), archivedYears: event.target.value.split(/\r?\n/u).map((year) => year.trim()).filter(Boolean) })); }}
 									placeholder={t('fiscalYearSelectorArchivedYearsPlaceholder')}
 									rows={3}
-									className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+									className="min-h-20 rounded-md"
 								/>
 								<p className="text-xs text-muted-foreground">{t('fiscalYearManagement.excludedYearsHelp')}</p>
 							</div>

@@ -10,7 +10,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_ENTRIES, type SettingsCategoryId } from '
 import { SettingsEntryCard } from '@/features/settings/components/SettingsEntryCard';
 import { FiscalYearManagement } from '@/features/settings/components/FiscalYearManagement';
 import { ReceiptCancelWindowControl } from '@/features/settings/components/ReceiptCancelWindowControl';
-import { FontasyHimaliControl } from '@/features/settings/components/FontasyHimaliControl';
+import { LinkedFeeRulesManager } from '@/features/billing-rules/components/configuration/LinkedFeeRulesManager';
 
 const DEFAULT_CATEGORY: SettingsCategoryId = 'billing-receipts';
 
@@ -66,8 +66,6 @@ export function AdminSettingsPage() {
         </div>
       </header>
 
-      <FontasyHimaliControl />
-
       <div className="relative max-w-lg">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="सेटिङ खोज्नुहोस्: VAT, रसिद, TQMS, SMS..." aria-label="सेटिङ खोज्नुहोस्" aria-expanded={Boolean(search.trim())} aria-controls="settings-search-results" className="h-9 bg-white pl-9 pr-9 text-sm" />
@@ -76,7 +74,7 @@ export function AdminSettingsPage() {
           <div id="settings-search-results" className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg" role="region" aria-label="सेटिङ खोज परिणाम">
             {filteredEntries.length ? filteredEntries.map((entry) => {
               const category = SETTINGS_CATEGORIES.find((item) => item.id === entry.category);
-              const isAvailable = Boolean(entry.href) || entry.id === 'receipt-fiscal-year-control' || entry.id === 'receipt-cancel-window';
+              const isAvailable = Boolean(entry.href) || entry.id === 'receipt-fiscal-year-control' || entry.id === 'receipt-cancel-window' || entry.id === 'related-fee-rules';
               return <button key={entry.id} type="button" className="flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left hover:bg-accent" onClick={() => selectSearchResult(entry.category, entry.id)}><span><span className="block text-xs font-medium">{entry.title}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">{category?.label}</span></span><span className="mt-0.5 text-[10px] text-muted-foreground">{isAvailable ? 'उपलब्ध' : 'जडान छैन'}</span></button>;
             }) : <p className="px-3 py-4 text-xs text-muted-foreground">मिल्दो सेटिङ भेटिएन।</p>}
           </div>
@@ -102,6 +100,8 @@ export function AdminSettingsPage() {
                   ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><FiscalYearManagement /></div>
                   : entry.id === 'receipt-cancel-window'
                     ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><ReceiptCancelWindowControl /></div>
+                    : entry.id === 'related-fee-rules'
+                      ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><LinkedFeeRulesManager /></div>
                   : <SettingsEntryCard key={entry.id} entry={entry} />
               ))}
             </div>

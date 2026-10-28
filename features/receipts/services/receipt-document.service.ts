@@ -2,12 +2,14 @@
 
 import 'regenerator-runtime/runtime';
 import fontkit from '@pdf-lib/fontkit';
-import { degrees, PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
+import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { SavedBill } from '@/features/billing/model/bill.types';
-import { formatReceiptNumberWithFiscalYear } from '@/lib/receipts/receipt-number-display';
 import { toNepaliDigits } from '@/utils/numbers';
+import { fontasyFromUnicode } from '@/utils/fontasy-himali/fromUnicode';
+import contacts from '@/shared/document-generation/data/document-contacts.json';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '@/shared/document-generation/utils/format-currency';
 import { DEFAULT_COMPANY_BRANDING } from '@/shared/document-generation/components/CompanyBranding';
+import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
 import { formatDocumentEnglishDate, formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
 
 const PAGE_WIDTH = 841.89;
@@ -19,7 +21,6 @@ const DEVANAGARI_SCRIPT = /\p{Script=Devanagari}/u;
 
 type ReceiptFonts = {
   nepali: PDFFont;
-  nepaliBold: PDFFont;
   latin: PDFFont;
   latinBold: PDFFont;
 };
@@ -35,8 +36,8 @@ function segments(text: string, fonts: ReceiptFonts, bold = false): TextSegment[
     const isDevanagari = DEVANAGARI_SCRIPT.test(character);
     if (devanagari !== null && isDevanagari !== devanagari) {
       result.push({
-        text: current,
-        font: devanagari ? (bold ? fonts.nepaliBold : fonts.nepali) : (bold ? fonts.latinBold : fonts.latin),
+        text: devanagari ? fontasyFromUnicode(current) : current,
+        font: devanagari ? fonts.nepali : (bold ? fonts.latinBold : fonts.latin),
       });
       current = '';
     }
@@ -45,8 +46,8 @@ function segments(text: string, fonts: ReceiptFonts, bold = false): TextSegment[
   }
   if (current) {
     result.push({
-      text: current,
-      font: devanagari ? (bold ? fonts.nepaliBold : fonts.nepali) : (bold ? fonts.latinBold : fonts.latin),
+      text: devanagari ? fontasyFromUnicode(current) : current,
+      font: devanagari ? fonts.nepali : (bold ? fonts.latinBold : fonts.latin),
     });
   }
   return result;
@@ -131,18 +132,13 @@ async function fetchAsset(path: string, name: string): Promise<Uint8Array> {
 }
 
 async function loadFonts(pdf: PDFDocument): Promise<ReceiptFonts> {
-  const [nepali, nepaliBold, latin, latinBold] = await Promise.all([
-    fetchAsset('/fonts/noto-sans-devanagari-devanagari-400-normal.woff', 'Nepali font'),
-    fetchAsset('/fonts/noto-sans-devanagari-devanagari-700-normal.woff', 'Nepali bold font'),
-    fetchAsset('/fonts/noto-sans-devanagari-latin-400-normal.woff', 'Latin font'),
-    fetchAsset('/fonts/noto-sans-devanagari-latin-700-normal.woff', 'Latin bold font'),
-  ]);
+  const fontasy = await fetchAsset('/fonts/Fontasy_Himali_TT.ttf', 'Fontasy Nepali font');
   pdf.registerFontkit(fontkit);
+  const embeddedFontasy = await pdf.embedFont(fontasy, { subset: true });
   return {
-    nepali: await pdf.embedFont(nepali, { subset: true }),
-    nepaliBold: await pdf.embedFont(nepaliBold, { subset: true }),
-    latin: await pdf.embedFont(latin, { subset: true }),
-    latinBold: await pdf.embedFont(latinBold, { subset: true }),
+    nepali: embeddedFontasy,
+    latin: await pdf.embedFont(StandardFonts.Helvetica),
+    latinBold: await pdf.embedFont(StandardFonts.HelveticaBold),
   };
 }
 
@@ -286,22 +282,24 @@ function drawReceipt(
   copyNumber: number,
   copyCount: number,
   voided: boolean,
+  brandingOverrides: Partial<CompanyBrandingOptions>,
+  showCopyLabel: boolean,
 ): void {
   const content = bill.content;
   const innerWidth = PAGE_WIDTH - MARGIN * 2;
-  const fiscalReceiptNumber = formatReceiptNumberWithFiscalYear(bill.receiptNumber, content.fiscalYearName);
   const layout = receiptLayout(bill, fonts);
   const centerX = PAGE_WIDTH / 2;
-  drawLineText(page, `र.नं. ${toNepaliDigits(fiscalReceiptNumber || bill.receiptNumber)}`, MARGIN, 24, 9.5, fonts);
+  const brand = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
+  if (brand.registrationNumber) drawLineText(page, `द.नं. ${brand.registrationNumber}`, MARGIN, 24, 9.5, fonts);
   drawLogo(page, logo, MARGIN + 40, 43, 62);
 
   const contactX = PAGE_WIDTH - MARGIN - 120;
   const contactWidth = 118;
   drawLineText(page, 'सम्पर्क नम्बरहरू:', contactX, 31, 9, fonts, true);
-  const contacts = [content.branch.contactPerson, content.branch.phone, content.branch.address].filter(Boolean);
-  contacts.slice(0, 3).forEach((line, index) => drawWrappedText(page, line, contactX, 45 + index * 13, contactWidth, 8.5, fonts));
+  contacts.forEach(({ label, phone }, index) => {
+    drawWrappedText(page, `${label}: ${phone}`, contactX, 45 + index * 12, contactWidth, 8.5, fonts);
+  });
 
-  const brand = DEFAULT_COMPANY_BRANDING;
   drawCenteredText(page, brand.name, centerX, 22, 19, fonts, true);
   drawCenteredText(page, brand.officeAddress, centerX, 46, 11, fonts, true);
   drawCenteredText(page, brand.regionalOfficeText, centerX, 62, 9.5, fonts);
@@ -310,11 +308,11 @@ function drawReceipt(
   drawRule(page, 120, LINE_COLOR, 1);
 
   const receiptRowTop = 126;
-  const branchLabel = `शाखा: ${content.branch.name || '—'}${content.branch.BranchCode ? ` (${content.branch.BranchCode})` : ''}`;
-  const receiptDate = `मिति ${formatDocumentNepaliDate(content.billingDate)}`;
-  drawLineText(page, branchLabel, MARGIN + 8, receiptRowTop, 10, fonts, true);
-  if (brand.panNumber) drawCenteredText(page, `PAN नं. ${toNepaliDigits(brand.panNumber)}`, centerX, receiptRowTop, 9.5, fonts, true);
-  drawRightText(page, receiptDate, PAGE_WIDTH - MARGIN - 8, receiptRowTop, 10, fonts);
+  const receiptLabel = `बिल नं. ${bill.receiptNumber} (${content.branch.name || '—'})`;
+  const receiptDate = `मिति ${formatDocumentNepaliDate(content.billingDate)} (${formatDocumentTime(bill.createdAt)})`;
+  drawLineText(page, receiptLabel, MARGIN + 8, receiptRowTop, 10, fonts, true);
+  if (brand.panNumber) drawCenteredText(page, `पान नं. ${brand.panNumber}`, centerX, receiptRowTop, 9.5, fonts, true);
+  drawRightText(page, receiptDate, PAGE_WIDTH - MARGIN - 8, receiptRowTop, 9.5, fonts);
   drawRule(page, 147, LINE_COLOR, 0.8);
 
   let detailTop = 157;
@@ -358,7 +356,7 @@ function drawReceipt(
     { text: '' },
     { text: 'जम्मा रु.', align: 'right', bold: true },
     { text: formatDocumentCurrency(content.total), align: 'right', bold: true },
-    { text: `प्रतिलिपि ${toNepaliDigits(String(copyNumber))}`, align: 'center', bold: copyCount > 1 },
+    { text: showCopyLabel ? `प्रतिलिपि ${toNepaliDigits(String(copyNumber))}` : '', align: 'center', bold: copyCount > 1 },
   ], fonts);
 
   const remarks = [
@@ -391,9 +389,10 @@ function drawReceipt(
   drawRightText(page, content.branch.contactPerson || content.branch.name || '—', PAGE_WIDTH - MARGIN - 10, layout.signatureTop + 18, 8.5, fonts);
   if (voided) {
     const watermark = 'रद्द';
+    const fontasyWatermark = fontasyFromUnicode(watermark);
     const watermarkSize = 72;
-    page.drawText(watermark, {
-      x: centerX - fonts.nepali.widthOfTextAtSize(watermark, watermarkSize) / 2,
+    page.drawText(fontasyWatermark, {
+      x: centerX - fonts.nepali.widthOfTextAtSize(fontasyWatermark, watermarkSize) / 2,
       y: page.getHeight() - layout.tableTop - 108,
       size: watermarkSize,
       font: fonts.nepali,
@@ -407,7 +406,12 @@ function drawReceipt(
 export async function createReceiptPdfBlob(
   bill: SavedBill,
   copies: number,
-  options: { voided?: boolean } = {},
+  options: {
+    voided?: boolean;
+    branding?: Partial<CompanyBrandingOptions>;
+    showCopyLabel?: boolean;
+    copyNumberStart?: number;
+  } = {},
 ): Promise<Blob> {
   const copyCount = Math.max(1, Math.min(5, Math.floor(copies)));
   if (!bill.id || !bill.receiptNumber || !bill.content.items.length) {
@@ -420,7 +424,17 @@ export async function createReceiptPdfBlob(
   const layout = receiptLayout(bill, fonts);
   for (let copy = 0; copy < copyCount; copy += 1) {
     const page = pdf.addPage([PAGE_WIDTH, layout.pageHeight]);
-    drawReceipt(page, bill, fonts, logo, copy + 1, copyCount, options.voided === true);
+    drawReceipt(
+      page,
+      bill,
+      fonts,
+      logo,
+      (options.copyNumberStart ?? 1) + copy,
+      copyCount,
+      options.voided === true,
+      options.branding ?? {},
+      options.showCopyLabel !== false,
+    );
   }
 
   const bytes = await pdf.save();

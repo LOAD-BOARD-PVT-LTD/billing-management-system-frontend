@@ -38,6 +38,7 @@ import {
   User,
 } from 'lucide-react';
 import type { Route } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
@@ -86,9 +87,11 @@ function buildNavLabels(t: (key: string) => string) {
 function buildBranding(
   t: (key: string) => string,
   organizationName: string,
+  logoUrl?: string,
 ) {
   return {
     organizationName,
+    logoUrl,
     tagline: t('app.tagline'),
   };
 }
@@ -135,9 +138,11 @@ function buildUserMenu(
 
 function SidebarBranding({
   organizationName,
+  logoUrl,
   tagline,
 }: {
   organizationName: string;
+  logoUrl?: string;
   tagline: string;
 }) {
   const { state } = useSidebar();
@@ -162,9 +167,21 @@ function SidebarBranding({
 
   return (
     <div className="px-3 py-4">
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="truncate text-sm font-bold text-sidebar-foreground">{organizationName}</span>
-        <span className="truncate text-xs font-medium text-sidebar-foreground/70">{tagline}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        {logoUrl && (
+          <Image
+            src={logoUrl}
+            alt=""
+            width={36}
+            height={36}
+            unoptimized
+            className="h-9 w-9 shrink-0 rounded-md object-contain"
+          />
+        )}
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="truncate text-sm font-bold text-sidebar-foreground">{organizationName}</span>
+          <span className="truncate text-xs font-medium text-sidebar-foreground/70">{tagline}</span>
+        </div>
       </div>
     </div>
   );
@@ -404,7 +421,7 @@ export function useSidebarNavData() {
   const userName = user?.name || user?.email || t('auth.myAccount');
 
   const labels = buildNavLabels(t);
-  const branding = buildBranding(t, organizationName);
+  const branding = buildBranding(t, organizationName, organization.logoUrl);
   const userMenu = buildUserMenu(t, userName, logout, isAdmin);
 
   return {

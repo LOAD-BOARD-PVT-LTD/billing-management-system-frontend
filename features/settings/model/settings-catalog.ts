@@ -54,8 +54,8 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
   },
   {
     id: 'related-fee-rules', category: 'billing-rules', title: 'सम्बन्धित शुल्क नियम',
-    description: 'फी हेड, आर्थिक वर्ष, अवधि र शुल्क रकमका नियमहरू।', icon: SlidersHorizontal,
-    href: '/dashboard/billing-rules', actionLabel: 'बिलिङ नियम खोल्नुहोस्',
+    description: 'एउटा शुल्क छनोट हुँदा अर्को शुल्क स्वतः थपिने सम्बन्ध व्यवस्थापन।', icon: SlidersHorizontal,
+    searchTerms: ['जोडिएको शुल्क नियम', 'linked fee rules', 'automatic fee'],
   },
   {
     id: 'paid-expired-rules', category: 'billing-rules', title: 'तिरेको तर म्याद सकिएको नियम',

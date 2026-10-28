@@ -101,12 +101,12 @@ export function VehicleBilling({
 	]);
 
 	return (
-		<section className="rounded-md border border-border bg-card shadow-sm">
-			<div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-6">
-				<label className="space-y-1 text-xs text-muted-foreground">
+		<section className="rounded-md border border-border bg-card">
+			<div className="grid gap-x-2 gap-y-1 p-1 sm:grid-cols-2 xl:grid-cols-5">
+				<label className="space-y-0.5 text-xs text-muted-foreground">
 					शाखा
 					<Select value={branchValue} onValueChange={setSelectedBranchId} disabled={isLoadingBranches || Boolean(branchError) || activeBranches.length === 0}>
-						<SelectTrigger aria-label="बिलिङ शाखा छान्नुहोस्" className="h-9 rounded-md">
+						<SelectTrigger aria-label="बिलिङ शाखा छान्नुहोस्" className="h-7 rounded-md px-2 py-0 text-sm">
 							{isLoadingBranches
 								? <span className="flex items-center gap-2"><LoaderCircle aria-hidden="true" className="size-4 animate-spin" />शाखा लोड हुँदैछ...</span>
 								: <SelectValue placeholder="बिलिङ शाखा छान्नुहोस्" />}
@@ -130,14 +130,14 @@ export function VehicleBilling({
 						<span role="status" className="block text-xs text-muted-foreground">कुनै सक्रिय शाखा उपलब्ध छैन।</span>
 					) : null}
 				</label>
-				<label className="space-y-1 text-xs text-muted-foreground">
+				<label className="space-y-0.5 text-xs text-muted-foreground">
 					वित्तीय वर्ष
 					<Select
 						value={fiscalYearValue}
 						onValueChange={onFiscalYearChange}
 						disabled={isLoadingBillingRules || fiscalYears.length === 0}
 					>
-						<SelectTrigger aria-label="वित्तीय वर्ष छान्नुहोस्" className="h-9 rounded-md">
+						<SelectTrigger aria-label="वित्तीय वर्ष छान्नुहोस्" className="h-7 rounded-md px-2 py-0 text-sm">
 							{isLoadingBillingRules && fiscalYears.length === 0
 								? <span className="flex items-center gap-2"><LoaderCircle aria-hidden="true" className="size-4 animate-spin" />वित्तीय वर्ष लोड हुँदैछ...</span>
 								: (
@@ -169,16 +169,16 @@ export function VehicleBilling({
 						<span role="status" className="block text-xs text-muted-foreground">Billing Rules response मा वित्तीय वर्ष उपलब्ध छैन।</span>
 					) : null}
 				</label>
-				<label className="space-y-1 text-xs text-muted-foreground">
+				<label className="space-y-0.5 text-xs text-muted-foreground">
 					भुक्तानी मिति
 					<NepaliDatePicker
 						value={billingDate}
 						onChange={setBillingDate}
 						placeholder="भुक्तानी मिति छान्नुहोस्"
-						className="h-9 rounded-md"
+						className="h-7 rounded-md"
 					/>
 				</label>
-				<label className="space-y-1 text-xs text-muted-foreground">
+				<label className="space-y-0.5 text-xs text-muted-foreground">
 					देखि
 					<NepaliDatePicker
 						value={periodStart}
@@ -187,17 +187,17 @@ export function VehicleBilling({
 							if (date && periodEnd && date > periodEnd) setPeriodEnd(undefined);
 						}}
 						placeholder="सुरु मिति छान्नुहोस्"
-						className="h-9 rounded-md"
+						className="h-7 rounded-md"
 					/>
 				</label>
-				<label className="space-y-1 text-xs text-muted-foreground">
+				<label className="space-y-0.5 text-xs text-muted-foreground">
 					सम्म
 					<NepaliDatePicker
 						value={periodEnd}
 						onChange={setPeriodEnd}
 						fromDate={periodStart}
 						placeholder="अन्त्य मिति छान्नुहोस्"
-						className="h-9 rounded-md"
+						className="h-7 rounded-md"
 					/>
 				</label>
 			</div>

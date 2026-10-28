@@ -81,6 +81,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   if (!content) throw new Error('Could not read receipt: BillResource.inner_content is missing.');
   const vehicle = asRecord(content.vehicle);
   const branch = asRecord(content.branch);
+  const createdBy = asRecord(content.createdBy ?? content.created_by);
   const fiscalYear = asRecord(content.fiscalYear);
   const fiscalYearId = text(content.fiscalYearId ?? fiscalYear?.id);
   if (!vehicle || !branch || !fiscalYearId) {
@@ -133,6 +134,13 @@ export function parseBillResource(value: unknown): ReceiptRecord {
     total: number(content.total, Math.max(0, subtotal - discount)),
     paymentMethod: text(content.paymentMethod),
     note: text(content.note),
+    ...(createdBy ? {
+      createdBy: {
+        id: text(createdBy.id),
+        name: text(createdBy.name ?? createdBy.displayName),
+        username: text(createdBy.username ?? createdBy.email),
+      },
+    } : {}),
   };
   const receiptNumber = formatBranchReceiptNumber(normalizedContent.branch.BranchCode, id);
   const createdAt = text(resource.createdAt ?? resource.created_at)
@@ -141,7 +149,14 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   const bill: SavedBill = { id, receiptNumber, createdAt, content: normalizedContent };
   const finalDigits = normalizedContent.vehicle.vehicleNumber.match(/[0-9०-९]+$/u)?.[0] ?? '';
   const firstItemEntity = normalizedContent.items.find((item) => item.billingEntity)?.billingEntity ?? '';
-  const lastCorrection = auditHistory(content).filter((entry) => entry.action === 'CORRECTED').at(-1);
+  const history = auditHistory(content);
+  const printHistory = history.filter((entry) => entry.action === 'PRINTED');
+  const printedCopyCount = printHistory.reduce((total, entry) => {
+    const copies = Number(entry.copyCount ?? entry.copies ?? 1);
+    return total + (Number.isInteger(copies) && copies > 0 ? copies : 1);
+  }, 0);
+  const lastPrintedAt = printHistory.map((entry) => text(entry.at)).filter(Boolean).at(-1);
+  const lastCorrection = history.filter((entry) => entry.action === 'CORRECTED').at(-1);
 
   return {
     id,
@@ -158,10 +173,24 @@ export function parseBillResource(value: unknown): ReceiptRecord {
     status: status(resource.status ?? content.status),
     totalAmount: normalizedContent.total,
     branchName: normalizedContent.branch.name,
-    userName: text(resource.userName ?? resource.createdByName ?? content.userName) || '—',
+    userName: text(
+      createdBy?.name
+      ?? createdBy?.username
+      ??
+      resource.userName
+      ?? resource.username
+      ?? resource.createdByName
+      ?? resource.createdByUsername
+      ?? resource.created_by_name
+      ?? content.userName
+      ?? content.username
+      ?? content.createdByUsername,
+    ) || '—',
     bill,
     resourceContent: content,
     externalContent: resource.external_content ?? resource.externalContent ?? null,
+    printedCopyCount,
+    lastPrintedAt,
     lastCorrection: lastCorrection
       ? { reason: text(lastCorrection.reason), at: text(lastCorrection.at) }
       : undefined,
@@ -195,6 +224,34 @@ async function updateReceiptResource(
     inner_content: content,
     external_content: externalContent,
   });
+}
+
+export async function recordReceiptPrint(
+  id: string,
+  resourceContent: unknown,
+  externalContent: unknown,
+  copyCount: number,
+): Promise<Record<string, unknown>> {
+  if (!Number.isInteger(copyCount) || copyCount < 1 || copyCount > 5) {
+    throw new Error('प्रतिलिपि संख्या १ देखि ५ सम्म हुनुपर्छ।');
+  }
+  const content = asRecord(resourceContent);
+  if (!content) throw new Error('रसिदको विवरण उपलब्ध नभएकाले प्रिन्ट अभिलेख राख्न सकिएन।');
+  const at = new Date().toISOString();
+  const updatedContent = {
+    ...content,
+    auditHistory: [
+      ...auditHistory(content),
+      { action: 'PRINTED', copyCount, at },
+    ],
+  };
+  await apiClient.put<void>(endpoints.resources.bill.update(id), {
+    id: resourceIdValue(id),
+    resource_name: 'BillResource',
+    inner_content: updatedContent,
+    external_content: externalContent ?? null,
+  });
+  return updatedContent;
 }
 
 export async function cancelReceipt(receipt: ReceiptRecord, reason: string): Promise<void> {

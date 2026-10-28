@@ -18,6 +18,7 @@ export const receiptsKeys = {
 export const settingsKeys = {
   all: ['settings'] as const,
   receiptCancelWindow: () => [...settingsKeys.all, 'receipt-cancel-window'] as const,
+  linkedFeeRules: () => [...settingsKeys.all, 'linked-fee-rules'] as const,
   fiscalYearSelector: () => [...settingsKeys.all, 'fiscal-year-selector'] as const,
   fiscalYearManagement: () => [...settingsKeys.all, 'fiscal-year-management'] as const,
 };
@@ -32,14 +33,22 @@ export const tqmsVehicleTypeKeys = {
   lists: () => [...tqmsVehicleTypeKeys.all, 'list'] as const,
 };
 
+export const vehicleResourceKeys = {
+  all: ['vehicle-resources'] as const,
+  list: () => [...vehicleResourceKeys.all, 'list'] as const,
+  search: (field: string, value: string, limit: number | 'all' = 'all') => (
+    [...vehicleResourceKeys.all, 'search', field, value, String(limit)] as const
+  ),
+};
+
 export const tqmsMemberRegistryKeys = {
-  all: ['tqms-member-registry'] as const,
-  lists: () => [...tqmsMemberRegistryKeys.all, 'vehicles'] as const,
+  all: vehicleResourceKeys.all,
+  lists: () => vehicleResourceKeys.search('SanghBranch', 'Narayani Sangh Hetauda'),
 };
 
 export const vehicleBlacklistKeys = {
-  all: ['vehicle-blacklist'] as const,
-  list: () => [...vehicleBlacklistKeys.all, 'list'] as const,
+  all: vehicleResourceKeys.all,
+  list: () => vehicleResourceKeys.search('isBlacklisted', 'true'),
 };
 
 export const globalSearchKeys = {
@@ -56,5 +65,6 @@ export const queryKeys = {
   tqmsVehicleTypes: tqmsVehicleTypeKeys,
   tqmsMemberRegistry: tqmsMemberRegistryKeys,
   vehicleBlacklist: vehicleBlacklistKeys,
+  vehicleResources: vehicleResourceKeys,
   globalSearch: globalSearchKeys,
 };

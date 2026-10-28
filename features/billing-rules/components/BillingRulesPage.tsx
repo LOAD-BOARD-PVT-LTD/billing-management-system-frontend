@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, Plus, RotateCcw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Plus, RotateCcw } from 'lucide-react';
 
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { DataTableToolbar } from '@/components/data-tables/DataTableToolbar';
@@ -27,10 +27,16 @@ import { filterBillingRules, groupVehicleTypeRules, sortBillingRules, type Billi
 import { formatFiscalYearForDisplay, formatNepaliFiscalYearLabel, generateNepaliFiscalYearOptions, parseFiscalYear } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 import { useTranslations } from '@/utils/translations';
 import { useVehicleTypes } from '@/features/vehicle/type/hooks/useVehicleTypes';
+import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 10;
 
-export function BillingRulesPage() {
+type BillingRulesPageProps = {
+  editRuleId?: string;
+};
+
+export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
+  const router = useRouter();
   const {
     config,
     isLoading,
@@ -65,10 +71,14 @@ export function BillingRulesPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>('asc');
   const [page, setPage] = useState(1);
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState<BillingRule | null>(null);
   const [viewingRule, setViewingRule] = useState<BillingRule | null>(null);
   const [statusRule, setStatusRule] = useState<BillingRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<BillingRule | null>(null);
+
+  const editingRule = editRuleId
+    ? config.rules.find((rule) => rule.id === editRuleId) ?? null
+    : null;
+  const isRuleEditorOpen = Boolean(editRuleId) || ruleEditorOpen;
 
   const selectorSettings = fiscalYearSelectorSettings ?? DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS;
   const availableFiscalYears = useMemo(() => {
@@ -163,8 +173,11 @@ export function BillingRulesPage() {
   };
 
   const openCreateDialog = () => {
-    setEditingRule(null);
     setRuleEditorOpen(true);
+  };
+
+  const openEditDialog = (rule: BillingRule) => {
+    router.push(`/dashboard/billing-rules/${encodeURIComponent(rule.id)}/edit`);
   };
 
   const handleSaveRule = async (rule: BillingRule, feeHead: FeeHead) => {
@@ -196,8 +209,7 @@ export function BillingRulesPage() {
         title: editingRule ? 'बिलिङ नियम परिवर्तन सुरक्षित भयो' : 'बिलिङ नियम सिर्जना भयो',
         description: `${feeHead.name} सफलतापूर्वक सुरक्षित भयो।`,
       });
-      setRuleEditorOpen(false);
-      setEditingRule(null);
+      closeRuleEditor();
     } catch (saveError) {
       toast({
         title: 'बिलिङ नियम सुरक्षित हुन सकेन',
@@ -236,8 +248,7 @@ export function BillingRulesPage() {
         title: 'Common Rules सिर्जना भए',
         description: `${items.length} वटा नियम सफलतापूर्वक सुरक्षित भए।`,
       });
-      setRuleEditorOpen(false);
-      setEditingRule(null);
+      closeRuleEditor();
     } catch (saveError) {
       toast({
         title: 'Common Rules सुरक्षित हुन सकेनन्',
@@ -291,8 +302,7 @@ export function BillingRulesPage() {
           ? `${entries.length} सवारी शुल्क नियम सुरक्षित भयो।`
           : 'खाली रकम भएका सवारी शुल्क नियम हटाइयो।',
       });
-      setRuleEditorOpen(false);
-      setEditingRule(null);
+      closeRuleEditor();
     } catch (saveError) {
       toast({
         title: 'बिलिङ नियम सुरक्षित हुन सकेन',
@@ -335,8 +345,11 @@ export function BillingRulesPage() {
   };
 
   const closeRuleEditor = () => {
+    if (editRuleId) {
+      router.replace('/dashboard/billing-rules');
+      return;
+    }
     setRuleEditorOpen(false);
-    setEditingRule(null);
   };
 
   const handleToggleStatus = async () => {
@@ -442,7 +455,7 @@ export function BillingRulesPage() {
             </Select>
           </div>
 
-          {!ruleEditorOpen ? (
+          {!isRuleEditorOpen ? (
             <Button type="button" onClick={openCreateDialog} disabled={!hasLoaded} leftIcon={<Plus className="h-4 w-4" />} className="shrink-0">
               नयाँ नियम थप्नुहोस्
             </Button>
@@ -472,32 +485,64 @@ export function BillingRulesPage() {
         />
       ) : null}
 
-      {ruleEditorOpen ? (
+      {isRuleEditorOpen ? (
         <section className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="बिलिङ नियम सम्पादन">
+          <nav aria-label="Breadcrumb">
+            <ol className="flex items-center gap-2 text-sm">
+              <li>
+                <Button type="button" variant="link" className="h-auto gap-1 p-0" onClick={closeRuleEditor}>
+                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                  Billing Rules List
+                </Button>
+              </li>
+              <li aria-hidden="true" className="text-muted-foreground">/</li>
+              <li aria-current="page" className="text-muted-foreground">
+                {editRuleId || editingRule ? 'Edit Rule' : 'New Rule'}
+              </li>
+            </ol>
+          </nav>
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{editingRule ? 'बिलिङ नियम सम्पादन' : 'नयाँ बिलिङ नियम'}</h2>
+            <h2 className="text-xl font-semibold text-foreground">{editRuleId || editingRule ? 'बिलिङ नियम सम्पादन' : 'नयाँ बिलिङ नियम'}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {editingRule ? 'नियमका विवरण परिवर्तन गरी सुरक्षित गर्नुहोस्।' : 'नयाँ Common Rule वा Vehicle Type Rule तयार गर्नुहोस्।'}
+              {editRuleId || editingRule ? 'नियमका विवरण परिवर्तन गरी सुरक्षित गर्नुहोस्।' : 'नयाँ Common Rule वा Vehicle Type Rule तयार गर्नुहोस्।'}
             </p>
           </div>
-          <BillingRuleForm
-            key={editingRule?.id ?? `new-${scope}`}
-            initialRule={editingRule}
-            initialRules={config.rules.filter((rule) => rule.scope === 'VEHICLE_TYPE')}
-            config={config}
-            vehicleCategories={vehicleCategories}
-            billingEntities={billingEntities}
-            isLoadingBillingEntities={isLoadingBillingEntities}
-            billingEntitiesError={billingEntitiesError}
-            onReloadBillingEntities={() => void reloadBillingEntities()}
-            currentFiscalYearId={fiscalYearFilter}
-            currentScope={editingRule?.scope ?? scope}
-            isSaving={isSaving}
-            onCancel={closeRuleEditor}
-            onSubmit={handleSaveRule}
-            onSubmitCommonRules={handleSaveCommonRules}
-            onSubmitVehicleRules={handleSaveVehicleRules}
-          />
+          {editRuleId && error ? (
+            <ErrorState
+              title="बिलिङ नियम लोड हुन सकेन"
+              description={error}
+              retryLabel="फेरि प्रयास गर्नुहोस्"
+              onRetry={() => void reload()}
+            />
+          ) : editRuleId && !hasLoaded ? (
+            <p role="status" className="text-sm text-muted-foreground">बिलिङ नियम लोड हुँदैछ...</p>
+          ) : editRuleId && !editingRule ? (
+            <ErrorState
+              title="बिलिङ नियम भेटिएन"
+              description="यो नियम हटाइएको वा उपलब्ध नभएको हुन सक्छ।"
+              retryLabel="फेरि प्रयास गर्नुहोस्"
+              onRetry={() => void reload()}
+            />
+          ) : (
+            <BillingRuleForm
+              key={editingRule?.id ?? `new-${scope}`}
+              initialRule={editingRule}
+              initialRules={config.rules.filter((rule) => rule.scope === 'VEHICLE_TYPE')}
+              config={config}
+              vehicleCategories={vehicleCategories}
+              billingEntities={billingEntities}
+              isLoadingBillingEntities={isLoadingBillingEntities}
+              billingEntitiesError={billingEntitiesError}
+              onReloadBillingEntities={() => void reloadBillingEntities()}
+              currentFiscalYearId={editingRule?.fiscalYearId ?? fiscalYearFilter}
+              currentScope={editingRule?.scope ?? scope}
+              isSaving={isSaving}
+              onCancel={closeRuleEditor}
+              onSubmit={handleSaveRule}
+              onSubmitCommonRules={handleSaveCommonRules}
+              onSubmitVehicleRules={handleSaveVehicleRules}
+            />
+          )}
         </section>
       ) : (
       <section className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5" aria-label="Billing Rules">
@@ -595,7 +640,7 @@ export function BillingRulesPage() {
           sortDirection={sortDirection}
           onSortChange={handleSortChange}
           onView={setViewingRule}
-          onEdit={(rule) => { setEditingRule(rule); setScope(rule.scope); setRuleEditorOpen(true); }}
+          onEdit={openEditDialog}
           onDeleteRule={setDeletingRule}
           onBillingEntityChange={(rule, billingEntityId) => void handleBillingEntityChange(rule, billingEntityId)}
           onUpdatePolicy={handleUpdatePolicy}

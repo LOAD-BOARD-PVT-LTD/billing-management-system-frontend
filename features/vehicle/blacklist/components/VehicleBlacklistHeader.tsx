@@ -13,10 +13,6 @@ export function VehicleBlacklistHeader({ onAddClick }: { onAddClick: () => void 
         <h1 className="text-2xl font-bold tracking-tight">{t('vehicleBlacklist.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t('vehicleBlacklist.description')}</p>
       </div>
-      <Button type="button" onClick={onAddClick}>
-        <Plus className="mr-2 size-4" aria-hidden="true" />
-        {t('vehicleBlacklist.addAction')}
-      </Button>
     </header>
   );
 }

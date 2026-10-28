@@ -14,23 +14,21 @@ function SummaryValue({
 	detailsLabel: string;
 }) {
 	return (
-		<div className="flex items-start justify-between gap-2 border-b border-border/60 py-2 last:border-b-0">
-			<div className="min-w-0">
-				<p className="text-[11px] text-muted-foreground">{label}</p>
-				<p className="mt-0.5 break-words text-xs font-medium text-foreground">{value || '-'}</p>
-			</div>
-			{href && (
+		<div className="grid min-w-0 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_18px] items-center gap-1 border-b border-border/60 px-1.5 py-0 last:border-b-0">
+			<p className="min-w-0 text-xs leading-4 text-muted-foreground">{label}</p>
+			<p className="min-w-0 break-words text-sm font-medium leading-4 text-foreground">{value || '-'}</p>
+			{href ? (
 				<a
 					href={href}
 					target="_blank"
 					rel="noreferrer"
 					aria-label={`${label} ${detailsLabel}`}
 					title={`${label} ${detailsLabel}`}
-					className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+					className="grid size-[18px] shrink-0 place-items-center rounded-sm border border-border text-muted-foreground hover:bg-muted"
 				>
 					<ExternalLink aria-hidden="true" className="size-3" />
 				</a>
-			)}
+			) : null}
 		</div>
 	);
 }
@@ -60,25 +58,25 @@ export function VehicleSummary({ vehicle }: { vehicle: BillingVehicle }) {
 
 	return (
 		<aside className="overflow-hidden rounded-md border border-border bg-card">
-			<h2 className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm font-semibold text-foreground">
+			<h2 className="flex items-center gap-1 border-b border-border px-1.5 py-1 text-sm font-semibold text-foreground">
 				<Truck aria-hidden="true" className="size-4 text-primary" />
 				सवारी विवरण
 				{isLoading && <LoaderCircle aria-label="TQMS विवरण लोड हुँदैछ" className="ml-auto size-4 animate-spin text-muted-foreground" />}
 			</h2>
 			{error && (
-				<div role="alert" className="border-b border-border px-3 py-2 text-xs text-destructive">
+				<div role="alert" className="border-b border-border px-2 py-1.5 text-xs text-destructive">
 					<p>TQMS सवारी विवरण लोड गर्न सकिएन: {error}</p>
-					<button type="button" onClick={() => void reload()} className="mt-1 font-medium underline underline-offset-2">
+					<button type="button" onClick={() => void reload()} className="font-medium underline underline-offset-2">
 						पुनः प्रयास गर्नुहोस्
 					</button>
 				</div>
 			)}
 			{!vehicle.vehicleNumber && (
-				<p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+				<p role="status" className="border-b border-border px-2 py-1.5 text-xs text-muted-foreground">
 					यस सवारीको TQMS विवरण उपलब्ध छैन।
 				</p>
 			)}
-			<div className="px-3">
+			<div className="px-1 py-0">
 				<SummaryValue
 					label="बीमा कम्पनी"
 					value={insurance?.Company?.trim() || '-'}

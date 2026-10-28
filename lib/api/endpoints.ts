@@ -33,6 +33,7 @@ export const endpoints = {
     billingEntity: resourceEndpoints('BillingEntityResource'),
     billingRule: resourceEndpoints('BillingRuleResource'),
     bill: resourceEndpoints('BillResource'),
+    member: resourceEndpoints('MemberResource'),
     branch: resourceEndpoints('BranchResource'),
     setting: resourceEndpoints('SettingResource'),
     user: resourceEndpoints('UserResource'),

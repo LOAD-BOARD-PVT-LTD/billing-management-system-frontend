@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { Ban, Download, Eye, LoaderCircle, MessageSquareText, Pencil } from 'lucide-react';
+import { Ban, Download, LoaderCircle, MessageSquareText, Pencil, Printer } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,11 +13,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ReceiptCorrection } from '@/features/receipts/api/bill-resource.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 
-type ReceiptAction = 'preview' | 'download' | 'cancel' | 'correct';
+type ReceiptAction = 'print' | 'download' | 'cancel' | 'correct';
 
 interface ReceiptActionsProps {
 	receipt: ReceiptRecord;
-	onPreview: (receipt: ReceiptRecord) => Promise<void>;
+	onPrint: (receipt: ReceiptRecord) => Promise<void>;
+	printing: boolean;
 	onDownload: (receipt: ReceiptRecord) => Promise<void>;
 	onCancel: (receipt: ReceiptRecord, reason: string) => Promise<void>;
 	onCorrect: (receipt: ReceiptRecord, correction: ReceiptCorrection, reason: string) => Promise<void>;
@@ -63,7 +64,8 @@ function ActionButton({
 
 export function ReceiptActions({
 	receipt,
-	onPreview,
+	onPrint,
+	printing,
 	onDownload,
 	onCancel,
 	onCorrect,
@@ -82,10 +84,10 @@ export function ReceiptActions({
 		validUntil: receipt.validUntil,
 	};
 
-	const runAction = async (action: 'preview' | 'download', callback: (receipt: ReceiptRecord) => Promise<void>) => {
+	const runAction = async (action: 'print' | 'download', callback: () => Promise<void>) => {
 		setPending(action);
 		try {
-			await callback(receipt);
+			await callback();
 		} finally {
 			setPending(null);
 		}
@@ -125,16 +127,16 @@ export function ReceiptActions({
 		<TooltipProvider delayDuration={200}>
 			<div className="flex items-center justify-end gap-1">
 				<ActionButton
-					label="Preview receipt"
-					busy={pending === 'preview'}
-					onClick={() => void runAction('preview', onPreview)}
+					label="रसिद प्रिन्ट"
+					busy={printing || pending === 'print'}
+					onClick={() => void runAction('print', () => onPrint(receipt))}
 				>
-					<Eye className="size-4" aria-hidden="true" />
+					<Printer className="size-4" aria-hidden="true" />
 				</ActionButton>
 				<ActionButton
 					label="Download PDF"
 					busy={pending === 'download'}
-					onClick={() => void runAction('download', onDownload)}
+					onClick={() => void runAction('download', () => onDownload(receipt))}
 				>
 					<Download className="size-4" aria-hidden="true" />
 				</ActionButton>

@@ -25,8 +25,6 @@ export function CompanyBranding({ branding }: { branding: CompanyBrandingOptions
         <p>{branding.officeAddress}</p>
         <p>{branding.regionalOfficeText}</p>
         <p className="document-purpose">{branding.organizationPurpose}</p>
-        {branding.registrationNumber ? <p>दर्ता नं. {branding.registrationNumber}</p> : null}
-        {branding.panNumber ? <p>PAN नं. {branding.panNumber}</p> : null}
         <h2>नगदी रसिद</h2>
       </div>
     </div>

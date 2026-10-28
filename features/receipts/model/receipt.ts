@@ -21,6 +21,8 @@ export interface ReceiptRecord {
   bill: SavedBill;
   resourceContent?: Record<string, unknown>;
   externalContent?: unknown;
+  printedCopyCount: number;
+  lastPrintedAt?: string;
   lastCorrection?: { reason: string; at: string };
 }
 
