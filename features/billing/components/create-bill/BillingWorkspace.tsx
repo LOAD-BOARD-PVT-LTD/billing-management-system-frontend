@@ -16,7 +16,7 @@ import { VehicleBilling } from '@/features/billing/components/create-bill/Vehicl
 import { MembershipHistory } from '@/features/billing/components/membership/MembershipHistory';
 import { VehicleSummary } from '@/features/billing/components/vehicle-summary/VehicleSummary';
 import type { BillingLine, BillingVehicle } from '@/features/billing/model/types';
-import type { BillDetails, CreateBillInput, SavedBill } from '@/features/billing/model/bill.types';
+import type { BillDetails, MembershipBillInput, SavedBill } from '@/features/billing/model/bill.types';
 import { findDuplicateBillItems, type DuplicateBillMatch } from '@/features/billing/utils/duplicate-bill-check';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
@@ -136,7 +136,7 @@ export function BillingWorkspace() {
   const [savedBill, setSavedBill] = useState<SavedBill | null>(null);
   const { records: existingBills, error: existingBillsError, isLoading: isLoadingExistingBills, reload: reloadBills } = useReceipts();
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateBillMatch[]>([]);
-  const [pendingSubmit, setPendingSubmit] = useState<CreateBillInput | null>(null);
+  const [pendingSubmit, setPendingSubmit] = useState<MembershipBillInput | null>(null);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const createBill = useCreateBill();
@@ -331,7 +331,7 @@ export function BillingWorkspace() {
     setIsCheckingDuplicates(false);
     if (!canCreateBill) return;
 
-    const pendingInput: CreateBillInput = {
+    const pendingInput: MembershipBillInput = {
       vehicle: selectedVehicle,
       ...(billCreator ? { createdBy: billCreator } : {}),
       details: {

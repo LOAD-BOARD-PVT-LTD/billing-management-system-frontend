@@ -16,7 +16,17 @@ export type BillDetails = {
 	billingMonths: number;
 };
 
+export type BillCustomer = {
+	name: string;
+	phone: string;
+	address: string;
+	panNumber: string;
+};
+
+export type BillingType = 'MEMBERSHIP' | 'GENERAL';
+
 export type BillResourceContent = {
+	billingType?: BillingType;
 	createdBy?: {
 		id: string;
 		name: string;
@@ -30,6 +40,7 @@ export type BillResourceContent = {
 		phone: string;
 		address: string;
 	};
+	customer?: BillCustomer;
 	branch: {
 		id: string;
 		name: string;
@@ -60,10 +71,11 @@ export type BillResourceContent = {
 	note: string;
 };
 
-export type BillResourcePayload = Omit<BillResourceContent, 'fiscalYearName'>;
+export type BillResourcePayload = Omit<BillResourceContent, 'fiscalYearName' | 'vehicle'> & {
+	vehicle?: BillResourceContent['vehicle'];
+};
 
-export type CreateBillInput = {
-	vehicle: BillingVehicle;
+type CreateBillBase = {
 	createdBy?: NonNullable<BillResourceContent['createdBy']>;
 	details: BillDetails;
 	items: BillingLine[];
@@ -72,6 +84,20 @@ export type CreateBillInput = {
 	paymentMethod: string;
 	note: string;
 };
+
+export type MembershipBillInput = CreateBillBase & {
+	billingType?: 'MEMBERSHIP';
+	vehicle: BillingVehicle;
+	customer?: never;
+};
+
+export type GeneralBillInput = CreateBillBase & {
+	billingType: 'GENERAL';
+	vehicle?: never;
+	customer: BillCustomer;
+};
+
+export type CreateBillInput = MembershipBillInput | GeneralBillInput;
 
 export type SavedBill = {
 	id: string;

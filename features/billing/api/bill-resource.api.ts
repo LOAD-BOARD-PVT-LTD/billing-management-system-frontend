@@ -1,7 +1,14 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
 import { formatBranchReceiptNumber } from '@/lib/receipts/receipt-number-display';
-import type { CreateBillInput, BillResourceContent, BillResourcePayload, SavedBill } from '@/features/billing/model/bill.types';
+import type {
+	CreateBillInput,
+	GeneralBillInput,
+	BillResourceContent,
+	BillResourcePayload,
+	MembershipBillInput,
+	SavedBill,
+} from '@/features/billing/model/bill.types';
 
 function resourceId(value: unknown): string | null {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -20,18 +27,28 @@ function resourceId(value: unknown): string | null {
 	return null;
 }
 
+export function buildBillResourceContent(input: MembershipBillInput): BillResourcePayload & {
+	vehicle: BillResourceContent['vehicle'];
+};
+export function buildBillResourceContent(input: GeneralBillInput): BillResourcePayload;
+export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload;
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload {
-	const { vehicle, createdBy, details, items, subtotal, discount, paymentMethod, note } = input;
+	const { createdBy, details, items, subtotal, discount, paymentMethod, note } = input;
 	return {
+		billingType: input.billingType ?? 'MEMBERSHIP',
 		...(createdBy ? { createdBy } : {}),
-		vehicle: {
-			id: vehicle.tqmsVehicleId,
-			vehicleNumber: vehicle.vehicleNumber,
-			vehicleType: vehicle.vehicleType,
-			ownerName: vehicle.ownerName,
-			phone: vehicle.phone,
-			address: vehicle.ownerAddress,
-		},
+		...(input.billingType === 'GENERAL'
+			? { customer: input.customer }
+			: {
+				vehicle: {
+					id: input.vehicle.tqmsVehicleId,
+					vehicleNumber: input.vehicle.vehicleNumber,
+					vehicleType: input.vehicle.vehicleType,
+					ownerName: input.vehicle.ownerName,
+					phone: input.vehicle.phone,
+					address: input.vehicle.ownerAddress,
+				},
+			}),
 		branch: {
 			id: details.branchId,
 			name: details.branchName,
@@ -66,6 +83,14 @@ export async function createBill(input: CreateBillInput): Promise<SavedBill> {
 	const resourceContent = buildBillResourceContent(input);
 	const content: BillResourceContent = {
 		...resourceContent,
+		vehicle: resourceContent.vehicle ?? {
+			id: '',
+			vehicleNumber: '',
+			vehicleType: '',
+			ownerName: resourceContent.customer?.name ?? '',
+			phone: resourceContent.customer?.phone ?? '',
+			address: resourceContent.customer?.address ?? '',
+		},
 		fiscalYearName: input.details.fiscalYearName,
 	};
 	const response = await apiClient.post<unknown>(endpoints.resources.bill.create(), {

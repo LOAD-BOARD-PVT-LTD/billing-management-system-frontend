@@ -81,6 +81,11 @@ export function resolveOrganizationConfiguration(
       currencySymbol: typeof input.currencySymbol === 'string' && input.currencySymbol.trim()
         ? input.currencySymbol.trim()
         : fallback.currencySymbol,
+      featureFlags: {
+        generalBilling: input.featureFlags?.generalBilling
+          ?? fallback.featureFlags?.generalBilling
+          ?? false,
+      },
     },
   };
 }

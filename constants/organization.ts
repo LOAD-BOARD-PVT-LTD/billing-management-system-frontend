@@ -9,6 +9,9 @@ export interface OrganizationConfig {
   themeMode?: 'light' | 'dark' | 'system';
   borderRadius?: 'compact' | 'comfortable' | 'rounded';
   currencySymbol: string;
+  featureFlags?: {
+    generalBilling?: boolean;
+  };
 }
 
 export const organizationThemeDefaults = {
@@ -24,4 +27,7 @@ export const organizationConfig = {
   nameEnglish: 'Narayani Internal Billing',
   ...organizationThemeDefaults,
   currencySymbol: 'Rs.',
+  featureFlags: {
+    generalBilling: process.env.NEXT_PUBLIC_ENABLE_GENERAL_BILLING === 'true',
+  },
 } as const satisfies OrganizationConfig;

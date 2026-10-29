@@ -8,9 +8,16 @@ export function ReceiptDetails({ receipt, open, onOpenChange }: { receipt: Recei
 	if (!receipt) return null;
 	const values = [
 		['रसिद नम्बर', receipt.receiptNumber],
-		['सवारी साधन नम्बर', receipt.vehicleNumber],
-		['अन्तिम अङ्क', receipt.finalDigits],
+		['बिलको प्रकार', receipt.billingType === 'GENERAL' ? 'सामान्य बिल' : 'सदस्यता बिल'],
+		...(receipt.billingType === 'GENERAL' ? [] : [
+			['सवारी साधन नम्बर', receipt.vehicleNumber],
+			['अन्तिम अङ्क', receipt.finalDigits],
+		]),
 		['ग्राहक', receipt.customerName],
+		...(receipt.billingType === 'GENERAL' ? [
+			['सम्पर्क नम्बर', receipt.customerPhone ?? ''],
+			['पान नम्बर', receipt.customerPanNumber ?? ''],
+		] : []),
 		['संस्था', receipt.organizationName],
 		['भुक्तानी मिति', receipt.paymentDate],
 		['म्याद समाप्ति', receipt.validUntil],

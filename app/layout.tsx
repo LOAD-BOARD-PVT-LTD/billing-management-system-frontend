@@ -1,6 +1,10 @@
 import { Providers } from '@/provider/app-providers';
 import { organizationConfig } from '@/constants/organization';
 
+import '@fontsource/noto-sans-devanagari/400.css';
+import '@fontsource/noto-sans-devanagari/500.css';
+import '@fontsource/noto-sans-devanagari/600.css';
+import '@fontsource/noto-sans-devanagari/700.css';
 import '@/app/globals.css';
 
 export const metadata = {

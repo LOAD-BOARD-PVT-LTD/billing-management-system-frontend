@@ -47,7 +47,7 @@ export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, 
 		vehicleNumber: {
 			id: 'vehicleNumber',
 			header: heading('सवारी साधन नम्बर', 'vehicleNumber', sortColumn, sortDirection, onSort),
-			cell: (receipt) => <span className="block max-w-44 break-words font-semibold" title={receipt.vehicleNumber}>{receipt.vehicleNumber}</span>,
+			cell: (receipt) => <span className="block max-w-44 break-words font-semibold" title={receipt.vehicleNumber || 'सामान्य बिल'}>{receipt.billingType === 'GENERAL' ? 'सामान्य बिल' : receipt.vehicleNumber}</span>,
 			headerClassName: 'min-w-40',
 		},
 		finalDigits: {

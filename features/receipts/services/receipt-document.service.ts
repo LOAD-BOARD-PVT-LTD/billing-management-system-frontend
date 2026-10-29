@@ -225,19 +225,27 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   const innerWidth = PAGE_WIDTH - MARGIN * 2;
   const leftDetailWidth = innerWidth * 0.54;
   const rightDetailWidth = innerWidth - leftDetailWidth;
+  const isGeneralBill = bill.content.billingType === 'GENERAL';
+  const customerName = bill.content.customer?.name || bill.content.vehicle.ownerName || '—';
+  const customerPhone = bill.content.customer?.phone || bill.content.vehicle.phone;
+  const customerAddress = bill.content.customer?.address || bill.content.vehicle.address || '—';
   const detailRows = [
     [
-      `सदस्यको नाम: ${bill.content.vehicle.ownerName || '—'}${bill.content.vehicle.phone ? ` (${bill.content.vehicle.phone})` : ''}`,
-      `ठेगाना: ${bill.content.vehicle.address || '—'}`,
+      `${isGeneralBill ? 'ग्राहकको नाम' : 'सदस्यको नाम'}: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}`,
+      `ठेगाना: ${customerAddress}`,
       leftDetailWidth,
       rightDetailWidth,
     ],
-    [
-      `सवारी नं.: ${bill.content.vehicle.vehicleNumber || '—'}${bill.content.vehicle.vehicleType ? ` (${bill.content.vehicle.vehicleType})` : ''}`,
-      '',
-      innerWidth,
-      0,
-    ],
+    ...(isGeneralBill
+      ? bill.content.customer?.panNumber
+        ? [[`पान नं.: ${bill.content.customer.panNumber}`, '', innerWidth, 0] as const]
+        : []
+      : [[
+          `सवारी नं.: ${bill.content.vehicle.vehicleNumber || '—'}${bill.content.vehicle.vehicleType ? ` (${bill.content.vehicle.vehicleType})` : ''}`,
+          '',
+          innerWidth,
+          0,
+        ] as const]),
     [
       `आर्थिक वर्ष: ${bill.content.fiscalYearName}${bill.content.periodStart || bill.content.periodEnd
         ? ` को लागि मिति ${formatDocumentNepaliDate(bill.content.periodStart)} देखि ${formatDocumentNepaliDate(bill.content.periodEnd)} सम्म`

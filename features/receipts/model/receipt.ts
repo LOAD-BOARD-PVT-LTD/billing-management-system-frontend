@@ -1,9 +1,12 @@
-import type { SavedBill } from '@/features/billing/model/bill.types';
+import type { BillingType, SavedBill } from '@/features/billing/model/bill.types';
 
 export type ReceiptStatus = 'PAID' | 'CANCELLED' | 'PENDING';
 
 export interface ReceiptRecord {
   id: string;
+  billingType: BillingType;
+  customerPhone?: string;
+  customerPanNumber?: string;
   receiptNumber: string;
   fiscalYear: string;
   vehicleNumber: string;

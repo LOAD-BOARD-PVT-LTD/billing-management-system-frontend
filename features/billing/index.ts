@@ -1,4 +1,5 @@
 export { BillingWorkspace } from '@/features/billing/components/create-bill/BillingWorkspace';
+export { GeneralBillingWorkspace } from '@/features/billing/components/create-bill/GeneralBillingWorkspace';
 export { VehicleCategoryMappingGate } from '@/features/billing/components/create-bill/VehicleCategoryMappingGate';
 export { useVehicleCategoryMapping } from '@/features/billing/hooks/useVehicleCategoryMapping';
 export { searchTqmsVehicles } from '@/features/billing/api/tqms-vehicle-search.api';

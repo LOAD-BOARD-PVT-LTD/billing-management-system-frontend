@@ -53,6 +53,7 @@ function previewReceipt(input: {
   const finalDigits = input.vehicleNumber.match(/[0-9०-९]+$/u)?.[0] ?? '';
   return {
     ...input,
+    billingType: 'MEMBERSHIP',
     status: input.status ?? 'PAID',
     fiscalYear: '2083/84',
     printedCopyCount: 0,
