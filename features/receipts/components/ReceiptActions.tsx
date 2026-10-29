@@ -21,7 +21,6 @@ const PAYMENT_METHODS = ['नगद', 'बैंक', 'अनलाइन'];
 
 function createReceiptCorrection(receipt: ReceiptRecord): ReceiptCorrection {
 	return {
-		ownerName: receipt.customerName,
 		billingDate: receipt.bill.content.billingDate,
 		periodStart: receipt.bill.content.periodStart,
 		periodEnd: receipt.bill.content.periodEnd,
@@ -278,13 +277,6 @@ export function ReceiptActions({
 								<div className="space-y-1.5">
 									<label htmlFor={`correction-period-end-${receipt.id}`} className="text-sm font-medium">सम्म मिति (BS)</label>
 									<NepaliDatePicker id={`correction-period-end-${receipt.id}`} required value={dateValue(correctionValues.periodEnd)} onChange={(date) => setCorrection({ ...correctionValues, periodEnd: dateString(date) })} />
-								</div>
-							</div>
-
-							<div className="grid gap-3 sm:grid-cols-2">
-								<div className="space-y-1.5">
-									<label htmlFor={`correction-owner-${receipt.id}`} className="text-sm font-medium">नाम</label>
-									<Input id={`correction-owner-${receipt.id}`} required value={correctionValues.ownerName} onChange={(event) => setCorrection({ ...correctionValues, ownerName: event.target.value })} maxLength={150} />
 								</div>
 							</div>
 

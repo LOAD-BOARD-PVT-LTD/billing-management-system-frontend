@@ -13,9 +13,19 @@ import {
   vehicleCategoryCreateRequestSchema,
 } from '@/features/vehicle/type/schemas/vehicle-type.schema';
 
+function isMissingVehicleCategories(error: unknown): boolean {
+  return error instanceof Error
+    && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*VehicleCategoryResource\b/iu.test(error.message);
+}
+
 export async function fetchVehicleTypes(): Promise<VehicleTypeRecord[]> {
-  const payload = await apiClient.get<unknown>(endpoints.resources.vehicleCategory.list());
-  return parseVehicleCategoryListResponse(payload);
+  try {
+    const payload = await apiClient.get<unknown>(endpoints.resources.vehicleCategory.list());
+    return parseVehicleCategoryListResponse(payload);
+  } catch (error) {
+    if (isMissingVehicleCategories(error)) return [];
+    throw error;
+  }
 }
 
 export async function createVehicleType(payload: VehicleCategoryCreateInput): Promise<VehicleTypeRecord> {

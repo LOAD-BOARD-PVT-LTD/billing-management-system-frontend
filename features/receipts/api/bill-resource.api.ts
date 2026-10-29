@@ -219,7 +219,6 @@ export function parseBillResource(value: unknown): ReceiptRecord {
 }
 
 export interface ReceiptCorrection {
-  ownerName: string;
   billingDate: string;
   periodStart: string;
   periodEnd: string;
@@ -312,13 +311,12 @@ export async function correctReceipt(
 ): Promise<void> {
   const normalizedReason = reason.trim();
   if (!normalizedReason) throw new Error('रसिद सुधार गर्ने कारण लेख्नुहोस्।');
-  const ownerName = correction.ownerName.trim();
   const billingDate = correction.billingDate.trim();
   const periodStart = correction.periodStart.trim();
   const periodEnd = correction.periodEnd.trim();
   const paymentMethod = correction.paymentMethod.trim();
-  if (!ownerName || !billingDate || !periodStart || !periodEnd || !paymentMethod) {
-    throw new Error('नाम, भुक्तानी विधि र सबै मितिहरू आवश्यक छन्।');
+  if (!billingDate || !periodStart || !periodEnd || !paymentMethod) {
+    throw new Error('भुक्तानी विधि र सबै मितिहरू आवश्यक छन्।');
   }
   const dates = [billingDate, periodStart, periodEnd];
   if (dates.some((date) => !isValidIsoDate(date))) {
@@ -343,7 +341,7 @@ export async function correctReceipt(
   const correctedAt = new Date().toISOString();
   await updateReceiptResource(receipt, {
     ...content,
-    vehicle: { ...vehicle, ownerName },
+    vehicle,
     billingDate,
     periodStart,
     periodEnd,
