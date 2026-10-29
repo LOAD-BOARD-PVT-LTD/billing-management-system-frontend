@@ -21,7 +21,6 @@ const PAYMENT_METHODS = ['नगद', 'बैंक', 'अनलाइन'];
 
 function createReceiptCorrection(receipt: ReceiptRecord): ReceiptCorrection {
 	return {
-		vehicleNumber: receipt.vehicleNumber,
 		ownerName: receipt.customerName,
 		billingDate: receipt.bill.content.billingDate,
 		periodStart: receipt.bill.content.periodStart,
@@ -283,10 +282,6 @@ export function ReceiptActions({
 							</div>
 
 							<div className="grid gap-3 sm:grid-cols-2">
-								<div className="space-y-1.5">
-									<label htmlFor={`correction-vehicle-${receipt.id}`} className="text-sm font-medium">सवारी साधन नम्बर</label>
-									<Input id={`correction-vehicle-${receipt.id}`} required value={correctionValues.vehicleNumber} onChange={(event) => setCorrection({ ...correctionValues, vehicleNumber: event.target.value })} maxLength={100} />
-								</div>
 								<div className="space-y-1.5">
 									<label htmlFor={`correction-owner-${receipt.id}`} className="text-sm font-medium">नाम</label>
 									<Input id={`correction-owner-${receipt.id}`} required value={correctionValues.ownerName} onChange={(event) => setCorrection({ ...correctionValues, ownerName: event.target.value })} maxLength={150} />
