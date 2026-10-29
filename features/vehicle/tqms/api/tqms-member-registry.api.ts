@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
+import { matchesTqmsSanghBranch } from '@/features/settings/api/tqms-sangh-branch-filter.api';
 import type { TqmsRegistryVehicle } from '@/features/vehicle/tqms/model/tqms-member-registry';
 
 type JsonRecord = Record<string, unknown>;
@@ -71,10 +72,24 @@ export function parseTqmsMemberRegistry(payload: unknown): TqmsRegistryVehicle[]
   return rows.map(normalizeVehicle).filter((vehicle): vehicle is TqmsRegistryVehicle => vehicle !== null);
 }
 
-export async function fetchTqmsMemberRegistry(signal?: AbortSignal): Promise<TqmsRegistryVehicle[]> {
-  const payload = await apiClient.get<unknown>(
-    endpoints.resources.vehicle.search('SanghBranch', 'Narayani Sangh Hetauda'),
-    { signal },
-  );
-  return parseTqmsMemberRegistry(payload);
+export async function fetchTqmsMemberRegistry(signal?: AbortSignal, branchName = ''): Promise<TqmsRegistryVehicle[]> {
+  let payload: unknown;
+  try {
+    payload = await apiClient.get<unknown>(
+      branchName.trim()
+        ? endpoints.resources.vehicle.search('SanghBranch', branchName, 'all')
+        : endpoints.resources.vehicle.list(),
+      { signal },
+    );
+  } catch (error) {
+    if (error instanceof Error && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*VehicleResource\b/iu.test(error.message)) {
+      return [];
+    }
+    if (error instanceof Error && /Request failed \(404\).*No resources found for search query/iu.test(error.message)) {
+      return [];
+    }
+    throw error;
+  }
+  return parseTqmsMemberRegistry(payload)
+    .filter((vehicle) => matchesTqmsSanghBranch(vehicle.branch, branchName));
 }

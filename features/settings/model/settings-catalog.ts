@@ -68,12 +68,6 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     href: '/dashboard/billing-rules', actionLabel: 'बिलिङ नियम खोल्नुहोस्',
   },
   {
-    id: 'tqms-branch-filter', category: 'integrations', title: 'TQMS संघ शाखा फिल्टर',
-    description: 'TQMS सवारी खोज र शाखा-आधारित फिल्टर।', icon: Building2,
-    unavailableReason: 'फिल्टर सुरक्षित गर्ने सेटिङ सेवा वा UI हाल उपलब्ध छैन।',
-    searchTerms: ['tqms branch', 'branch filter'],
-  },
-  {
     id: 'tqms-data-sync', category: 'integrations', title: 'TQMS डाटा सिंक',
     description: 'सिंक अवस्था, अन्तिम सफल समय, रेकर्ड गणना र छोडिएका अभिलेख।', icon: Link2,
     unavailableReason: 'TQMS स्न्यापसट सिंक, यसको operational metrics र Excel export UI/API हाल उपलब्ध छैन।',
@@ -103,6 +97,11 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     id: 'sms-delivery-history', category: 'sms-notifications', title: 'SMS पठाउने अवस्था तथा अभियान इतिहास',
     description: 'डेलिभरी विवरण र अभियान इतिहास।', icon: FileClock,
     unavailableReason: 'SMS delivery status वा अभियान इतिहास endpoint उपलब्ध छैन।',
+  },
+  {
+    id: 'tqms-branch-filter', category: 'organization', title: 'TQMS संघ शाखा फिल्टर',
+    description: 'संघ शाखा अनुसार TQMS सवारी सीमित गर्नुहोस्। खाली राख्दा सबै शाखाका सवारी देखिन्छन्।', icon: Building2,
+    searchTerms: ['tqms branch', 'branch filter', 'Sthaniya', 'स्थानीय'],
   },
   {
     id: 'displaced-tags', category: 'organization', title: 'विस्थापित ट्याग सेटिङ',

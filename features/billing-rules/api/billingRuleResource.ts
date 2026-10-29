@@ -276,7 +276,18 @@ export function unwrapBillingRuleResource(value: unknown): BillingRuleConfig {
 }
 
 export async function listBillingRuleResources(): Promise<BillingRuleResourceDocument[]> {
-  const payload = await apiClient.get<unknown>(endpoints.resources.billingRule.list());
+  let payload: unknown;
+  try {
+    payload = await apiClient.get<unknown>(endpoints.resources.billingRule.list());
+  } catch (error) {
+    if (
+      error instanceof Error
+      && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*BillingRuleResource\b/iu.test(error.message)
+    ) {
+      return [];
+    }
+    throw error;
+  }
   const documents = getResourceList(payload).map(mapBillingRuleResource);
   if (documents.some((document) => !(
     document.config.rules.length === 1

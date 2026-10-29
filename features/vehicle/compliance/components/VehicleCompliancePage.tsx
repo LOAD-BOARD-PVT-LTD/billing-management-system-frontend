@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/table';
 import type { MemberVehicleDetails, VehicleDocumentPeriod } from '@/features/members/api/member-vehicle.api';
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
-import { useOrganization } from '@/contexts/organization-context';
 import {
   bikramSambatToGregorian,
   parseBikramSambatDate,
@@ -33,8 +32,6 @@ import {
 import { toNepaliDigits } from '@/utils/numbers';
 
 const PAGE_SIZE = 25;
-const NARAYANI_BRANCH = 'Narayani Sangh Hetauda';
-
 const DOCUMENT_OPTIONS = [
   { value: 'all', label: 'सबै कागजात' },
   { value: 'insurance', label: 'बीमा' },
@@ -176,22 +173,14 @@ function downloadVehicleCsv(vehicles: MemberVehicleDetails[], documentKey: Docum
 }
 
 export function VehicleCompliancePage() {
-  const { vehicles, isLoading, isRefreshing, lastSyncedAt, error, reload } = useMemberVehicles();
-  const { organization } = useOrganization();
+  const { vehicles, branchFilter, isLoading, isRefreshing, lastSyncedAt, error, reload } = useMemberVehicles();
   const [search, setSearch] = useState('');
   const [documentKey, setDocumentKey] = useState<DocumentKey>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [vehicleType, setVehicleType] = useState('all');
   const [page, setPage] = useState(1);
 
-  const isNarayaniBilling = `${organization.nameEnglish} ${organization.nameNepali}`
-    .toLocaleLowerCase()
-    .includes('narayani');
-  const scopedVehicles = useMemo(() => (
-    isNarayaniBilling
-      ? vehicles.filter((vehicle) => vehicle.branch.trim().toLocaleLowerCase() === NARAYANI_BRANCH.toLocaleLowerCase())
-      : vehicles
-  ), [isNarayaniBilling, vehicles]);
+  const scopedVehicles = vehicles;
 
   const vehicleTypes = useMemo(
     () => [...new Set(scopedVehicles.map((vehicle) => vehicle.tqmsVehicleType).filter(Boolean))]
@@ -355,7 +344,7 @@ export function VehicleCompliancePage() {
             <p className="mt-0.5 text-xs text-muted-foreground" aria-live="polite">
               {toNepaliDigits(filteredVehicles.length)} सवारी
               {lastSyncedAt ? ` · अन्तिम sync ${lastSyncedAt.toLocaleString('ne-NP')}` : ''}
-              {isNarayaniBilling ? ` · ${NARAYANI_BRANCH}` : ''}
+              {branchFilter ? ` · ${branchFilter}` : ''}
             </p>
           </div>
           <span className="text-xs text-muted-foreground">

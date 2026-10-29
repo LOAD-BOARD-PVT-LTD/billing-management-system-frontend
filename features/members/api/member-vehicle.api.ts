@@ -147,6 +147,14 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
 }
 
 export async function fetchMemberVehicleDetails(signal?: AbortSignal): Promise<MemberVehicleDetails[]> {
-  const payload = await apiClient.get<unknown>(endpoints.resources.vehicle.list(), { signal });
+  let payload: unknown;
+  try {
+    payload = await apiClient.get<unknown>(endpoints.resources.vehicle.list(), { signal });
+  } catch (error) {
+    if (error instanceof Error && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*VehicleResource\b/iu.test(error.message)) {
+      return [];
+    }
+    throw error;
+  }
   return rows(payload).map(parseMemberVehicleResource);
 }

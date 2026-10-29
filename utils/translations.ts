@@ -221,6 +221,14 @@ export const translations: Translations = {
     },
 
     settings: {
+      tqmsSanghBranchFilterTitle: 'TQMS संघ शाखा फिल्टर',
+      tqmsSanghBranchFilterDescription: 'यो सेटिङ राख्दा TQMS बाट यही शाखाका सवारी मात्र देखिन्छन्। खाली छोड्दा सबै शाखाका सवारी देखिन्छन्।',
+      tqmsSanghBranchFilterLabel: 'संघ शाखा नाम',
+      tqmsSanghBranchFilterPlaceholder: 'उदाहरण: संघ शाखाको नाम',
+      tqmsSanghBranchFilterSaveButton: 'सेभ गर्नुहोस्',
+      tqmsSanghBranchFilterSaved: 'TQMS संघ शाखा फिल्टर सुरक्षित गरियो।',
+      tqmsSanghBranchFilterCleared: 'TQMS संघ शाखा फिल्टर खाली गरियो।',
+      tqmsSanghBranchFilterSaveFailed: 'TQMS संघ शाखा फिल्टर सुरक्षित गर्न सकिएन।',
       authSessionSectionTitle: 'सत्र सुरक्षा नीति',
       authSessionNormalTitle: 'सामान्य सत्र',
       authSessionNormalDescription: 'Remember Me चयन नगरेका लगइनको स्वतन्त्र अधिकतम अवधि व्यवस्थापन गर्नुहोस्।',
@@ -2196,7 +2204,7 @@ export const translations: Translations = {
       tqmsSanghBranchFilterDescription:
         'यो सेटिङ राख्दा TQMS बाट यही शाखाका सवारी मात्र देखिन्छन्। खाली छोड्दा सबै शाखाका सवारी देखिन्छन्।',
       tqmsSanghBranchFilterLabel: 'संघ शाखा नाम',
-      tqmsSanghBranchFilterPlaceholder: 'उदाहरण: Narayani Sangh',
+      tqmsSanghBranchFilterPlaceholder: 'उदाहरण: संघ शाखाको नाम',
       tqmsSanghBranchFilterSaveButton: 'सेभ गर्नुहोस्',
       tqmsSanghBranchFilterSaved: 'TQMS संघ शाखा फिल्टर सुरक्षित गरियो।',
       tqmsSanghBranchFilterCleared: 'TQMS संघ शाखा फिल्टर खाली गरियो।',
@@ -3066,6 +3074,14 @@ export const translations: Translations = {
       },
     },
     settings: {
+      tqmsSanghBranchFilterTitle: 'TQMS Sangh Branch Filter',
+      tqmsSanghBranchFilterDescription: 'When this setting is filled, TQMS results are limited to that Sangh branch only. Keep it empty to show all branches.',
+      tqmsSanghBranchFilterLabel: 'Sangh branch name',
+      tqmsSanghBranchFilterPlaceholder: 'Example: Sangh branch name',
+      tqmsSanghBranchFilterSaveButton: 'Save',
+      tqmsSanghBranchFilterSaved: 'TQMS Sangh branch filter saved.',
+      tqmsSanghBranchFilterCleared: 'TQMS Sangh branch filter cleared.',
+      tqmsSanghBranchFilterSaveFailed: 'Failed to save TQMS Sangh branch filter.',
       authSessionSectionTitle: 'Session security policy',
       authSessionNormalTitle: 'Normal session',
       authSessionNormalDescription: 'Manage the independent maximum duration for logins without Remember Me.',
@@ -4958,7 +4974,7 @@ export const translations: Translations = {
       tqmsSanghBranchFilterDescription:
         'When this setting is filled, TQMS results are limited to that Sangh branch only. Keep it empty to show all branches.',
       tqmsSanghBranchFilterLabel: 'Sangh branch name',
-      tqmsSanghBranchFilterPlaceholder: 'Example: Narayani Sangh',
+      tqmsSanghBranchFilterPlaceholder: 'Example: Sangh branch name',
       tqmsSanghBranchFilterSaveButton: 'Save',
       tqmsSanghBranchFilterSaved: 'TQMS Sangh branch filter saved.',
       tqmsSanghBranchFilterCleared: 'TQMS Sangh branch filter cleared.',

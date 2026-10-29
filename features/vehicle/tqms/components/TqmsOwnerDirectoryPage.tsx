@@ -19,8 +19,6 @@ import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles'
 import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import { toNepaliDigits } from '@/utils/numbers';
 
-const DIRECTORY_BRANCH = 'Narayani Sangh Hetauda';
-
 type OwnerGroup = {
   key: string;
   name: string;
@@ -97,16 +95,12 @@ function lastSyncLabel(date: Date | null) {
 }
 
 export function TqmsOwnerDirectoryPage() {
-  const { vehicles, isLoading, isRefreshing, lastSyncedAt, error, reload } = useMemberVehicles();
+  const { vehicles: sanghVehicles, branchFilter, isLoading, isRefreshing, lastSyncedAt, error, reload } = useMemberVehicles();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [expandedOwner, setExpandedOwner] = useState<string | null>(null);
   const pageSize = 25;
 
-  const sanghVehicles = useMemo(
-    () => vehicles.filter((vehicle) => vehicle.branch.trim().toLocaleLowerCase() === DIRECTORY_BRANCH.toLocaleLowerCase()),
-    [vehicles],
-  );
   const ownerGroups = useMemo(() => groupVehicles(sanghVehicles), [sanghVehicles]);
   const filteredOwners = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
@@ -182,7 +176,7 @@ export function TqmsOwnerDirectoryPage() {
             {search.trim() ? ` · खोज नतिजा: ${toNepaliDigits(filteredOwners.length)}` : ''}
             {' · सवारी: '}{toNepaliDigits(vehicleCount)}
           </p>
-          <p className="mt-1">स्रोत: TQMS synced VehicleResource · Narayani Sangh Hetauda · {lastSyncLabel(lastSyncedAt)}</p>
+          <p className="mt-1">स्रोत: TQMS synced VehicleResource · {branchFilter || 'सबै शाखा'} · {lastSyncLabel(lastSyncedAt)}</p>
         </div>
       </Card>
 

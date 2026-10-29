@@ -243,7 +243,7 @@ function RegistryPagination({
 }
 
 export function TqmsMemberRegistryPage() {
-  const { vehicles, isLoading, isRefreshing, error, reload } = useTqmsMemberRegistry();
+  const { vehicles, branchFilter, isLoading, isRefreshing, error, reload } = useTqmsMemberRegistry();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -377,7 +377,7 @@ export function TqmsMemberRegistryPage() {
         {pdfError ? <p role="alert" className="text-sm text-destructive">{pdfError}</p> : null}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
           <p aria-live="polite">कुल दर्ता सवारी: <span className="font-semibold text-foreground">{toNepaliDigits(activeVehicles.length)}</span>{debouncedSearch ? ` · खोज नतिजा: ${toNepaliDigits(filteredVehicles.length)}` : ''}</p>
-          <p>TQMS शाखा फिल्टर: Narayani Sangh Hetauda</p>
+          <p>TQMS शाखा फिल्टर: {branchFilter || 'सबै शाखा'}</p>
         </div>
       </Card>
 

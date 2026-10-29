@@ -8,33 +8,36 @@ import {
   updateVehicleBlacklist,
 } from '@/features/vehicle/blacklist/api/vehicle-blacklist.api';
 import { vehicleBlacklistKeys } from '@/lib/query/query-keys';
+import { useTqmsSanghBranchFilter } from '@/features/settings/hooks/useTqmsSanghBranchFilter';
 
 export function useVehicleBlacklist() {
   const queryClient = useQueryClient();
+  const branchFilter = useTqmsSanghBranchFilter();
   const query = useQuery({
-    queryKey: vehicleBlacklistKeys.list(),
-    queryFn: ({ signal }) => fetchVehicleBlacklist(signal),
+    queryKey: vehicleBlacklistKeys.list(branchFilter.branchName),
+    queryFn: ({ signal }) => fetchVehicleBlacklist(signal, branchFilter.branchName),
+    enabled: !branchFilter.isLoading && !branchFilter.error,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
   const createMutation = useMutation({
     mutationFn: createVehicleBlacklist,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list(branchFilter.branchName) }),
   });
   const createMemberMutation = useMutation({
     mutationFn: createMemberVehicleBlacklist,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list(branchFilter.branchName) }),
   });
   const updateMutation = useMutation({
     mutationFn: updateVehicleBlacklist,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: vehicleBlacklistKeys.list(branchFilter.branchName) }),
   });
 
   return {
     records: query.data ?? [],
-    isLoading: query.isLoading,
+    isLoading: branchFilter.isLoading || query.isLoading,
     isRefreshing: query.isFetching && !query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
+    error: branchFilter.error ?? (query.error instanceof Error ? query.error.message : null),
     reload: query.refetch,
     createRecord: createMutation.mutateAsync,
     createMemberRecord: createMemberMutation.mutateAsync,

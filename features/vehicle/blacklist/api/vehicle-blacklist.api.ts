@@ -6,6 +6,7 @@ import {
 } from '@/features/billing/api/vehicle-resource.api';
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
+import { matchesTqmsSanghBranch } from '@/features/settings/api/tqms-sangh-branch-filter.api';
 import type { VehicleBlacklistRecord, VehicleStatusMetadata } from '@/features/vehicle/blacklist';
 
 type JsonRecord = Record<string, unknown>;
@@ -139,10 +140,11 @@ async function searchBlacklistedVehicles(signal?: AbortSignal): Promise<VehicleB
   return unwrapResourceRows(payload).map(mapResourceToStatusRecord);
 }
 
-export async function fetchVehicleBlacklist(signal?: AbortSignal): Promise<VehicleBlacklistRecord[]> {
+export async function fetchVehicleBlacklist(signal?: AbortSignal, branchName = ''): Promise<VehicleBlacklistRecord[]> {
   const records = await searchBlacklistedVehicles(signal);
   return records
     .filter((record) => record.isBlacklisted)
+    .filter((record) => matchesTqmsSanghBranch(record.branch, branchName))
     .sort((left, right) => (right.blacklistedAt ?? '').localeCompare(left.blacklistedAt ?? ''));
 }
 

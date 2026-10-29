@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
+import { fetchTqmsSanghBranchFilter } from '@/features/settings/api/tqms-sangh-branch-filter.api';
 import { searchTqmsVehicles } from './tqms-vehicle-search.api';
 import type { BillingVehicle } from '../model/types';
 import type { VehiclePhoneUpdateInput } from '../schemas/vehicle-phone-update.schema';
@@ -76,7 +77,8 @@ export async function readVehicleResource(
 	const query = vehicleNumber.trim();
 	if (!query) throw new Error('A vehicle number is required to resolve the TQMS VehicleId.');
 
-	const tqmsVehicles = await searchTqmsVehicles(query);
+	const { branchName } = await fetchTqmsSanghBranchFilter();
+	const tqmsVehicles = await searchTqmsVehicles(query, undefined, branchName);
 	const matchingVehicle = tqmsVehicles.find((vehicle) => vehicle.tqmsVehicleId === requestedVehicleId);
 	if (!matchingVehicle) {
 		throw new Error(`TQMS search did not return vehicle ${query} with VehicleId ${requestedVehicleId}.`);
