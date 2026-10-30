@@ -93,6 +93,9 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
   const mainOwner = owners.find((owner) => text(owner?.Type).toLocaleLowerCase() === 'main owner')
     ?? second
     ?? first;
+  const branchNames = Array.from(new Set(
+    owners.map((owner) => text(owner?.SanghBranch)).filter(Boolean),
+  ));
   const compliance = asRecord(
     content?.Compliance
     ?? content?.compliance
@@ -126,7 +129,7 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
       ?? vehicleTypeRecord?.id,
     ),
     ownerType: text(mainOwner?.Type),
-    branch: text(mainOwner?.SanghBranch ?? first?.SanghBranch),
+    branch: branchNames.join(', '),
     sanchalakName: text(first?.Name),
     sawariDhaniName: text(mainOwner?.Name) || text(first?.Name),
     ownerCount: owners.length,

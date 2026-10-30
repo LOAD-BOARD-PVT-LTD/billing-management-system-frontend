@@ -49,6 +49,11 @@ function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
   const operator = owners.length > 1 ? owners[0] : null;
   const registration = asRecord(content.Registration);
   const citizenship = vehicleOwner?.CitizenshipNumber;
+  const branchNames = Array.from(new Set(
+    owners
+      .map((owner) => text(owner.SanghBranch))
+      .filter(Boolean),
+  ));
 
   return {
     id: text(resource?.id ?? resource?.ID ?? vehicleId ?? vehicleNumber),
@@ -59,7 +64,7 @@ function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
     vehicleOwnerName: text(vehicleOwner?.Name) || '—',
     operatorName: operator ? text(operator.Name) || null : null,
     phone: text(vehicleOwner?.Phone),
-    branch: text(vehicleOwner?.SanghBranch),
+    branch: branchNames.join(', '),
     status: text(registration?.Status ?? content.Status) || '—',
     address: text(vehicleOwner?.Address),
     citizenshipNumber: typeof citizenship === 'string' || typeof citizenship === 'number' ? String(citizenship) : '',

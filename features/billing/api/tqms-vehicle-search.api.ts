@@ -14,7 +14,7 @@ export async function searchTqmsVehicles(
 
   const payload = await apiClient.post<unknown>(
     endpoints.tqms.searchVehicles,
-    { vehicle_number: query },
+    { vehicle_number: query, status: 'ACTIVE' },
     { signal },
   );
   return parseTqmsVehicleSearchResponse(payload, query)

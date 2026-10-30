@@ -68,6 +68,7 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 	const owner = owners.find((candidate) => text(candidate.Type).toLowerCase() === 'main owner')
 		?? owners[0];
 	const phone = text(owner?.Phone);
+	const branchNames = Array.from(new Set(owners.map((candidate) => text(candidate.SanghBranch)).filter(Boolean)));
 
 	return {
 		id: text(vehicle.VehicleId) || vehicleNumber,
@@ -79,7 +80,7 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 		phone,
 		smsPhone: phone,
 		ownerAddress: text(owner?.Address),
-		branch: text(owner?.SanghBranch),
+		branch: branchNames.join(', '),
 		fiscalYear: '',
 		billingDate: '',
 		periodStart: '',
