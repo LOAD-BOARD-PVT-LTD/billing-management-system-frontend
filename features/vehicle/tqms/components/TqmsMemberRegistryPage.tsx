@@ -88,13 +88,11 @@ async function downloadUniqueVehicleNumbersPdf(rows: TqmsRegistryVehicle[]): Pro
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const [devanagariFontBytes, latinFontBytes] = await Promise.all([
-    fetchPdfFont('/fonts/noto-sans-devanagari-devanagari-400-normal.woff'),
-    fetchPdfFont('/fonts/noto-sans-devanagari-latin-400-normal.woff'),
-  ]);
+  const fontBytes = await fetchPdfFont('/fonts/NotoSansDevanagari_Condensed-Regular.ttf');
+  const font = await pdf.embedFont(fontBytes, { subset: true });
   const fonts = {
-    devanagari: await pdf.embedFont(devanagariFontBytes, { subset: true }),
-    latin: await pdf.embedFont(latinFontBytes, { subset: true }),
+    devanagari: font,
+    latin: font,
   };
 
   const title = 'सवारी नम्बर';
