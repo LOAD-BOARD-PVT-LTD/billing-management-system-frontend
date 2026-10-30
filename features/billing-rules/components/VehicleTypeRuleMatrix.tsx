@@ -64,12 +64,6 @@ const validityOptions: Array<{ value: Validity; label: string }> = [
   { value: 'END_OF_FISCAL_YEAR', label: 'आर्थिक वर्षको अन्त्य' },
 ];
 
-function todayAsDateInputValue() {
-  const date = new Date();
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 10);
-}
-
 function dateInputValueToDate(value: string): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
   if (!match) return undefined;
@@ -164,24 +158,8 @@ export function VehicleTypeRuleMatrix({
 }: VehicleTypeRuleMatrixProps) {
   const initialYearId = initialRule?.fiscalYearId ?? currentFiscalYearId;
   const [fiscalYearId, setFiscalYearId] = useState(initialYearId);
-  const [effectiveDate, setEffectiveDate] = useState(() =>
-    initialRules.find((rule) =>
-      rule.fiscalYearId === initialYearId
-      && (!initialRule || rule.vehicleCategoryId === initialRule.vehicleCategoryId)
-      && rule.effectiveDate,
-    )?.effectiveDate
-      ?? initialRule?.effectiveDate
-      ?? todayAsDateInputValue(),
-  );
-  const [meetingReference, setMeetingReference] = useState(() =>
-    initialRules.find((rule) =>
-      rule.fiscalYearId === initialYearId
-      && (!initialRule || rule.vehicleCategoryId === initialRule.vehicleCategoryId)
-      && rule.meetingReference,
-    )?.meetingReference
-      ?? initialRule?.meetingReference
-      ?? '',
-  );
+  const [effectiveDate, setEffectiveDate] = useState(initialRule?.effectiveDate ?? '');
+  const [meetingReference, setMeetingReference] = useState(initialRule?.meetingReference ?? '');
   const [meetingDocument, setMeetingDocument] = useState<File | null>(null);
   const meetingDocumentInputRef = useRef<HTMLInputElement>(null);
   const [columns, setColumns] = useState(() => makeInitialColumns(
@@ -222,12 +200,6 @@ export function VehicleTypeRuleMatrix({
     setFiscalYearId(nextFiscalYearId);
     setColumns(nextColumns);
     setRows(makeInitialRows(initialRules, nextFiscalYearId, nextColumns, initialRule?.vehicleCategoryId ?? undefined));
-    const yearRule = initialRules.find((rule) =>
-      rule.fiscalYearId === nextFiscalYearId
-      && (!initialRule || rule.vehicleCategoryId === initialRule.vehicleCategoryId),
-    );
-    setEffectiveDate(yearRule?.effectiveDate ?? todayAsDateInputValue());
-    setMeetingReference(yearRule?.meetingReference ?? '');
     setMeetingDocument(null);
     setFormError('');
   };
