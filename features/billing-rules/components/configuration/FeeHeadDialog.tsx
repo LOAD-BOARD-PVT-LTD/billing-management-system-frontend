@@ -30,14 +30,10 @@ export function FeeHeadDialog({ open, onOpenChange, initialValue, fiscalYears, f
       <DialogContent>
         <DialogHeader>
           <DialogTitle>शुल्क शीर्षक</DialogTitle>
-          <DialogDescription>शुल्कको कोड, नाम र विवरण लेख्नुहोस्।</DialogDescription>
+          <DialogDescription>शुल्क शीर्षकको नाम र विवरण लेख्नुहोस्।</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="fee-head-code">Code</Label>
-            <Input id="fee-head-code" value={value.code ?? ''} onChange={(event) => setValue((current) => ({ ...current, code: event.target.value.toUpperCase() }))} />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="fee-head-name">Name</Label>
             <Input id="fee-head-name" value={value.name} onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))} />
@@ -61,7 +57,7 @@ export function FeeHeadDialog({ open, onOpenChange, initialValue, fiscalYears, f
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!value.code?.trim() || !value.name.trim() || !value.fiscalYearId} onClick={() => void onSubmit({ ...value, id: value.id || crypto.randomUUID() })}>Save</Button>
+          <Button disabled={!value.name.trim() || !value.fiscalYearId} onClick={() => void onSubmit({ ...value, id: value.id || crypto.randomUUID() })}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -51,12 +51,6 @@ const validityOptions: Array<{ value: Validity; label: string }> = [
   { value: 'END_OF_FISCAL_YEAR', label: 'आर्थिक वर्षको अन्त्य' },
 ];
 
-function todayAsDateInputValue() {
-  const date = new Date();
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 10);
-}
-
 function dateInputValueToDate(value: string): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
   if (!match) return undefined;
@@ -115,7 +109,7 @@ export function BillingRuleForm({
     status: 'ACTIVE',
   });
   const [amount, setAmount] = useState(initialRule ? String(initialRule.amount) : '');
-  const [effectiveDate, setEffectiveDate] = useState(initialRule?.effectiveDate ?? todayAsDateInputValue());
+  const [effectiveDate, setEffectiveDate] = useState(initialRule?.effectiveDate ?? '');
   const [meetingReference, setMeetingReference] = useState(initialRule?.meetingReference ?? '');
   const [meetingDocument, setMeetingDocument] = useState<File | null>(null);
   const meetingDocumentInputRef = useRef<HTMLInputElement>(null);

@@ -121,10 +121,8 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   const activeRules = contextVehicleGroups.filter((group) => group.every((rule) => rule.status === 'ACTIVE')).length
     + contextCommonRules.filter((rule) => rule.status === 'ACTIVE').length;
 
-  const activeFeeHeadIds = new Set(config.feeHeads.filter((feeHead) => feeHead.status === 'ACTIVE').map((feeHead) => feeHead.id));
   const rulesForDisplay = config.rules.filter((rule) =>
-    activeFeeHeadIds.has(rule.feeHeadId)
-    && (scope !== 'VEHICLE_TYPE' || rule.status === 'ACTIVE'),
+    scope !== 'VEHICLE_TYPE' || rule.status === 'ACTIVE',
   );
   const filteredRules = useMemo(() => filterBillingRules(rulesForDisplay, config, {
     scope,
