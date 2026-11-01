@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type FormEvent } from 'react';
-import { Car, Layers, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Upload, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,9 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TableActionIconButton } from '@/components/ui/table-action-icon-button';
 import { NepaliDatePicker } from '@/components/ui/nepali-date-picker';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { BillingEntityRecord } from '@/features/administration/billing-entities/types/billing-entity.types';
+import { getDefaultBillingEntityId } from '@/features/administration/billing-entities/utils/billing-entity-default';
 import type { BillingRule, BillingRuleConfig, FeeHead, Frequency, Scope, Validity } from '@/features/billing-rules/model/types';
+import { getPeriodForFrequency, getValidityForFrequency, validityOptionsByFrequency } from '@/features/billing-rules/utils/rule-period-policy';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 import { VehicleTypeRuleMatrix, type VehicleRuleSubmission } from '@/features/billing-rules/components/VehicleTypeRuleMatrix';
 import { useTranslations } from '@/utils/translations';
@@ -44,12 +45,6 @@ interface CommonRuleFormRow {
   validity: Validity;
   billingEntityId: string | null;
 }
-
-const validityOptions: Array<{ value: Validity; label: string }> = [
-  { value: 'SAME_DAY', label: 'सोही दिन' },
-  { value: 'END_OF_MONTH', label: 'महिनाको अन्त्य' },
-  { value: 'END_OF_FISCAL_YEAR', label: 'आर्थिक वर्षको अन्त्य' },
-];
 
 function dateInputValueToDate(value: string): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
@@ -95,19 +90,29 @@ export function BillingRuleForm({
     ? currentFiscalYearId
     : defaultFiscalYear?.id ?? '';
   const initialFeeHeadId = config.feeHeads.find((feeHead) => feeHead.fiscalYearId === initialFiscalYearId)?.id ?? '';
-  const [rule, setRule] = useState<BillingRule | null>(() => initialRule ?? {
-    id: crypto.randomUUID(),
-    feeHeadId: initialFeeHeadId,
-    fiscalYearId: initialFiscalYearId,
-    billingEntityId: null,
-    scope: currentScope,
-    vehicleCategoryId: currentScope === 'VEHICLE_TYPE' ? vehicleCategories[0]?.id ?? null : null,
-    frequency: 'ONE_TIME',
-    period: currentScope === 'COMMON' ? null : 'FISCAL_YEAR',
-    validity: 'SAME_DAY',
-    amount: 0,
-    status: 'ACTIVE',
-  });
+  const defaultBillingEntityId = getDefaultBillingEntityId(billingEntities);
+  const [rule, setRule] = useState<BillingRule | null>(() => initialRule
+    ? {
+      ...initialRule,
+      validity: getValidityForFrequency(initialRule.frequency, initialRule.validity),
+      period: getPeriodForFrequency(
+        initialRule.frequency,
+        getValidityForFrequency(initialRule.frequency, initialRule.validity),
+      ),
+    }
+    : {
+      id: crypto.randomUUID(),
+      feeHeadId: initialFeeHeadId,
+      fiscalYearId: initialFiscalYearId,
+      billingEntityId: defaultBillingEntityId || null,
+      scope: currentScope,
+      vehicleCategoryId: currentScope === 'VEHICLE_TYPE' ? vehicleCategories[0]?.id ?? null : null,
+      frequency: 'ONE_TIME',
+      period: null,
+      validity: 'SAME_DAY',
+      amount: 0,
+      status: 'ACTIVE',
+    });
   const [amount, setAmount] = useState(initialRule ? String(initialRule.amount) : '');
   const [effectiveDate, setEffectiveDate] = useState(initialRule?.effectiveDate ?? '');
   const [meetingReference, setMeetingReference] = useState(initialRule?.meetingReference ?? '');
@@ -120,15 +125,18 @@ export function BillingRuleForm({
     feeHeadId: initialRule?.feeHeadId ?? initialFeeHeadId,
     amount: initialRule ? String(initialRule.amount) : '',
     frequency: initialRule?.frequency ?? 'ONE_TIME',
-    validity: initialRule?.validity ?? 'SAME_DAY',
-    billingEntityId: initialRule?.billingEntityId ?? null,
+    validity: initialRule
+      ? getValidityForFrequency(initialRule.frequency, initialRule.validity)
+      : 'SAME_DAY',
+    billingEntityId: initialRule?.billingEntityId ?? (defaultBillingEntityId || null),
   }]);
   const selectableEntities = billingEntities;
-  const selectedBillingEntity = selectableEntities.find((entity) => entity.id === rule?.billingEntityId);
+  const resolvedBillingEntityId = (rule?.billingEntityId ?? defaultBillingEntityId) || null;
+  const selectedBillingEntity = selectableEntities.find((entity) => entity.id === resolvedBillingEntityId);
   const canKeepExistingBillingEntity = Boolean(
     initialRule?.billingEntityId && initialRule.billingEntityId === rule?.billingEntityId,
   );
-  const hasValidBillingEntity = Boolean(rule?.billingEntityId)
+  const hasValidBillingEntity = Boolean(resolvedBillingEntityId)
     && (Boolean(selectedBillingEntity) || canKeepExistingBillingEntity);
   if (!rule) {
     return (
@@ -163,31 +171,6 @@ export function BillingRuleForm({
   if (rule.scope === 'VEHICLE_TYPE' && onSubmitVehicleRules) {
     return (
       <div className="space-y-5">
-        <Tabs
-          value={rule.scope}
-          onValueChange={(value) => {
-            const scope = value as Scope;
-            setRule((current) => current ? {
-              ...current,
-              scope,
-              vehicleCategoryId: scope === 'COMMON' ? null : current.vehicleCategoryId ?? vehicleCategories[0]?.id ?? null,
-              period: current.frequency === 'ONE_TIME'
-                ? scope === 'COMMON' ? null : 'FISCAL_YEAR'
-                : 'MONTH',
-            } : current);
-          }}
-        >
-          <TabsList className="grid h-auto w-full grid-cols-2 sm:inline-grid sm:w-auto">
-            <TabsTrigger value="COMMON" className="gap-2">
-              <Layers className="h-4 w-4" aria-hidden="true" />
-              Common Rule
-            </TabsTrigger>
-            <TabsTrigger value="VEHICLE_TYPE" className="gap-2">
-              <Car className="h-4 w-4" aria-hidden="true" />
-              Vehicle Type Rule
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
         <VehicleTypeRuleMatrix
           config={config}
           initialRule={initialRule}
@@ -210,6 +193,10 @@ export function BillingRuleForm({
     event.preventDefault();
     setFormError('');
     const errors: Record<string, string> = {};
+    const resolvedCommonRows = commonRows.map((row) => ({
+      ...row,
+      billingEntityId: row.billingEntityId ?? (defaultBillingEntityId || null),
+    }));
     if (!rule.fiscalYearId) errors.fiscalYearId = t('billing.ruleForm.fiscalYearRequired');
     if (rule.scope === 'COMMON' && !effectiveDate) errors.effectiveDate = t('billing.ruleForm.effectiveDateRequired');
     const reference = meetingReference.trim();
@@ -219,7 +206,7 @@ export function BillingRuleForm({
       return;
     }
     if (rule.scope === 'COMMON' && !initialRule && onSubmitCommonRules) {
-      commonRows.forEach((row) => {
+      resolvedCommonRows.forEach((row) => {
         const parsedAmount = Number(row.amount);
         if (!row.feeHeadId) errors[`${row.id}.feeHeadId`] = t('billing.ruleForm.feeHeadRequired');
         if (!row.amount.trim()) errors[`${row.id}.amount`] = t('billing.ruleForm.amountRequired');
@@ -235,7 +222,7 @@ export function BillingRuleForm({
       if (Object.keys(errors).length > 0) {
         setFieldErrors(errors);
         setFormError(t('billing.ruleForm.completeRequired'));
-        const firstInvalidRow = commonRows.find((row) =>
+        const firstInvalidRow = resolvedCommonRows.find((row) =>
           errors[`${row.id}.feeHeadId`] || errors[`${row.id}.amount`] || errors[`${row.id}.billingEntityId`],
         );
         if (firstInvalidRow) {
@@ -247,7 +234,7 @@ export function BillingRuleForm({
         }
         return;
       }
-      const items = commonRows.map((row) => {
+      const items = resolvedCommonRows.map((row) => {
         const parsedAmount = Number(row.amount);
         const feeHead = feeHeadsForYear.find((item) => item.id === row.feeHeadId);
         if (!feeHead || !row.billingEntityId || !Number.isFinite(parsedAmount) || parsedAmount < 0) return null;
@@ -260,8 +247,8 @@ export function BillingRuleForm({
           scope: 'COMMON',
           vehicleCategoryId: null,
           frequency: row.frequency,
-          period: row.frequency === 'ONE_TIME' ? null : 'MONTH',
-          validity: row.validity,
+          period: getPeriodForFrequency(row.frequency, getValidityForFrequency(row.frequency, row.validity)),
+          validity: getValidityForFrequency(row.frequency, row.validity),
           amount: parsedAmount,
           status: rule.status,
           effectiveDate,
@@ -318,44 +305,18 @@ export function BillingRuleForm({
     if (!selectedBillingEntity && !canKeepExistingBillingEntity) return;
     void onSubmit({
       ...rule,
+      billingEntityId: resolvedBillingEntityId,
       amount: parsedAmount,
       effectiveDate,
       meetingReference: reference,
       vehicleCategoryId: rule.scope === 'COMMON' ? null : rule.vehicleCategoryId,
-      period: rule.frequency === 'ONE_TIME'
-        ? rule.scope === 'COMMON' ? null : 'FISCAL_YEAR'
-        : 'MONTH',
+      period: getPeriodForFrequency(rule.frequency, getValidityForFrequency(rule.frequency, rule.validity)),
+      validity: getValidityForFrequency(rule.frequency, rule.validity),
     }, feeHead);
   };
 
   return (
     <form className="space-y-5" noValidate onSubmit={handleSubmit}>
-      <Tabs
-        value={rule.scope}
-        onValueChange={(value) => {
-          const scope = value as Scope;
-          setRule((current) => current ? {
-            ...current,
-            scope,
-            vehicleCategoryId: scope === 'COMMON' ? null : current.vehicleCategoryId ?? vehicleCategories[0]?.id ?? null,
-            period: current.frequency === 'ONE_TIME'
-              ? scope === 'COMMON' ? null : 'FISCAL_YEAR'
-              : 'MONTH',
-          } : current);
-        }}
-      >
-        <TabsList className="grid h-auto w-full grid-cols-2 sm:inline-grid sm:w-auto">
-          <TabsTrigger value="COMMON" className="gap-2">
-            <Layers className="h-4 w-4" aria-hidden="true" />
-            Common Rule
-          </TabsTrigger>
-          <TabsTrigger value="VEHICLE_TYPE" className="gap-2">
-            <Car className="h-4 w-4" aria-hidden="true" />
-            Vehicle Type Rule
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       <section className="space-y-5 rounded-xl border border-border bg-card p-4 sm:p-6">
          <div>
           <h3 className="text-base font-semibold">Common Type Rule</h3>
@@ -509,7 +470,7 @@ export function BillingRuleForm({
           {rule.scope === 'VEHICLE_TYPE' ? <div className="space-y-2">
             <Label htmlFor="common-rule-billing-entity">Billing Entity</Label>
             <Select
-              value={rule.billingEntityId ?? ''}
+              value={resolvedBillingEntityId ?? ''}
               onValueChange={(value) => {
                 const entity = selectableEntities.find((record) => record.id === value);
                 if (entity) {
@@ -562,7 +523,6 @@ export function BillingRuleForm({
                 <TableHead className="min-w-32">रकम{rule.scope === 'COMMON' ? ' *' : ''}</TableHead>
                 <TableHead className="min-w-40">शुल्क प्रकार</TableHead>
                 <TableHead className="min-w-44">मान्य अवधि अन्त्य</TableHead>
-                {rule.scope === 'VEHICLE_TYPE' ? <TableHead className="min-w-40">अवधि</TableHead> : null}
                 <TableHead className="min-w-48">Billing Entity *</TableHead>
                 {rule.scope === 'COMMON' && !initialRule && onSubmitCommonRules ? (
                   <TableHead className="w-12 text-center">
@@ -577,7 +537,7 @@ export function BillingRuleForm({
                         amount: '',
                         frequency: 'ONE_TIME',
                         validity: 'SAME_DAY',
-                        billingEntityId: null,
+                        billingEntityId: defaultBillingEntityId || null,
                       }])}
                     >
                       <Plus className="h-4 w-4" aria-hidden="true" />
@@ -631,7 +591,14 @@ export function BillingRuleForm({
                   {fieldErrors[`${row.id}.amount`] ? <p id={`common-rule-row-${row.id}-amount-error`} role="alert" className="mt-1 text-xs text-destructive">{fieldErrors[`${row.id}.amount`]}</p> : null}
                 </TableCell>
                 <TableCell>
-                  <Select value={row.frequency} onValueChange={(value) => setCommonRows((rows) => rows.map((item) => item.id === row.id ? { ...item, frequency: value as Frequency } : item))}>
+                  <Select value={row.frequency} onValueChange={(value) => {
+                    const frequency = value as Frequency;
+                    setCommonRows((rows) => rows.map((item) => item.id === row.id ? {
+                      ...item,
+                      frequency,
+                      validity: getValidityForFrequency(frequency, item.validity),
+                    } : item));
+                  }}>
                     <SelectTrigger aria-label={`शुल्क प्रकार ${index + 1}`}><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="ONE_TIME">एकपटक</SelectItem><SelectItem value="PERIODIC">आवधिक</SelectItem></SelectContent>
                   </Select>
@@ -639,12 +606,12 @@ export function BillingRuleForm({
                 <TableCell>
                   <Select value={row.validity} onValueChange={(value) => setCommonRows((rows) => rows.map((item) => item.id === row.id ? { ...item, validity: value as Validity } : item))}>
                     <SelectTrigger aria-label={`मान्य अवधि अन्त्य ${index + 1}`}><SelectValue /></SelectTrigger>
-                    <SelectContent>{validityOptions.map((validity) => <SelectItem key={validity.value} value={validity.value}>{validity.label}</SelectItem>)}</SelectContent>
+                    <SelectContent>{validityOptionsByFrequency[row.frequency].map((validity) => <SelectItem key={validity.value} value={validity.value}>{validity.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </TableCell>
                 <TableCell>
                   <Select
-                    value={row.billingEntityId ?? ''}
+                    value={row.billingEntityId ?? defaultBillingEntityId}
                     onValueChange={(value) => {
                       setCommonRows((rows) => rows.map((item) => item.id === row.id ? { ...item, billingEntityId: value } : item));
                       clearFieldError(`${row.id}.billingEntityId`);
@@ -710,10 +677,12 @@ export function BillingRuleForm({
                     value={rule.frequency}
                     onValueChange={(value) => {
                       const frequency = value as Frequency;
+                      const validity = getValidityForFrequency(frequency, rule.validity);
                       setRule((current) => current ? {
                         ...current,
                         frequency,
-                        period: frequency === 'ONE_TIME' ? null : 'MONTH',
+                        period: getPeriodForFrequency(frequency, validity),
+                        validity,
                       } : current);
                     }}
                   >
@@ -725,33 +694,25 @@ export function BillingRuleForm({
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Select value={rule.validity} onValueChange={(value) => setField('validity', value as Validity)}>
+                  <Select value={rule.validity} onValueChange={(value) => {
+                    const validity = value as Validity;
+                    setRule((current) => current ? {
+                      ...current,
+                      validity,
+                      period: getPeriodForFrequency(current.frequency, validity),
+                    } : current);
+                  }}>
                     <SelectTrigger aria-label="मान्य अवधि अन्त्य"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {validityOptions.map((validity) => (
+                      {validityOptionsByFrequency[rule.frequency].map((validity) => (
                         <SelectItem key={validity.value} value={validity.value}>{validity.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </TableCell>
-                {rule.scope === 'VEHICLE_TYPE' ? (
-                  <TableCell>
-                    <Select
-                      value={rule.period ?? 'FISCAL_YEAR'}
-                      onValueChange={(value) => setField('period', value as BillingRule['period'])}
-                      disabled={rule.frequency === 'ONE_TIME'}
-                    >
-                      <SelectTrigger aria-label="अवधि"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FISCAL_YEAR">आर्थिक वर्ष</SelectItem>
-                        <SelectItem value="MONTH">महिना</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                ) : null}
                 <TableCell>
                   <Select
-                    value={rule.billingEntityId ?? ''}
+                    value={resolvedBillingEntityId ?? ''}
                     onValueChange={(value) => setField('billingEntityId', value)}
                     disabled={isLoadingBillingEntities || selectableEntities.length === 0 || Boolean(billingEntitiesError)}
                   >

@@ -4,7 +4,7 @@ export { DotMatrixReceiptTemplate } from './templates/pdf/receipts/dot-matrix-re
 export { renderPdf, renderPdfUrl, downloadDocument } from './renderers/pdf.renderer';
 export { renderHtmlDocument } from './renderers/html.renderer';
 export { formatAmountInNepaliWords, formatDocumentCurrency, formatDocumentCount } from './utils/format-currency';
-export { formatDocumentNepaliDate, formatDocumentEnglishDate, formatDocumentTime } from './utils/format-date';
+export { formatDocumentNepaliDate, formatDocumentTime } from './utils/format-date';
 export { createDocumentFilename } from './utils/filename';
 export { parseDocumentOptions } from './schemas/document-options.schema';
 export type { DocumentOptions, CompanyBrandingOptions, DocumentOrientation } from './types/document.types';

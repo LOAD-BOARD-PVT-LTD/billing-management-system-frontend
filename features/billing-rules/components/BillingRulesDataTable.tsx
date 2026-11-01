@@ -7,6 +7,7 @@ import { DataTableColumnHeader, type SortDirection } from '@/components/data-tab
 import { TableActionIconButton } from '@/components/ui/table-action-icon-button';
 import type { BillingEntityRecord } from '@/features/administration/billing-entities/types/billing-entity.types';
 import type { BillingRule, FeeHead, FiscalYear, Scope } from '@/features/billing-rules/model/types';
+import { getPeriodForFrequency, getPeriodLabel, getValidityLabel } from '@/features/billing-rules/utils/rule-period-policy';
 import { groupVehicleTypeRules, type BillingRuleSortColumn } from '@/features/billing-rules/utils/rule-grouping';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 
@@ -126,7 +127,7 @@ export function BillingRulesDataTable({
                   <p className="whitespace-nowrap text-[11px] text-muted-foreground">
                     {rule.frequency === 'PERIODIC' ? 'आवधिक' : 'एकपटक'}
                     {' · '}
-                    {rule.period === 'MONTH' ? 'महिना' : rule.period === 'FISCAL_YEAR' ? 'आर्थिक वर्ष' : 'लागू हुँदैन'}
+                    {getPeriodLabel(getPeriodForFrequency(rule.frequency, rule.validity))}
                     {rule.status === 'INACTIVE' ? ' · निष्क्रिय' : ''}
                   </p>
                 </div>
@@ -159,7 +160,7 @@ export function BillingRulesDataTable({
           if (!rule) return null;
 
           const feeHeadName = feeHeadMap.get(rule.feeHeadId)?.name ?? rule.feeHeadId;
-          const ruleLabel = `${feeHeadName} · ${rule.frequency === 'PERIODIC' ? 'आवधिक' : 'एकपटक'} · ${rule.period === 'MONTH' ? 'महिना' : rule.period === 'FISCAL_YEAR' ? 'आर्थिक वर्ष' : 'लागू हुँदैन'}`;
+          const ruleLabel = `${feeHeadName} · ${rule.frequency === 'PERIODIC' ? 'आवधिक' : 'एकपटक'} · ${getPeriodLabel(getPeriodForFrequency(rule.frequency, rule.validity))}`;
           return (
             <div className="flex min-w-24 flex-row flex-nowrap items-center justify-end gap-2">
               <TableActionIconButton aria-label={`${ruleLabel} — विवरण हेर्नुहोस्`} title={`${ruleLabel} — विवरण हेर्नुहोस्`} onClick={() => onView(rule)}>
@@ -234,11 +235,7 @@ export function BillingRulesDataTable({
     {
       id: 'validity',
       header: sortHeader('मान्य अवधि अन्त्य', 'validity', sortColumn, sortDirection, onSortChange),
-      cell: (rule) => rule.validity === 'END_OF_MONTH'
-        ? 'महिनाको अन्त्य'
-        : rule.validity === 'END_OF_FISCAL_YEAR'
-          ? 'आर्थिक वर्षको अन्त्य'
-          : 'सोही दिन',
+      cell: (rule) => getValidityLabel(rule.frequency, rule.validity),
       headerClassName: 'min-w-40 text-center',
       cellClassName: 'text-center',
     },

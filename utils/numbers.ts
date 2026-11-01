@@ -94,3 +94,7 @@ export function toNepaliDigits(input: string | number | bigint): string {
   const nepaliDigits = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९'];
   return str.replace(/[0-9]/g, (digit) => nepaliDigits[Number(digit)]);
 }
+
+export function toEnglishDigits(input: string | number | bigint): string {
+  return String(input).replace(/[०-९]/g, (digit) => String('०१२३४५६७८९'.indexOf(digit)));
+}

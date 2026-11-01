@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { BillingRule, BillingRuleConfig } from '@/features/billing-rules/model/types';
+import { getPeriodForFrequency, getValidityForFrequency, validityOptionsByFrequency } from '@/features/billing-rules/utils/rule-period-policy';
 
 export const feeHeadSchema = z.object({
   id: z.string().trim().min(1),
@@ -39,6 +40,23 @@ export const billingRuleSchema = z.object({
       path: ['amount'],
     });
   }
+  if (!validityOptionsByFrequency[rule.frequency].some((option) => option.value === rule.validity)) {
+    context.addIssue({
+      code: 'custom',
+      message: rule.frequency === 'ONE_TIME'
+        ? 'एकपटक शुल्कका लागि सोही दिन वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।'
+        : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन वा महिनाको अन्त्य चयन गर्नुहोस्।',
+      path: ['validity'],
+    });
+  }
+  const normalizedValidity = getValidityForFrequency(rule.frequency, rule.validity);
+  if (rule.period !== getPeriodForFrequency(rule.frequency, normalizedValidity)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'शुल्कको अवधि आवृत्ति र मान्य अवधि अन्त्यसँग मिल्नुपर्छ।',
+      path: ['period'],
+    });
+  }
 });
 
 export const billingRuleConfigSchema = z.object({
@@ -60,13 +78,14 @@ export function validateBillingRuleRecord(rule: BillingRule): { isValid: boolean
   if (rule.scope === 'COMMON' && rule.vehicleCategoryId) {
     errors.vehicleCategoryId = 'COMMON नियममा सवारी श्रेणी राख्न हुँदैन।';
   }
-  if (rule.scope === 'COMMON' && rule.frequency === 'ONE_TIME' && rule.period !== null) {
-    errors.period = 'साझा एकपटक शुल्कको अवधि लागू हुँदैन।';
-  } else if (rule.frequency === 'ONE_TIME' && rule.period !== 'FISCAL_YEAR') {
-    errors.period = 'एकपटक शुल्कको अवधि आर्थिक वर्ष हुनुपर्छ।';
+  if (!validityOptionsByFrequency[rule.frequency].some((option) => option.value === rule.validity)) {
+    errors.validity = rule.frequency === 'ONE_TIME'
+      ? 'एकपटक शुल्कका लागि सोही दिन वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।'
+      : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन वा महिनाको अन्त्य चयन गर्नुहोस्।';
   }
-  if (rule.frequency === 'PERIODIC' && rule.period !== 'MONTH') {
-    errors.period = 'आवधिक शुल्कको अवधि महिना हुनुपर्छ।';
+  const normalizedValidity = getValidityForFrequency(rule.frequency, rule.validity);
+  if (rule.period !== getPeriodForFrequency(rule.frequency, normalizedValidity)) {
+    errors.period = 'शुल्कको अवधि आवृत्ति र मान्य अवधि अन्त्यसँग मिल्नुपर्छ।';
   }
   if (rule.amount < 0 || (rule.scope === 'VEHICLE_TYPE' && rule.amount === 0)) {
     errors.amount = rule.scope === 'COMMON'

@@ -27,6 +27,7 @@ export function BillingEntitiesTable({
             <TableHead>Registration / PAN</TableHead>
             <TableHead>Contact</TableHead>
             <TableHead>Address</TableHead>
+            <TableHead>Default</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="w-16 text-right">Action</TableHead>
           </TableRow>
@@ -47,6 +48,7 @@ export function BillingEntitiesTable({
                 <div className="text-xs text-muted-foreground">{record.phoneNumber}</div>
               </TableCell>
               <TableCell className="max-w-52 whitespace-normal">{record.address}</TableCell>
+              <TableCell>{record.isDefault ? <Badge variant="default">Default</Badge> : '—'}</TableCell>
               <TableCell>
                 <Select
                   value={record.status}

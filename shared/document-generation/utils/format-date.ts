@@ -23,9 +23,9 @@ export function formatDocumentNepaliDate(value: string): string {
   }
 }
 
-export function formatDocumentEnglishDate(value: string): string {
-  const date = parseIsoDate(value);
-  if (!date) return value;
+export function formatDocumentEnglishTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
     month: 'long',

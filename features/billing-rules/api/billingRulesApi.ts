@@ -9,6 +9,8 @@ import {
 } from '@/features/billing-rules/api/billingRuleResource';
 import type { BillingRule, BillingRuleConfig } from '@/features/billing-rules/model/types';
 import { fetchFiscalYearManagement } from '@/features/settings/api/fiscal-year-management.api';
+import { assertUniqueFeeHeadNames } from '@/features/billing-rules/utils/fee-head-name-validation';
+import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 
 function mergeDocuments(documents: BillingRuleResourceDocument[]): BillingRuleResourceDocument {
   const feeHeads = new Map<string, BillingRuleConfig['feeHeads'][number]>();
@@ -41,7 +43,7 @@ function mergeDocuments(documents: BillingRuleResourceDocument[]): BillingRuleRe
     resourceId: null,
     config: {
       version: 1,
-      feeHeads: Array.from(feeHeads.values()),
+      feeHeads: sortFeeHeadsByDisplayOrder(Array.from(feeHeads.values())),
       fiscalYears: Array.from(fiscalYears.values()),
       rules: Array.from(rules.values()),
     },
@@ -70,6 +72,8 @@ export const billingRulesApi = {
   },
 
   async save(config: BillingRuleConfig, previousConfig: BillingRuleConfig): Promise<BillingRuleResourceDocument> {
+    assertUniqueFeeHeadNames(config.feeHeads);
+
     const defaultYears = config.fiscalYears.filter((year) => year.isDefault === true);
     if (defaultYears.length > 1) throw new Error('आर्थिक वर्षमध्ये एउटा मात्र पूर्वनिर्धारित वर्ष छान्नुहोस्।');
     if (defaultYears.some((year) => year.status !== 'ACTIVE')) throw new Error('निष्क्रिय आर्थिक वर्षलाई पूर्वनिर्धारित बनाउन मिल्दैन।');
@@ -93,7 +97,10 @@ export const billingRulesApi = {
       const document = previousFeeHead
         ? await updateBillingRuleFeeHead(feeHead.id, feeHead)
         : await createBillingRuleFeeHead(feeHead);
-      const savedFeeHead = document.config.feeHeads[0] ?? feeHead;
+      const savedFeeHead = {
+        ...(document.config.feeHeads[0] ?? feeHead),
+        displayOrder: document.config.feeHeads[0]?.displayOrder ?? feeHead.displayOrder,
+      };
       savedFeeHeads.push(savedFeeHead);
       feeHeadIdMap.set(feeHead.id, savedFeeHead.id);
       if (!previousFeeHead || previousFeeHead.name !== savedFeeHead.name) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, ArrowLeft, Plus, RotateCcw } from 'lucide-react';
+import { AlertCircle, Plus, RotateCcw } from 'lucide-react';
 
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { DataTableToolbar } from '@/components/data-tables/DataTableToolbar';
@@ -71,6 +71,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>('asc');
   const [page, setPage] = useState(1);
   const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
+  const [createRuleScope, setCreateRuleScope] = useState<Scope>('VEHICLE_TYPE');
   const [viewingRule, setViewingRule] = useState<BillingRule | null>(null);
   const [statusRule, setStatusRule] = useState<BillingRule | null>(null);
   const [deletingRule, setDeletingRule] = useState<BillingRule | null>(null);
@@ -171,6 +172,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   };
 
   const openCreateDialog = () => {
+    setCreateRuleScope(scope);
     setRuleEditorOpen(true);
   };
 
@@ -479,31 +481,8 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
         </div>
       ) : null}
 
-      {error ? (
-        <ErrorState
-          title={hasLoaded ? 'नियमहरू अद्यावधिक हुन सकेनन्' : 'नियमहरू लोड हुन सकेनन्'}
-          description={error}
-          retryLabel="फेरि प्रयास गर्नुहोस्"
-          onRetry={() => void reload()}
-        />
-      ) : null}
-
       {isRuleEditorOpen ? (
         <section className="space-y-5 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-6" aria-label="बिलिङ नियम सम्पादन">
-          <nav aria-label="Breadcrumb">
-            <ol className="flex items-center gap-2 text-sm">
-              <li>
-                <Button type="button" variant="link" className="h-auto gap-1 p-0" onClick={closeRuleEditor}>
-                  <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                  Billing Rules List
-                </Button>
-              </li>
-              <li aria-hidden="true" className="text-muted-foreground">/</li>
-              <li aria-current="page" className="text-muted-foreground">
-                {editRuleId || editingRule ? 'Edit Rule' : 'New Rule'}
-              </li>
-            </ol>
-          </nav>
           <div>
             <h2 className="text-xl font-semibold text-foreground">{editRuleId || editingRule ? 'बिलिङ नियम सम्पादन' : 'नयाँ बिलिङ नियम'}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -528,7 +507,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
             />
           ) : (
             <BillingRuleForm
-              key={editingRule?.id ?? `new-${scope}`}
+              key={editingRule?.id ?? `new-${createRuleScope}`}
               initialRule={editingRule}
               initialRules={config.rules.filter((rule) => rule.scope === 'VEHICLE_TYPE')}
               config={config}
@@ -538,7 +517,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
               billingEntitiesError={billingEntitiesError}
               onReloadBillingEntities={() => void reloadBillingEntities()}
               currentFiscalYearId={editingRule?.fiscalYearId ?? fiscalYearFilter}
-              currentScope={editingRule?.scope ?? scope}
+              currentScope={editingRule?.scope ?? createRuleScope}
               isSaving={isSaving}
               onCancel={closeRuleEditor}
               onSubmit={handleSaveRule}
@@ -667,6 +646,8 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
         rules={config.rules}
         onCreate={addFeeHead}
         onUpdate={updateFeeHead}
+        onReorder={(feeHeads) => save({ ...config, feeHeads })}
+        isSaving={isSaving}
       />
 
       <BillingRuleDetailsDialog

@@ -13,6 +13,14 @@ const allowSelfSignedCertificates = (
   && process.env.API_PROXY_ALLOW_SELF_SIGNED === 'true'
 );
 
+const sharedProxyAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 60_000,
+  rejectUnauthorized: !allowSelfSignedCertificates,
+});
+
 function backendUrl(path: string[], search: string): URL {
   const target = process.env.API_PROXY_TARGET;
   if (!target) throw new Error('API_PROXY_TARGET is not configured.');
@@ -60,7 +68,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext): Promis
     const upstream = https.request(url, {
       method: request.method,
       headers,
-      agent: new https.Agent({ rejectUnauthorized: !allowSelfSignedCertificates }),
+      agent: sharedProxyAgent,
     }, (response) => {
       const chunks: Buffer[] = [];
       response.on('data', (chunk: Buffer | string) => {

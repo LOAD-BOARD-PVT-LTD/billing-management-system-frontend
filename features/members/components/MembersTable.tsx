@@ -18,6 +18,7 @@ type MembersTableProps = {
   records: MemberListRecord[];
   isLoading: boolean;
   isSaving: boolean;
+  displacedTaggingEnabled: boolean;
   error: string | null;
   page: number;
   pageSize: number;
@@ -36,6 +37,7 @@ export function MembersTable({
   records,
   isLoading,
   isSaving,
+  displacedTaggingEnabled,
   error,
   page,
   pageSize,
@@ -136,13 +138,15 @@ export function MembersTable({
             >
               <Eye className="size-4" aria-hidden="true" />
             </ActionTooltipButton>
-            <ActionTooltipButton
-              label={record.isDisplaced ? 'विस्थापित ट्याग हटाउनुहोस्' : 'विस्थापित सदस्यको रूपमा चिन्ह लगाउनुहोस्'}
-              onClick={() => record.isDisplaced ? onRemoveDisplaced(record) : onTagDisplaced(record)}
-              disabled={isSaving}
-            >
-              <Flag className={`size-4 ${record.isDisplaced ? 'fill-current' : ''}`} aria-hidden="true" />
-            </ActionTooltipButton>
+            {displacedTaggingEnabled ? (
+              <ActionTooltipButton
+                label={record.isDisplaced ? 'विस्थापित ट्याग हटाउनुहोस्' : 'विस्थापित सदस्यको रूपमा चिन्ह लगाउनुहोस्'}
+                onClick={() => record.isDisplaced ? onRemoveDisplaced(record) : onTagDisplaced(record)}
+                disabled={isSaving}
+              >
+                <Flag className={`size-4 ${record.isDisplaced ? 'fill-current' : ''}`} aria-hidden="true" />
+              </ActionTooltipButton>
+            ) : null}
             <ActionTooltipButton
               label={record.isBlacklisted ? 'कालोसूची व्यवस्थापन हेर्नुहोस्' : 'सवारीलाई कालोसूचीमा राख्नुहोस्'}
               onClick={() => record.isBlacklisted ? onOpenBlacklist() : onTagBlacklist(record)}
@@ -156,7 +160,7 @@ export function MembersTable({
         </TooltipProvider>
       ),
     },
-  }), [isSaving, onOpenBlacklist, onRemoveDisplaced, onTagBlacklist, onTagDisplaced, onView]);
+  }), [displacedTaggingEnabled, isSaving, onOpenBlacklist, onRemoveDisplaced, onTagBlacklist, onTagDisplaced, onView]);
   const columns = useMemo(
     () => visibleColumns.map((id) => allColumns[id]),
     [allColumns, visibleColumns],

@@ -1,29 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { useSetAtom } from 'jotai';
 
 import {
 	fetchTqmsVehicleTypes,
 	syncTqmsVehicleTypes,
 } from '@/features/vehicle/mappings/tqms-vehicle-type/api/tqms-vehicle-type.api';
 import type { TqmsVehicleTypeOption } from '@/features/vehicle/mappings/tqms-vehicle-type/types/tqms-vehicle-type.types';
-import { tqmsVehicleTypeKeys } from '@/lib/query/query-keys';
-import { tqmsVehicleTypesAtom } from '@/features/vehicle/store/vehicle-type-atoms';
+import { tqmsVehicleTypeKeys, vehicleResourceKeys } from '@/lib/query/query-keys';
 
 export function useTqmsVehicleTypes(enabled: boolean) {
 	const queryClient = useQueryClient();
-	const setTqmsVehicleTypes = useSetAtom(tqmsVehicleTypesAtom);
 	const query = useQuery({
 		queryKey: tqmsVehicleTypeKeys.lists(),
 		queryFn: fetchTqmsVehicleTypes,
 		enabled,
 	});
-	useEffect(() => {
-		if (query.data) setTqmsVehicleTypes(query.data);
-	}, [query.data, setTqmsVehicleTypes]);
 	const syncMutation = useMutation({
 		mutationFn: syncTqmsVehicleTypes,
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: tqmsVehicleTypeKeys.lists() }),
+		onSuccess: async () => {
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: tqmsVehicleTypeKeys.lists() }),
+				queryClient.invalidateQueries({ queryKey: vehicleResourceKeys.all }),
+			]);
+		},
 	});
 	const reload = () => query.refetch();
 	const sync = syncMutation.mutateAsync;
@@ -38,6 +36,8 @@ export function useTqmsVehicleTypes(enabled: boolean) {
 		isLoading: query.isLoading,
 		isRefreshing: query.isFetching && !query.isLoading,
 		isSyncing: syncMutation.isPending,
+		syncResult: syncMutation.data,
+		syncError: syncMutation.error instanceof Error ? syncMutation.error.message : null,
 		loadError: query.error instanceof Error ? query.error.message : null,
 		error,
 		reload,

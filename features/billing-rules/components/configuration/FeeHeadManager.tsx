@@ -5,10 +5,11 @@ import { TableActionIconButton } from '@/components/ui/table-action-icon-button'
 import { useToast } from '@/components/ui/use-toast';
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import type { BillingRule, FiscalYear } from '@/features/billing-rules/model/types';
-import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FeeHeadDialog } from '@/features/billing-rules/components/configuration/FeeHeadDialog';
+import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 
 interface FeeHeadManagerProps {
   feeHeads: FeeHead[];
@@ -16,9 +17,11 @@ interface FeeHeadManagerProps {
   rules: BillingRule[];
   onCreate: (feeHead: FeeHead) => Promise<unknown> | void;
   onUpdate: (feeHead: FeeHead) => Promise<unknown> | void;
+  onReorder: (feeHeads: FeeHead[]) => Promise<unknown> | void;
+  isSaving: boolean;
 }
 
-export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdate }: FeeHeadManagerProps) {
+export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdate, onReorder, isSaving }: FeeHeadManagerProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FeeHead | null>(null);
   const [deactivating, setDeactivating] = useState<FeeHead | null>(null);
@@ -26,6 +29,23 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
   const [emptyValue] = useState<FeeHead>(() => ({ id: '', code: '', fiscalYearId: null, name: '', status: 'ACTIVE' }));
   const { toast } = useToast();
   const fiscalYearNames = new Map(fiscalYears.map((year) => [year.id, year.name]));
+  const orderedFeeHeads = sortFeeHeadsByDisplayOrder(feeHeads);
+
+  const moveFeeHead = async (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= orderedFeeHeads.length) return;
+    const reordered = [...orderedFeeHeads];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    try {
+      await onReorder(reordered.map((feeHead, displayOrder) => ({ ...feeHead, displayOrder })));
+    } catch (error) {
+      toast({
+        title: 'शुल्क शीर्षकको क्रम परिवर्तन गर्न सकिएन',
+        description: error instanceof Error ? error.message : 'कृपया फेरि प्रयास गर्नुहोस्।',
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <section className="space-y-2" aria-label="शुल्क शीर्षक">
@@ -45,7 +65,7 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
         <p className="py-2 text-xs text-muted-foreground">कुनै शुल्क शीर्षक छैन।</p>
       ) : (
         <ol className="flex max-w-full flex-row flex-wrap gap-2">
-          {feeHeads.map((feeHead, index) => (
+          {orderedFeeHeads.map((feeHead, index) => (
             <li key={feeHead.id} className="flex max-w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs">
               <span className="shrink-0 text-muted-foreground">{index + 1}.</span>
               <span className="min-w-0 font-medium">
@@ -59,6 +79,25 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
               </span>
               <TableActionIconButton
                 className="h-7 w-7 shrink-0"
+                aria-label={`${feeHead.name} माथि सार्नुहोस्`}
+                title="माथि सार्नुहोस्"
+                disabled={isSaving || index === 0}
+                onClick={() => void moveFeeHead(index, -1)}
+              >
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+              </TableActionIconButton>
+              <TableActionIconButton
+                className="h-7 w-7 shrink-0"
+                aria-label={`${feeHead.name} तल सार्नुहोस्`}
+                title="तल सार्नुहोस्"
+                disabled={isSaving || index === orderedFeeHeads.length - 1}
+                onClick={() => void moveFeeHead(index, 1)}
+              >
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </TableActionIconButton>
+              <TableActionIconButton
+                className="h-7 w-7 shrink-0"
+                disabled={isSaving}
                 aria-label={`${feeHead.name} सम्पादन गर्नुहोस्`}
                 onClick={() => { setEditing(feeHead); setOpen(true); }}
               >
@@ -66,6 +105,7 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
               </TableActionIconButton>
               <TableActionIconButton
                 className="h-7 w-7 shrink-0"
+                disabled={isSaving}
                 tone={feeHead.status === 'ACTIVE' ? 'destructive' : 'default'}
                 aria-label={feeHead.status === 'ACTIVE' ? `${feeHead.name} निष्क्रिय गर्नुहोस्` : `${feeHead.name} पुनः सक्रिय गर्नुहोस्`}
                 title={feeHead.status === 'ACTIVE' ? 'निष्क्रिय गर्नुहोस्' : 'पुनः सक्रिय गर्नुहोस्'}

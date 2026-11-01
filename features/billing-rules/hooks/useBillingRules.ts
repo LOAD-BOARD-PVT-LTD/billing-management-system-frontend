@@ -1,28 +1,21 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect } from 'react';
-import { useSetAtom } from 'jotai';
+import { useCallback } from 'react';
 
 import { billingRulesApi } from '@/features/billing-rules/api/billingRulesApi';
 import { EMPTY_BILLING_RULE_CONFIG } from '@/features/billing-rules/model/defaults';
 import type { BillingRuleConfig } from '@/features/billing-rules/model/types';
 import type { BillingRuleResourceDocument } from '@/features/billing-rules/api/billingRuleResource';
-import { billingRuleResponseAtom } from '@/features/billing-rules/store/atom';
 import { billingRulesKeys } from '@/lib/query/query-keys';
 
 export function useBillingRules() {
   const queryClient = useQueryClient();
-  const setBillingRuleResponse = useSetAtom(billingRuleResponseAtom);
 
   const query = useQuery({
     queryKey: billingRulesKeys.config(),
     queryFn: billingRulesApi.list,
   });
-
-  useEffect(() => {
-    if (query.data) setBillingRuleResponse(query.data);
-  }, [query.data, setBillingRuleResponse]);
 
   const setConfig = useCallback((nextConfig: BillingRuleConfig) => {
     const current = queryClient.getQueryData<BillingRuleResourceDocument>(billingRulesKeys.config());
@@ -31,8 +24,7 @@ export function useBillingRules() {
       config: nextConfig,
     };
     queryClient.setQueryData<BillingRuleResourceDocument>(billingRulesKeys.config(), nextDocument);
-    setBillingRuleResponse(nextDocument);
-  }, [queryClient, setBillingRuleResponse]);
+  }, [queryClient]);
 
   const saveMutation = useMutation({
     mutationFn: async (nextConfig: BillingRuleConfig) => {
@@ -41,7 +33,6 @@ export function useBillingRules() {
     },
     onSuccess: (savedDocument) => {
       queryClient.setQueryData(billingRulesKeys.config(), savedDocument);
-      setBillingRuleResponse(savedDocument);
       void queryClient.invalidateQueries({ queryKey: billingRulesKeys.config() });
     },
   });

@@ -32,4 +32,5 @@ export type BillingLine = {
 	entityId?: string;
 	ruleId?: string;
 	isManual?: boolean;
+	isUnconfigured?: boolean;
 };

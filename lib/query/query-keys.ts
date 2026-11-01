@@ -20,6 +20,7 @@ export const settingsKeys = {
   receiptCancelWindow: () => [...settingsKeys.all, 'receipt-cancel-window'] as const,
   linkedFeeRules: () => [...settingsKeys.all, 'linked-fee-rules'] as const,
   tqmsSanghBranchFilter: () => [...settingsKeys.all, 'tqms-sangh-branch-filter'] as const,
+  displacedTagging: () => [...settingsKeys.all, 'displaced-tagging'] as const,
   fiscalYearSelector: () => [...settingsKeys.all, 'fiscal-year-selector'] as const,
   fiscalYearManagement: () => [...settingsKeys.all, 'fiscal-year-management'] as const,
 };

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import { ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -41,7 +42,7 @@ function dateSortValue(receipt: ReceiptRecord) {
 	return Number.isNaN(billingDate) ? Date.parse(receipt.bill.createdAt) || 0 : billingDate;
 }
 
-export function MembershipHistory({
+export const MembershipHistory = memo(function MembershipHistory({
 	vehicleId,
 	vehicleNumber,
 	records,
@@ -51,9 +52,11 @@ export function MembershipHistory({
 	onDownloadReceipt,
 	downloadingReceiptId,
 }: MembershipHistoryProps) {
-	const history = records
-		.filter((receipt) => belongsToVehicle(receipt, vehicleId, vehicleNumber))
-		.sort((left, right) => dateSortValue(right) - dateSortValue(left));
+	const history = useMemo(() => {
+		return records
+			.filter((receipt) => belongsToVehicle(receipt, vehicleId, vehicleNumber))
+			.sort((left, right) => dateSortValue(right) - dateSortValue(left));
+	}, [records, vehicleId, vehicleNumber]);
 
 	return (
 		<section className="overflow-hidden rounded-md border border-border bg-card">
@@ -102,21 +105,16 @@ export function MembershipHistory({
 						</thead>
 						<tbody className="divide-y divide-border">
 							{history.map((receipt) => {
-								const items = receipt.bill.content.items
-									.map((item) => item.title.trim())
-									.filter(Boolean);
-								const feeDescription = items.length > 0 ? [...new Set(items)].join(', ') : '—';
-
+								const feeDescription = receipt.bill.content.items.map((item) => item.title).join(', ');
 								return (
-									<tr key={receipt.id} className="align-top">
+									<tr key={receipt.id} className="hover:bg-muted/30">
 										<td className="whitespace-nowrap px-2 py-1">{displayDate(receipt.billingDate)}</td>
-										<td className="whitespace-nowrap px-2 py-1">{displayDate(receipt.bill.content.periodStart)}</td>
-										<td className="whitespace-nowrap px-2 py-1">{displayDate(receipt.bill.content.periodEnd)}</td>
+										<td className="whitespace-nowrap px-2 py-1">{displayDate(receipt.validUntil ? receipt.billingDate : '—')}</td>
+										<td className="whitespace-nowrap px-2 py-1">{displayDate(receipt.validUntil || '—')}</td>
 										<td className="whitespace-nowrap px-2 py-1 font-medium">
 											<button
 												type="button"
-												className="text-primary hover:underline disabled:cursor-wait disabled:opacity-60"
-												aria-label={`रसिद ${receipt.receiptNumber} (${toNepaliDigits(receipt.fiscalYear)}) डाउनलोड गर्नुहोस्`}
+												className="text-primary hover:underline"
 												disabled={downloadingReceiptId !== null}
 												onClick={() => onDownloadReceipt(receipt)}
 											>
@@ -138,4 +136,4 @@ export function MembershipHistory({
 			)}
 		</section>
 	);
-}
+});

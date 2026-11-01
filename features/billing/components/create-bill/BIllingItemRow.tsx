@@ -1,5 +1,5 @@
+import { memo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { FeeHead } from '@/features/billing-rules/model/types';
@@ -20,7 +20,7 @@ type BillingItemRowProps = {
 	onDeselectFromReceipt: (id: string, isLinkedAutoSelected?: boolean) => void;
 };
 
-export function BillingItemRow({
+export const BillingItemRow = memo(function BillingItemRow({
 	index,
 	item,
 	feeHeads,
@@ -63,6 +63,9 @@ export function BillingItemRow({
 			) : (
 				<span className="col-start-2 min-w-0 sm:col-start-auto">
 					<span className="truncate text-sm" title={item.title}>{item.title}</span>
+					{item.isUnconfigured ? (
+						<span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">नियम छैन</span>
+					) : null}
 				</span>
 			)}
 			<div className="col-start-2 flex min-w-0 items-center gap-2 sm:col-start-auto">
@@ -118,4 +121,4 @@ export function BillingItemRow({
 			</div>
 		</div>
 	);
-}
+});

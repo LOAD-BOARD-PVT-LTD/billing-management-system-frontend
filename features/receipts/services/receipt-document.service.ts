@@ -1,6 +1,6 @@
 'use client';
 
-import 'regenerator-runtime/runtime';
+
 import fontkit from '@pdf-lib/fontkit';
 import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { SavedBill } from '@/features/billing/model/bill.types';
@@ -10,7 +10,8 @@ import contacts from '@/shared/document-generation/data/document-contacts.json';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '@/shared/document-generation/utils/format-currency';
 import { DEFAULT_COMPANY_BRANDING } from '@/shared/document-generation/components/CompanyBranding';
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
-import { formatDocumentEnglishDate, formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
+import { formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
+import { BILL_FOOTER_LABELS, getBillFooterDetails } from '@/shared/document-generation/utils/bill-footer';
 
 const PAGE_WIDTH = 841.89;
 const PAGE_HEIGHT = 595.28;
@@ -203,21 +204,43 @@ function drawTableRow(
   values: Array<{ text: string; align?: 'left' | 'center' | 'right'; bold?: boolean }>,
   fonts: ReceiptFonts,
   header = false,
+  verticalBordersOnly = false,
 ): number {
   let x = MARGIN;
+  const bottomY = page.getHeight() - top - height;
   widths.forEach((width, index) => {
-    page.drawRectangle({
-      x,
-      y: page.getHeight() - top - height,
-      width,
-      height,
-      borderColor: LINE_COLOR,
-      borderWidth: 0.6,
-    });
+    if (!verticalBordersOnly) {
+      page.drawRectangle({
+        x,
+        y: bottomY,
+        width,
+        height,
+        borderColor: LINE_COLOR,
+        borderWidth: 0.6,
+      });
+    }
     const value = values[index];
     if (value) drawCellText(page, value.text, x, top, width, height, header ? 10 : 9.5, fonts, value.align, header || value.bold);
     x += width;
   });
+  if (verticalBordersOnly) {
+    let borderX = MARGIN;
+    page.drawLine({
+      start: { x: borderX, y: bottomY },
+      end: { x: borderX, y: bottomY + height },
+      thickness: 0.6,
+      color: LINE_COLOR,
+    });
+    widths.forEach((width) => {
+      borderX += width;
+      page.drawLine({
+        start: { x: borderX, y: bottomY },
+        end: { x: borderX, y: bottomY + height },
+        thickness: 0.6,
+        color: LINE_COLOR,
+      });
+    });
+  }
   return top + height;
 }
 
@@ -282,6 +305,39 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   return { widths, detailRows, tableTop, itemRows, remarkRows, signatureTop, pageHeight: Math.max(PAGE_HEIGHT, signatureTop + 74) };
 }
 
+function drawReceiptFooter(
+  page: PDFPage,
+  bill: SavedBill,
+  fonts: ReceiptFonts,
+  signatureTop: number,
+  viewedAt: string,
+): void {
+  const centerX = PAGE_WIDTH / 2;
+  const signatureWidth = 92;
+  const rightSignatureX = PAGE_WIDTH - MARGIN - signatureWidth;
+  const signatureLineY = page.getHeight() - signatureTop + 3;
+  const detailsTop = signatureTop + 18;
+  const details = getBillFooterDetails(bill.content, viewedAt);
+
+  page.drawLine({
+    start: { x: MARGIN + 10, y: signatureLineY },
+    end: { x: MARGIN + 10 + signatureWidth, y: signatureLineY },
+    thickness: 0.7,
+    color: LINE_COLOR,
+  });
+  page.drawLine({
+    start: { x: rightSignatureX, y: signatureLineY },
+    end: { x: rightSignatureX + signatureWidth, y: signatureLineY },
+    thickness: 0.7,
+    color: LINE_COLOR,
+  });
+  drawLineText(page, BILL_FOOTER_LABELS.payerSignature, MARGIN + 10, signatureTop, 10, fonts, true);
+  drawRightText(page, BILL_FOOTER_LABELS.receiverSignature, PAGE_WIDTH - MARGIN - 10, signatureTop, 10, fonts, true);
+  drawLineText(page, details.date, MARGIN + 10, detailsTop, 8.5, fonts);
+  drawCenteredText(page, details.time, centerX, detailsTop, 9, fonts);
+  drawRightText(page, details.issuedBy, PAGE_WIDTH - MARGIN - 10, detailsTop, 8.5, fonts);
+}
+
 function drawReceipt(
   page: PDFPage,
   bill: SavedBill,
@@ -292,6 +348,7 @@ function drawReceipt(
   voided: boolean,
   brandingOverrides: Partial<CompanyBrandingOptions>,
   showCopyLabel: boolean,
+  viewedAt: string,
 ): void {
   const content = bill.content;
   const innerWidth = PAGE_WIDTH - MARGIN * 2;
@@ -347,7 +404,7 @@ function drawReceipt(
       { text: formatDocumentCurrency(item.amount), align: 'right' },
       { text: formatDocumentCurrency(item.amount), align: 'right' },
       { text: '' },
-    ], fonts);
+    ], fonts, false, true);
   });
 
   if (content.discount > 0) {
@@ -385,16 +442,7 @@ function drawReceipt(
     top += height;
   });
 
-  const signatureY = page.getHeight() - layout.signatureTop - 10;
-  const signatureWidth = 92;
-  const rightSignatureX = PAGE_WIDTH - MARGIN - signatureWidth;
-  page.drawLine({ start: { x: MARGIN + 10, y: signatureY }, end: { x: MARGIN + 10 + signatureWidth, y: signatureY }, thickness: 0.7, color: LINE_COLOR });
-  page.drawLine({ start: { x: rightSignatureX, y: signatureY }, end: { x: rightSignatureX + signatureWidth, y: signatureY }, thickness: 0.7, color: LINE_COLOR });
-  drawLineText(page, 'बुझाउनेको सही', MARGIN + 10, layout.signatureTop, 10, fonts, true);
-  drawRightText(page, 'बुझिलिनेको सही', PAGE_WIDTH - MARGIN - 10, layout.signatureTop, 10, fonts, true);
-  drawLineText(page, formatDocumentEnglishDate(bill.createdAt.slice(0, 10)), MARGIN + 10, layout.signatureTop + 18, 8.5, fonts);
-  drawCenteredText(page, formatDocumentTime(bill.createdAt), centerX, layout.signatureTop + 18, 9, fonts);
-  drawRightText(page, content.branch.contactPerson || content.branch.name || '—', PAGE_WIDTH - MARGIN - 10, layout.signatureTop + 18, 8.5, fonts);
+  drawReceiptFooter(page, bill, fonts, layout.signatureTop, viewedAt);
   if (voided) {
     const watermark = 'रद्द';
     const fontasyWatermark = fontasyFromUnicode(watermark);
@@ -430,6 +478,7 @@ export async function createReceiptPdfBlob(
   const fonts = await loadFonts(pdf);
   const logo = await loadLogo(pdf);
   const layout = receiptLayout(bill, fonts);
+  const viewedAt = new Date().toISOString();
   for (let copy = 0; copy < copyCount; copy += 1) {
     const page = pdf.addPage([PAGE_WIDTH, layout.pageHeight]);
     drawReceipt(
@@ -442,6 +491,7 @@ export async function createReceiptPdfBlob(
       options.voided === true,
       options.branding ?? {},
       options.showCopyLabel !== false,
+      viewedAt,
     );
   }
 

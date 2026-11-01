@@ -36,6 +36,8 @@ export const billTemplateStyles = `
   .document-items { width:100%; border-collapse:collapse; table-layout:fixed; }
   .document-items th, .document-items td { height:29px; border:1px solid #222; padding:3px 8px; font-weight:400; }
   .document-items th { height:28px; text-align:center; font-weight:600; }
+  .document-items .document-fee-head-row td, .document-items .document-fee-head-row-last td { border-top:0; border-bottom:0; }
+  .document-items .document-fee-head-row-last td { border-bottom:1px solid #222; }
   .document-col-index { width:5.5%; }
   .document-col-description { width:63%; }
   .document-col-rate { width:10%; }

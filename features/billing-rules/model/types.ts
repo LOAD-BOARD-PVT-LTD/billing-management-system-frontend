@@ -7,6 +7,7 @@ export type RuleStatus = 'ACTIVE' | 'INACTIVE';
 export interface FeeHead {
   id: string;
   code?: string;
+  displayOrder?: number;
   fiscalYearId: string | null;
   name: string;
   status: RuleStatus;

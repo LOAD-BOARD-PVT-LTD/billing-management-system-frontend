@@ -11,6 +11,8 @@ import { SettingsEntryCard } from '@/features/settings/components/SettingsEntryC
 import { FiscalYearManagement } from '@/features/settings/components/FiscalYearManagement';
 import { ReceiptCancelWindowControl } from '@/features/settings/components/ReceiptCancelWindowControl';
 import { TqmsSanghBranchFilterControl } from '@/features/settings/components/TqmsSanghBranchFilterControl';
+import { TqmsDataSyncControl } from '@/features/settings/components/TqmsDataSyncControl';
+import { DisplacedTaggingControl } from '@/features/settings/components/DisplacedTaggingControl';
 import { LinkedFeeRulesManager } from '@/features/billing-rules/components/configuration/LinkedFeeRulesManager';
 
 const DEFAULT_CATEGORY: SettingsCategoryId = 'billing-receipts';
@@ -75,7 +77,7 @@ export function AdminSettingsPage() {
           <div id="settings-search-results" className="absolute inset-x-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg" role="region" aria-label="सेटिङ खोज परिणाम">
             {filteredEntries.length ? filteredEntries.map((entry) => {
               const category = SETTINGS_CATEGORIES.find((item) => item.id === entry.category);
-              const isAvailable = Boolean(entry.href) || entry.id === 'receipt-fiscal-year-control' || entry.id === 'receipt-cancel-window' || entry.id === 'related-fee-rules' || entry.id === 'tqms-branch-filter';
+              const isAvailable = Boolean(entry.href) || ['receipt-fiscal-year-control', 'receipt-cancel-window', 'related-fee-rules', 'tqms-branch-filter', 'tqms-data-sync', 'displaced-tags'].includes(entry.id);
               return <button key={entry.id} type="button" className="flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left hover:bg-accent" onClick={() => selectSearchResult(entry.category, entry.id)}><span><span className="block text-xs font-medium">{entry.title}</span><span className="mt-0.5 block text-[10px] text-muted-foreground">{category?.label}</span></span><span className="mt-0.5 text-[10px] text-muted-foreground">{isAvailable ? 'उपलब्ध' : 'जडान छैन'}</span></button>;
             }) : <p className="px-3 py-4 text-xs text-muted-foreground">मिल्दो सेटिङ भेटिएन।</p>}
           </div>
@@ -105,6 +107,10 @@ export function AdminSettingsPage() {
                       ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><LinkedFeeRulesManager /></div>
                       : entry.id === 'tqms-branch-filter'
                         ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><TqmsSanghBranchFilterControl /></div>
+                        : entry.id === 'tqms-data-sync'
+                          ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring xl:col-span-2"><TqmsDataSyncControl /></div>
+                          : entry.id === 'displaced-tags'
+                            ? <div key={entry.id} id={entry.id} tabIndex={-1} className="scroll-mt-28 outline-none focus-visible:ring-2 focus-visible:ring-ring"><DisplacedTaggingControl /></div>
                   : <SettingsEntryCard key={entry.id} entry={entry} />
               ))}
             </div>

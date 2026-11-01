@@ -43,10 +43,28 @@ export function BillingEntitiesPage() {
   };
 
   const handleSubmit = async (fields: BillingEntityFields) => {
-    if (editingRecord) {
-      await update(editingRecord.id, fields);
-    } else {
-      await create(fields);
+    const savedFields = {
+      ...fields,
+      isDefault: fields.status === 'ACTIVE' && fields.isDefault,
+    };
+
+    try {
+      if (editingRecord) {
+        await update(editingRecord.id, savedFields);
+      } else {
+        await create(savedFields);
+      }
+
+      if (savedFields.isDefault) {
+        for (const record of records) {
+          if (record.isDefault && record.id !== editingRecord?.id) {
+            await update(record.id, { ...record, isDefault: false });
+          }
+        }
+      }
+    } catch (saveError) {
+      await reload();
+      throw saveError;
     }
 
     toast({
@@ -72,6 +90,7 @@ export function BillingEntitiesPage() {
         website: record.website,
         address: record.address,
         status,
+        isDefault: status === 'ACTIVE' && record.isDefault,
       });
       toast({
         title: 'Billing entity status updated',

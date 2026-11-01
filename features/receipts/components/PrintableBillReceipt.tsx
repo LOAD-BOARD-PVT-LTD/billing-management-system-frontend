@@ -20,7 +20,7 @@ type PdfState =
 export function PrintableBillReceipt({
   bill,
   onBack,
-  backLabel = 'Нयाँ बिल',
+  backLabel = 'नयाँ बिल',
   backAction = 'new-bill',
   copies = 1,
   voided = false,

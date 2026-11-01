@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ type PaymentSectionProps = {
 	error: string | null;
 };
 
-export function PaymentSection({
+export const PaymentSection = memo(function PaymentSection({
 	total,
 	discount,
 	onDiscountChange,
@@ -69,4 +69,4 @@ export function PaymentSection({
 			<p className="mt-0.5 text-right text-xs text-muted-foreground">भुक्तानी विधि: {paymentMethod} · तिर्नुपर्ने रु {formatCurrency(Math.max(0, total - discount))}</p>
 		</section>
 	);
-}
+});

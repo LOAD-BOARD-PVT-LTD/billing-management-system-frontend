@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ExternalLink, LoaderCircle, Truck } from 'lucide-react';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import type { BillingVehicle } from '@/features/billing/model/types';
@@ -33,7 +34,7 @@ function SummaryValue({
 	);
 }
 
-export function VehicleSummary({ vehicle }: { vehicle: BillingVehicle }) {
+export const VehicleSummary = memo(function VehicleSummary({ vehicle }: { vehicle: BillingVehicle }) {
 	const { details, isLoading, error, reload } = useTqmsVehicleDetails(vehicle.vehicleNumber);
 	const compliance = details?.Compliance;
 	const insurance = compliance?.Insurance;
@@ -115,4 +116,4 @@ export function VehicleSummary({ vehicle }: { vehicle: BillingVehicle }) {
 			</div>
 		</aside>
 	);
-}
+});

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { validateBillingEntity } from '../schemas/billing-entity.schema';
 import type { BillingEntityFields } from '../types/billing-entity.types';
 
-const fields: { key: keyof Omit<BillingEntityFields, 'status'>; label: string; required?: boolean }[] = [
+const fields: { key: keyof Omit<BillingEntityFields, 'status' | 'isDefault'>; label: string; required?: boolean }[] = [
   { key: 'entity', label: 'Entity name', required: true },
   { key: 'registrationNumber', label: 'Registration Number', required: true },
   { key: 'panNumber', label: 'PAN number', required: true },
@@ -92,6 +92,16 @@ export function BillingEntityForm({
                 <SelectItem value="INACTIVE">Inactive</SelectItem>
               </SelectContent>
             </Select>
+          </label>
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <input
+              type="checkbox"
+              checked={form.isDefault}
+              disabled={form.status !== 'ACTIVE'}
+              onChange={(event) => update('isDefault', event.target.checked)}
+              className="size-4 accent-primary"
+            />
+            <span>Default billing entity</span>
           </label>
           <label className="space-y-1.5 text-sm font-medium text-foreground sm:col-span-2">
             <span>Address *</span>

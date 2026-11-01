@@ -1,9 +1,7 @@
 'use client';
 
-import 'regenerator-runtime/runtime';
 import { useEffect, useMemo, useState } from 'react';
-import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import type { PDFFont, PDFPage } from 'pdf-lib';
 import { Download, FileDown, RefreshCw, Search } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/data-tables/DataTable';
 import { ErrorState } from '@/components/feedback/ErrorState';
@@ -14,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTqmsMemberRegistry } from '@/features/vehicle/tqms/hooks/useTqmsMemberRegistry';
 import type { TqmsRegistryVehicle } from '@/features/vehicle/tqms/model/tqms-member-registry';
 import { toNepaliDigits } from '@/utils/numbers';
-
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const PDF_PAGE_WIDTH = 595.28;
@@ -33,43 +30,6 @@ async function fetchPdfFont(path: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function drawVehicleNumber(
-  page: PDFPage,
-  value: string,
-  x: number,
-  top: number,
-  fonts: VehicleNumberFonts,
-): void {
-  const size = 12;
-  let cursorX = x;
-  let segment = '';
-  let segmentIsDevanagari: boolean | null = null;
-
-  const drawSegment = () => {
-    if (!segment || segmentIsDevanagari === null) return;
-    const font = segmentIsDevanagari ? fonts.devanagari : fonts.latin;
-    page.drawText(segment, {
-      x: cursorX,
-      y: page.getHeight() - top - size,
-      size,
-      font,
-      color: rgb(0.12, 0.16, 0.22),
-    });
-    cursorX += font.widthOfTextAtSize(segment, size);
-  };
-
-  for (const character of value) {
-    const isDevanagari = DEVANAGARI_SCRIPT.test(character);
-    if (segmentIsDevanagari !== null && isDevanagari !== segmentIsDevanagari) {
-      drawSegment();
-      segment = '';
-    }
-    segment += character;
-    segmentIsDevanagari = isDevanagari;
-  }
-  drawSegment();
-}
-
 async function downloadUniqueVehicleNumbersPdf(rows: TqmsRegistryVehicle[]): Promise<void> {
   const numberGroups = new Map<string, { number: string; count: number }>();
   rows.forEach((row) => {
@@ -85,6 +45,48 @@ async function downloadUniqueVehicleNumbersPdf(rows: TqmsRegistryVehicle[]): Pro
   const duplicateNumbers = groupedNumbers.filter(({ count }) => count > 1);
 
   if (uniqueNumbers.length === 0) throw new Error('डाउनलोड गर्न सवारी नम्बर उपलब्ध छैन।');
+
+  const [{ PDFDocument, rgb }, { default: fontkit }] = await Promise.all([
+    import('pdf-lib'),
+    import('@pdf-lib/fontkit'),
+  ]);
+
+  const drawVehicleNumber = (
+    page: PDFPage,
+    value: string,
+    x: number,
+    top: number,
+    fonts: VehicleNumberFonts,
+  ): void => {
+    const size = 12;
+    let cursorX = x;
+    let segment = '';
+    let segmentIsDevanagari: boolean | null = null;
+
+    const drawSegment = () => {
+      if (!segment || segmentIsDevanagari === null) return;
+      const font = segmentIsDevanagari ? fonts.devanagari : fonts.latin;
+      page.drawText(segment, {
+        x: cursorX,
+        y: page.getHeight() - top - size,
+        size,
+        font,
+        color: rgb(0.12, 0.16, 0.22),
+      });
+      cursorX += font.widthOfTextAtSize(segment, size);
+    };
+
+    for (const character of value) {
+      const isDevanagari = DEVANAGARI_SCRIPT.test(character);
+      if (segmentIsDevanagari !== null && isDevanagari !== segmentIsDevanagari) {
+        drawSegment();
+        segment = '';
+      }
+      segment += character;
+      segmentIsDevanagari = isDevanagari;
+    }
+    drawSegment();
+  };
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);

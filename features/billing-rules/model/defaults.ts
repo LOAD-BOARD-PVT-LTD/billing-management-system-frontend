@@ -33,7 +33,7 @@ export const createEmptyRule = (): BillingRule => ({
   scope: 'COMMON',
   vehicleCategoryId: null,
   frequency: 'ONE_TIME',
-  period: 'MONTH',
+  period: null,
   validity: 'SAME_DAY',
   amount: 0,
   status: 'ACTIVE',

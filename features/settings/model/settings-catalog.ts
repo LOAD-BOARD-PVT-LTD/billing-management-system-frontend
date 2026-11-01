@@ -70,7 +70,7 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
   {
     id: 'tqms-data-sync', category: 'integrations', title: 'TQMS डाटा सिंक',
     description: 'सिंक अवस्था, अन्तिम सफल समय, रेकर्ड गणना र छोडिएका अभिलेख।', icon: Link2,
-    unavailableReason: 'TQMS स्न्यापसट सिंक, यसको operational metrics र Excel export UI/API हाल उपलब्ध छैन।',
+    searchTerms: ['TQMS snapshot sync', 'सवारी सिंक', 'छोडिएका अभिलेख'],
   },
   {
     id: 'cts-insurance', category: 'integrations', title: 'CTS तथा बीमा एकीकरण',
@@ -106,7 +106,7 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
   {
     id: 'displaced-tags', category: 'organization', title: 'विस्थापित ट्याग सेटिङ',
     description: 'संस्था-स्तरमा प्रयोग हुने विस्थापित ट्याग।', icon: SlidersHorizontal,
-    unavailableReason: 'ट्याग configuration का लागि छुट्टै सेटिङ मोड्युल छैन।',
+    searchTerms: ['displaced tags', 'displaced tagging', 'विस्थापित सुविधा'],
   },
   {
     id: 'organization-features-policies', category: 'organization', title: 'संस्थागत सुविधाहरू तथा नीतिहरू',

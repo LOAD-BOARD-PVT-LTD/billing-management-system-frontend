@@ -71,7 +71,8 @@ export function GeneralBillingWorkspace() {
     : activeEntities;
   const resolvedEntityId = availableEntities.some((entity) => entity.id === selectedEntityId)
     ? selectedEntityId
-    : availableEntities.length === 1 ? availableEntities[0].id : '';
+    : availableEntities.find((entity) => entity.isDefault)?.id
+      ?? (availableEntities.length === 1 ? availableEntities[0].id : '');
   const subtotal = charges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
 
   const branding = useMemo(

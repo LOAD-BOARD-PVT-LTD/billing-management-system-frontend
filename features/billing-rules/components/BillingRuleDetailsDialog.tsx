@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { BillingRule, FeeHead, FiscalYear } from '@/features/billing-rules/model/types';
+import { getPeriodForFrequency, getPeriodLabel, getValidityLabel } from '@/features/billing-rules/utils/rule-period-policy';
 import type { BillingEntityRecord } from '@/features/administration/billing-entities/types/billing-entity.types';
 
 export interface BillingRuleDetailsDialogProps {
@@ -51,8 +52,8 @@ export function BillingRuleDetailsDialog({
     ['कुन मिटिङबाट पास', rule?.meetingReference ?? '—'],
     ['Billing Entity', billingEntity?.entity ?? '—'],
     ['शुल्क प्रकार', rule?.frequency === 'ONE_TIME' ? 'एकपटक' : 'आवधिक'],
-    ['अवधि', rule?.period === null ? 'लागू हुँदैन' : rule?.period === 'MONTH' ? 'महिना' : rule?.period === 'FISCAL_YEAR' ? 'आर्थिक वर्ष' : '—'],
-    ['मान्य अवधि अन्त्य', rule?.validity === 'END_OF_MONTH' ? 'महिनाको अन्त्य' : rule?.validity === 'END_OF_FISCAL_YEAR' ? 'आर्थिक वर्षको अन्त्य' : 'सोही दिन'],
+    ['अवधि', rule ? getPeriodLabel(getPeriodForFrequency(rule.frequency, rule.validity)) : '—'],
+    ['मान्य अवधि अन्त्य', rule ? getValidityLabel(rule.frequency, rule.validity) : '—'],
     ['रकम', rule ? `Rs. ${rule.amount.toLocaleString('en-IN')}` : '—'],
     ['स्थिति', rule?.status === 'ACTIVE' ? 'सक्रिय' : 'निष्क्रिय'],
     ['सिर्जना मिति', formatDate(rule?.createdAt)],

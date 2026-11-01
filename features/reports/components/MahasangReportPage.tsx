@@ -30,7 +30,7 @@ export function MahasangReportPage() {
   const totalMembership = useMemo(() => rows.reduce((sum, row) => sum + row.membershipIncome, 0), [rows]);
   const totalOther = useMemo(() => rows.reduce((sum, row) => sum + row.otherIncome, 0), [rows]);
   const columns: DataTableColumn<MahasangReportRow>[] = [
-    { id: 'vehicleNumber', header: 'गाडी नं.', cell: (row) => toNepaliDigits(row.vehicleNumber) },
+    { id: 'vehicleNumber', header: 'गाडी नं.', cell: (row) => row.vehicleNumber },
     { id: 'previousVehicleNumber', header: 'पुरानो गाडी नं.', cell: (row) => row.previousVehicleNumber },
     { id: 'vehicleType', header: 'सवारी प्रकार', cell: (row) => row.vehicleType },
     { id: 'ownerName', header: 'धनीको नाम', cell: (row) => row.ownerName },

@@ -109,7 +109,6 @@ export async function fetchTqmsVehicleTypes(): Promise<TqmsVehicleTypeOption[]> 
   return normalizeTqmsVehicleTypeList(payload);
 }
 
-export async function syncTqmsVehicleTypes(): Promise<void> {
-  await apiClient.get<void>(endpoints.tqms.syncVehicleTypes);
+export async function syncTqmsVehicleTypes(): Promise<unknown> {
+  return apiClient.get<unknown>(endpoints.tqms.syncVehicleTypes);
 }
-

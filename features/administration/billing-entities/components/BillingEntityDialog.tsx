@@ -15,6 +15,7 @@ const EMPTY_ENTITY: BillingEntityFields = {
   website: '',
   address: '',
   status: 'ACTIVE',
+  isDefault: false,
 };
 
 export function BillingEntityDialog({

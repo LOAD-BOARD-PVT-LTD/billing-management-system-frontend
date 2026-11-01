@@ -75,7 +75,10 @@ export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplate
           </thead>
           <tbody>
             {content.items.map((item, index) => (
-              <tr key={`${item.feeHeadId}-${index}`}>
+              <tr
+                key={`${item.feeHeadId}-${index}`}
+                className={index === content.items.length - 1 ? 'document-fee-head-row-last' : 'document-fee-head-row'}
+              >
                 <td className="document-center">{formatDocumentCount(index + 1)}</td>
                 <td>{item.title}</td>
                 <td className="document-number">{formatDocumentCurrency(item.amount)}</td>
@@ -107,9 +110,7 @@ export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplate
         </div>
 
         <DocumentFooter
-          createdAt={bill.createdAt}
-          billingDate={content.billingDate}
-          issuedBy={content.branch.contactPerson || content.branch.name || '—'}
+          content={content}
         />
       </article>
     </>

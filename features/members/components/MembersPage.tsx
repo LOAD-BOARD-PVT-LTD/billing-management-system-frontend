@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useAtomValue } from 'jotai';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
@@ -14,11 +14,12 @@ import type { MemberListRecord } from '@/features/members/model/member';
 import { calculateMembers } from '@/features/members/utils/member-calculations';
 import { exportMembers } from '@/features/members/utils/export-members';
 import { useFiscalYearManagement } from '@/features/settings/hooks/useFiscalYearManagement';
+import { useDisplacedTaggingSetting } from '@/features/settings/hooks/useDisplacedTaggingSetting';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehicleBlacklist';
 import { useVehicleTypes } from '@/features/vehicle/type/hooks/useVehicleTypes';
 import { useTqmsVehicleTypes } from '@/features/vehicle/mappings/tqms-vehicle-type/hooks/useTqmsVehicleTypes';
-import { billingVehicleTypesAtom, tqmsVehicleTypesAtom } from '@/features/vehicle/store/vehicle-type-atoms';
+
 import { MembersDialogs } from '@/features/members/components/MembersDialogs';
 import { MembersHeader } from '@/features/members/components/MembersHeader';
 import { MembersTable } from '@/features/members/components/MembersTable';
@@ -67,8 +68,9 @@ export function MembersPage() {
   } = useMemberVehicles();
   const billingVehicleTypesQuery = useVehicleTypes();
   const tqmsVehicleTypesQuery = useTqmsVehicleTypes(true);
-  const billingVehicleTypes = useAtomValue(billingVehicleTypesAtom);
-  const tqmsVehicleTypes = useAtomValue(tqmsVehicleTypesAtom);
+  const { enabled: displacedTaggingEnabled } = useDisplacedTaggingSetting();
+  const billingVehicleTypes = billingVehicleTypesQuery.records;
+  const tqmsVehicleTypes = tqmsVehicleTypesQuery.data;
 
   const sortedFiscalYears = useMemo(
     () => [...fiscalYears].sort((left, right) => right.startDate.localeCompare(left.startDate)),
@@ -177,6 +179,7 @@ export function MembersPage() {
   const resetPage = () => setPage(1);
 
   const handleTagDisplaced = async (record: MemberListRecord, reason: string) => {
+    if (!displacedTaggingEnabled) return;
     try {
       await tagDisplaced({
         vehicleId: record.vehicleId,
@@ -197,6 +200,7 @@ export function MembersPage() {
   };
 
   const handleRemoveDisplaced = async (record: MemberListRecord) => {
+    if (!displacedTaggingEnabled) return;
     const resource = resourceByVehicleId.get(record.vehicleId);
     if (!resource) {
       toast({ title: 'विस्थापित रेकर्ड भेटिएन।', variant: 'destructive' });
@@ -273,6 +277,7 @@ export function MembersPage() {
           records={pageRecords}
           isLoading={isLoading}
           isSaving={memberSaving || blacklistSaving || memberResourcesLoading}
+          displacedTaggingEnabled={displacedTaggingEnabled}
           error={combinedError}
           page={currentPage}
           pageSize={PAGE_SIZE}
@@ -288,11 +293,11 @@ export function MembersPage() {
         />
       </Card>
       <MembersDialogs
-        key={`${tagTarget?.vehicleId ?? ''}:${blacklistTarget?.vehicleId ?? ''}`}
+        key={`${displacedTaggingEnabled}:${tagTarget?.vehicleId ?? ''}:${blacklistTarget?.vehicleId ?? ''}`}
         detail={detail}
-        tagTarget={tagTarget}
+        tagTarget={displacedTaggingEnabled ? tagTarget : null}
         blacklistTarget={blacklistTarget}
-        removeTarget={removeTarget}
+        removeTarget={displacedTaggingEnabled ? removeTarget : null}
         isSaving={memberSaving || blacklistSaving}
         onCloseDetail={() => setDetail(null)}
         onCloseTag={() => setTagTarget(null)}

@@ -81,16 +81,25 @@ export function IncomeReportPage() {
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageRows = sortedRows
-    .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-    .map((row, index) => ({ ...row, displayNumber: (currentPage - 1) * PAGE_SIZE + index + 1 }));
-  const fiscalYears = Array.from(new Set(rows.map((row) => row.fiscalYear).filter(Boolean))).sort();
-  const branches = Array.from(new Set(rows.map((row) => row.branchName).filter(Boolean))).sort();
-  const users = Array.from(new Set(rows.map((row) => row.userName).filter(Boolean))).sort();
-  const feeHeads = Array.from(new Map(rows
-    .filter((row) => row.feeHeadId)
-    .map((row) => [row.feeHeadId, { value: row.feeHeadId, label: row.feeTitle ? `${row.feeTitle} (${row.feeHeadId})` : row.feeHeadId }])).values())
-    .sort((first, second) => first.label.localeCompare(second.label, 'ne'));
+  const pageRows = useMemo(() => {
+    return sortedRows
+      .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+      .map((row, index) => ({ ...row, displayNumber: (currentPage - 1) * PAGE_SIZE + index + 1 }));
+  }, [sortedRows, currentPage]);
+
+  const { fiscalYears, branches, users, feeHeads } = useMemo(() => {
+    const fYears = Array.from(new Set(rows.map((row) => row.fiscalYear).filter(Boolean))).sort();
+    const brs = Array.from(new Set(rows.map((row) => row.branchName).filter(Boolean))).sort();
+    const usrs = Array.from(new Set(rows.map((row) => row.userName).filter(Boolean))).sort();
+    const fHeads = Array.from(new Map(rows
+      .filter((row) => row.feeHeadId)
+      .map((row) => [row.feeHeadId, { value: row.feeHeadId, label: row.feeTitle ? `${row.feeTitle} (${row.feeHeadId})` : row.feeHeadId }])).values())
+      .sort((first, second) => first.label.localeCompare(second.label, 'ne'));
+    return { fiscalYears: fYears, branches: brs, users: usrs, feeHeads: fHeads };
+  }, [rows]);
+
+  const totalIncome = useMemo(() => summaryTotal(filteredRows), [filteredRows]);
+  const totalTransactions = useMemo(() => summaryTransactions(filteredRows), [filteredRows]);
 
   const updateReportFilter = (key: keyof IncomeReportFilterValues, value: string) => {
     updateFilter(key, value);
@@ -171,13 +180,13 @@ export function IncomeReportPage() {
       <div className="grid gap-3 sm:grid-cols-2">
         <SummaryCard
           label="कुल आम्दानी / सङ्कलन"
-          value={isLoading || error ? '—' : `रु ${formatCurrency(summaryTotal(filteredRows))}`}
+          value={isLoading || error ? '—' : `रु ${formatCurrency(totalIncome)}`}
           description="भुक्तानी भएका मिल्ने रसिदको जम्मा"
           accent="bg-sky-500"
         />
         <SummaryCard
           label="सफल सङ्कलन"
-          value={isLoading || error ? '—' : toNepaliDigits(summaryTransactions(filteredRows))}
+          value={isLoading || error ? '—' : toNepaliDigits(totalTransactions)}
           description="भुक्तानी भएका छुट्टाछुट्टै रसिद"
           accent="bg-emerald-500"
         />
@@ -199,7 +208,13 @@ export function IncomeReportPage() {
           onSort={(column, direction) => { setSortColumn(column); setSortDirection(direction); }}
           isLoading={isLoading}
         />
-        <DataTablePagination page={currentPage} pageSize={PAGE_SIZE} total={sortedRows.length} onPageChange={setPage} className="mt-3" />
+        <DataTablePagination
+          page={currentPage}
+          pageSize={PAGE_SIZE}
+          total={sortedRows.length}
+          onPageChange={setPage}
+          className="mt-4"
+        />
       </section>
     </section>
   );

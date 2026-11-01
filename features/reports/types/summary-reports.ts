@@ -37,6 +37,7 @@ export type MahasangReportRow = {
 
 export type MemberTransactionRow = {
   id: string;
+  displayNumber?: number;
   receipt: ReceiptRecord;
   feeTitles: string;
   phone: string;

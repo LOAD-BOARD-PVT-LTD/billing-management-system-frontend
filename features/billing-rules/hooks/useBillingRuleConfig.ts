@@ -9,6 +9,7 @@ import type {
   FeeHead,
   FiscalYear,
 } from '@/features/billing-rules/model/types';
+import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 
 export function useBillingRuleConfig() {
@@ -22,9 +23,18 @@ export function useBillingRuleConfig() {
 
   const getFeeHeads = useCallback(() => config.feeHeads, [config.feeHeads]);
   const addFeeHead = useCallback(async (feeHead: FeeHead) => {
+    const orderedFeeHeads = sortFeeHeadsByDisplayOrder(config.feeHeads);
+    const feeHeadIndex = orderedFeeHeads.findIndex((item) => item.id === feeHead.id);
+    const nextFeeHeads = orderedFeeHeads.map((item, index) => ({
+      ...(item.id === feeHead.id ? feeHead : item),
+      displayOrder: index,
+    }));
+    if (feeHeadIndex === -1) {
+      nextFeeHeads.push({ ...feeHead, displayOrder: nextFeeHeads.length });
+    }
     const next = {
       ...config,
-      feeHeads: [...config.feeHeads.filter((item) => item.id !== feeHead.id), feeHead],
+      feeHeads: nextFeeHeads,
     };
     return persist(next);
   }, [config, persist]);

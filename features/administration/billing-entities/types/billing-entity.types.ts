@@ -11,6 +11,7 @@ export type BillingEntityFields = {
   website: string;
   address: string;
   status: BillingEntityStatus;
+  isDefault: boolean;
 };
 
 export type BillingEntityRecord = BillingEntityFields & {

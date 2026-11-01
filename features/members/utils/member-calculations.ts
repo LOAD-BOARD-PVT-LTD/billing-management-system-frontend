@@ -2,6 +2,7 @@ import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type { FiscalYear } from '@/features/billing-rules/model/types';
 import type { MemberListRecord, MemberResourceRecord } from '@/features/members/model/member';
 import type { VehicleBlacklistRecord } from '@/features/vehicle/blacklist';
+import { normalizeVehicleNumber } from '@/features/vehicle/blacklist/utils/dedupe-vehicle-blacklist';
 
 export type MemberCounts = Record<
   'total' | 'active' | 'new' | 'inactive' | 'displaced' | 'blacklisted' | 'nonMemberBlacklisted',
@@ -15,6 +16,15 @@ function vehicleId(receipt: ReceiptRecord): string {
 function dateValue(receipt: ReceiptRecord): number {
   const timestamp = Date.parse(receipt.bill.createdAt);
   return Number.isFinite(timestamp) ? timestamp : Date.parse(receipt.billingDate) || 0;
+}
+
+function vehicleIdentityKeys(vehicleId: string, vehicleNumber: string): string[] {
+  const keys: string[] = [];
+  const id = vehicleId.trim().toLocaleLowerCase();
+  const number = normalizeVehicleNumber(vehicleNumber);
+  if (id) keys.push(`id:${id}`);
+  if (number) keys.push(`number:${number}`);
+  return keys;
 }
 
 export function calculateMembers(
@@ -61,18 +71,30 @@ export function calculateMembers(
     : new Set<string>();
 
   const billingVehicleIds = new Set(latestByVehicle.keys());
-  const tqmsBlacklistedIds = new Set(
-    blacklistedVehicles.map((record) => record.vehicleId.trim()).filter(Boolean),
+  const blacklistedMemberResources = displacedResources.filter((record) => record.isBlacklisted);
+  const memberIdentityKeys = new Set(
+    [...latestByVehicle.entries()].flatMap(([id, receipt]) => (
+      vehicleIdentityKeys(id, receipt.bill.content.vehicle.vehicleNumber)
+    )),
   );
-  const memberResourceBlacklistedIds = new Set(
-    displacedResources.filter((record) => record.isBlacklisted).map((record) => record.vehicleId.trim()).filter(Boolean),
-  );
+  const blacklistedIdentityKeys = new Set([
+    ...blacklistedVehicles.flatMap((record) => vehicleIdentityKeys(record.vehicleId, record.vehicleNumber)),
+    ...blacklistedMemberResources.flatMap((record) => vehicleIdentityKeys(record.vehicleId, record.vehicleNumber)),
+  ]);
   const blacklistedIds = new Set(
-    [...tqmsBlacklistedIds, ...memberResourceBlacklistedIds].filter((id) => billingVehicleIds.has(id)),
+    [...latestByVehicle.entries()]
+      .filter(([id, receipt]) => vehicleIdentityKeys(
+        id,
+        receipt.bill.content.vehicle.vehicleNumber,
+      ).some((key) => blacklistedIdentityKeys.has(key)))
+      .map(([id]) => id),
   );
-  const allBlacklistedIds = new Set([...tqmsBlacklistedIds, ...memberResourceBlacklistedIds]);
   const nonMemberBlacklistedIds = new Set(
-    [...tqmsBlacklistedIds].filter((id) => !billingVehicleIds.has(id)),
+    blacklistedVehicles
+      .filter((record) => !vehicleIdentityKeys(record.vehicleId, record.vehicleNumber)
+        .some((key) => memberIdentityKeys.has(key)))
+      .map((record) => record.vehicleId.trim() || normalizeVehicleNumber(record.vehicleNumber))
+      .filter(Boolean),
   );
   const displacedIds = new Set(
     displacedResources
@@ -162,7 +184,7 @@ export function calculateMembers(
       new: newIds.size,
       inactive: inactiveIds.size,
       displaced: displacedIds.size,
-      blacklisted: allBlacklistedIds.size,
+      blacklisted: blacklistedIds.size,
       nonMemberBlacklisted: nonMemberBlacklistedIds.size,
     },
   };

@@ -13,6 +13,14 @@ const billingEntityFieldsSchema = z.object({
   Website: z.string().trim(),
   Address: z.string().trim().min(1, 'Address is required.'),
   Status: z.enum(['ACTIVE', 'INACTIVE']),
+  Default: z.preprocess((value) => {
+    if (value === true || value === 1 || value === 'true') return true;
+    if (value === false || value === 0 || value === 'false') return false;
+    return false;
+  }, z.boolean()).default(false),
+  isDefault: z.preprocess((value) => value === true || value === 1 || value === 'true', z.boolean()).optional(),
+  is_default: z.preprocess((value) => value === true || value === 1 || value === 'true', z.boolean()).optional(),
+  default: z.preprocess((value) => value === true || value === 1 || value === 'true', z.boolean()).optional(),
 });
 
 function parseSerializedJson(value: unknown): unknown {
@@ -46,6 +54,7 @@ export function toBillingEntityRequest(fields: BillingEntityFields, id?: string)
     Website: fields.website,
     Address: fields.address,
     Status: fields.status,
+    Default: fields.isDefault,
   });
 
   const request = {
@@ -86,6 +95,7 @@ export function parseBillingEntity(value: unknown): BillingEntityRecord {
     website: content.Website,
     address: content.Address,
     status: content.Status,
+    isDefault: content.Default || content.isDefault === true || content.is_default === true || content.default === true,
   };
 }
 
@@ -129,6 +139,7 @@ export function validateBillingEntity(fields: BillingEntityFields): string | nul
     Website: fields.website,
     Address: fields.address,
     Status: fields.status,
+    Default: fields.isDefault,
   });
 
   return result.success ? null : result.error.issues[0]?.message ?? 'Check the billing entity details.';

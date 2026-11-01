@@ -150,8 +150,8 @@ export function FeeHeadWiseReportPage() {
   const currentPage = Math.min(page, pageCount);
   const pageRows = allRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
     .map((row, index) => ({ ...row, rowNumber: (currentPage - 1) * PAGE_SIZE + index + 1 }));
-  const pageTotals = totalsForRows(pageRows, visibleFeeHeads);
-  const allTotals = totalsForRows(allRows, visibleFeeHeads);
+  const pageTotals = useMemo(() => totalsForRows(pageRows, visibleFeeHeads), [pageRows, visibleFeeHeads]);
+  const allTotals = useMemo(() => totalsForRows(allRows, visibleFeeHeads), [allRows, visibleFeeHeads]);
 
   const updateReportFilter = (key: Parameters<typeof updateFilter>[0], value: string) => {
     updateFilter(key, value);
@@ -288,7 +288,7 @@ export function FeeHeadWiseReportPage() {
                         <TableRow key={row.receipt.id}>
                           <TableCell className="text-center tabular-nums">{toNepaliDigits(row.rowNumber)}</TableCell>
                           <TableCell className="whitespace-nowrap">{toNepaliDigits(row.receipt.receiptNumber)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{toNepaliDigits(row.receipt.vehicleNumber)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.receipt.vehicleNumber}</TableCell>
                           <TableCell>
                             <span className="block font-medium">{row.receipt.customerName || '—'}</span>
                             {getOperatorName(row.receipt) ? (

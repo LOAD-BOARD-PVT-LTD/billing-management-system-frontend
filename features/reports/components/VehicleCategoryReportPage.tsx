@@ -471,7 +471,7 @@ export function VehicleCategoryReportPage() {
                 pageRows.map((row, index) => (
                   <TableRow key={row.receipt.id} className={index % 2 === 1 ? 'bg-muted/20' : undefined}>
                     <TableCell className="text-center tabular-nums">{toNepaliDigits((currentPage - 1) * pageSize + index + 1)}</TableCell>
-                    <TableCell className="font-medium">{toNepaliDigits(row.receipt.vehicleNumber)}</TableCell>
+                    <TableCell className="font-medium">{row.receipt.vehicleNumber}</TableCell>
                     <TableCell className="whitespace-normal">{row.vehicleType}</TableCell>
                     <TableCell>{row.route}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.routePermitExpiry === '—' ? '—' : formatReportDate(row.routePermitExpiry)}</TableCell>

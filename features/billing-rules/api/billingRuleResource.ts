@@ -2,6 +2,8 @@ import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
 import { EMPTY_BILLING_RULE_CONFIG } from '@/features/billing-rules/model/defaults';
 import type { BillingRule, BillingRuleConfig, FeeHead, FiscalYear, Validity } from '@/features/billing-rules/model/types';
+import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
+import { getPeriodForFrequency, getValidityForFrequency } from '@/features/billing-rules/utils/rule-period-policy';
 
 export interface BillingRuleResourceDocument {
   resourceId: string | null;
@@ -68,6 +70,9 @@ function normalizeFeeHead(value: unknown, fallbackId?: unknown, fallbackFiscalYe
   return {
     id,
     code: typeof record?.code === 'string' ? record.code : id,
+    displayOrder: Number.isInteger(record?.displayOrder ?? record?.display_order)
+      ? Number(record?.displayOrder ?? record?.display_order)
+      : undefined,
     fiscalYearId: idString(record?.fiscalYearId ?? record?.fiscal_year_id ?? fallbackFiscalYearId),
     name: typeof record?.name === 'string' ? record.name : id,
     status: record?.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
@@ -103,19 +108,18 @@ function normalizeRule(candidate: unknown, rootId?: unknown): BillingRule | null
   if (record.frequency !== 'PERIODIC' && record.frequency !== 'ONE_TIME') return null;
   if (record.status !== 'ACTIVE' && record.status !== 'INACTIVE') return null;
   const scope = record.scope;
-  const period = record.period === null && scope === 'COMMON' && record.frequency === 'ONE_TIME'
-    ? null
-    : record.period === 'MONTH' || record.period === 'FISCAL_YEAR'
-      ? record.period
+  const periodValue = record.period === 'MONTH' || record.period === 'FISCAL_YEAR'
+    ? record.period
+    : record.period === null && record.frequency === 'ONE_TIME'
+      ? null
       : undefined;
-  if (period === undefined) return null;
+  if (periodValue === undefined) return null;
   const validityValue = record.validity ?? record.Validity ?? record.timing;
   if (validityValue !== 'SAME_DAY' && validityValue !== 'END_OF_MONTH' && validityValue !== 'END_OF_FISCAL_YEAR') {
     return null;
   }
-  const validity: Validity = validityValue === 'END_OF_MONTH' || validityValue === 'END_OF_FISCAL_YEAR'
-    ? validityValue
-    : 'SAME_DAY';
+  const validity: Validity = getValidityForFrequency(record.frequency, validityValue as Validity);
+  const period = getPeriodForFrequency(record.frequency, validity);
   const amount = Number(record.amount);
   const vehicleCategoryId = scope === 'COMMON' ? null : idString(record.vehicleCategoryId ?? record.vehicleTypeId);
   const billingEntityValue = parseSerializedJson(record.billingEntity);
@@ -264,7 +268,7 @@ export function unwrapBillingRuleResource(value: unknown): BillingRuleConfig {
     const configs = value.map(unwrapBillingRuleResource);
     return {
       version: 1,
-      feeHeads: uniqueById(configs.flatMap((config) => config.feeHeads)),
+      feeHeads: sortFeeHeadsByDisplayOrder(uniqueById(configs.flatMap((config) => config.feeHeads))),
       fiscalYears: uniqueById(configs.flatMap((config) => config.fiscalYears)),
       rules: configs.flatMap((config) => config.rules),
     };
@@ -327,6 +331,7 @@ function toFeeHeadResourceContent(feeHead: FeeHead): ResourceRecord {
     resourceType: 'FEE_HEAD',
     name: feeHead.name,
     code: feeHead.code ?? '',
+    ...(feeHead.displayOrder !== undefined ? { displayOrder: feeHead.displayOrder } : {}),
     fiscalYearId: feeHead.fiscalYearId ? resourceIdValue(feeHead.fiscalYearId) : null,
     status: feeHead.status,
   };

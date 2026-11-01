@@ -8,6 +8,7 @@ import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
 import { matchesTqmsSanghBranch } from '@/features/settings/api/tqms-sangh-branch-filter.api';
 import type { VehicleBlacklistRecord, VehicleStatusMetadata } from '@/features/vehicle/blacklist';
+import { dedupeVehicleBlacklistRecords } from '@/features/vehicle/blacklist/utils/dedupe-vehicle-blacklist';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -82,6 +83,7 @@ function mapResourceToStatusRecord(value: unknown): VehicleBlacklistRecord {
   }
   const externalContent = parseExternalContent(root.external_content ?? root.externalContent);
   const metadata = parseMetadata({
+    ...innerContent,
     ...asRecord(externalContent.metadata),
     ...asRecord(root.metadata),
     ...asRecord(innerContent.metadata),
@@ -142,9 +144,9 @@ async function searchBlacklistedVehicles(signal?: AbortSignal): Promise<VehicleB
 
 export async function fetchVehicleBlacklist(signal?: AbortSignal, branchName = ''): Promise<VehicleBlacklistRecord[]> {
   const records = await searchBlacklistedVehicles(signal);
-  return records
+  return dedupeVehicleBlacklistRecords(records
     .filter((record) => record.isBlacklisted)
-    .filter((record) => matchesTqmsSanghBranch(record.branch, branchName))
+    .filter((record) => matchesTqmsSanghBranch(record.branch, branchName)))
     .sort((left, right) => (right.blacklistedAt ?? '').localeCompare(left.blacklistedAt ?? ''));
 }
 
@@ -173,6 +175,7 @@ async function saveMetadata(
     ...metadata,
     tags,
   };
+  innerContent.isBlacklisted = metadata.isBlacklisted;
   await updateVehicleResource(resource, innerContent, resource.externalContent);
 }
 
@@ -192,6 +195,7 @@ async function addVehicleToBlacklist(input: {
   }
   const resource = await readVehicleResource(vehicleId, input.vehicleNumber);
   const currentMetadata = parseMetadata({
+    ...resource.innerContent,
     ...asRecord(resource.externalContent.metadata),
     ...asRecord(resource.resource.metadata),
     ...asRecord(resource.innerContent.metadata),
@@ -249,6 +253,7 @@ export async function updateVehicleBlacklist(input: {
   if (!input.vehicleId.trim()) throw new Error('A TQMS VehicleId is required to update vehicle metadata.');
   const resource = await readVehicleResource(input.vehicleId, input.vehicleNumber);
   const existingMetadata = parseMetadata({
+    ...resource.innerContent,
     ...asRecord(resource.externalContent.metadata),
     ...asRecord(resource.resource.metadata),
     ...asRecord(resource.innerContent.metadata),

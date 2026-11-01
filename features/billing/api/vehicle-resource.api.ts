@@ -1,7 +1,5 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
-import { fetchTqmsSanghBranchFilter } from '@/features/settings/api/tqms-sangh-branch-filter.api';
-import { searchTqmsVehicles } from './tqms-vehicle-search.api';
 import type { BillingVehicle } from '../model/types';
 import type { VehiclePhoneUpdateInput } from '../schemas/vehicle-phone-update.schema';
 import { vehiclePhoneUpdateSchema } from '../schemas/vehicle-phone-update.schema';
@@ -73,35 +71,101 @@ export async function readVehicleResource(
 	vehicleNumber: string,
 ): Promise<VehicleResourceDocument> {
 	const requestedVehicleId = vehicleId.trim();
-	if (!requestedVehicleId) throw new Error('A TQMS VehicleId is required to read VehicleResource.');
 	const query = vehicleNumber.trim();
-	if (!query) throw new Error('A vehicle number is required to resolve the TQMS VehicleId.');
-
-	const { branchName } = await fetchTqmsSanghBranchFilter();
-	const tqmsVehicles = await searchTqmsVehicles(query, undefined, branchName);
-	const matchingVehicle = tqmsVehicles.find((vehicle) => vehicle.tqmsVehicleId === requestedVehicleId);
-	if (!matchingVehicle) {
-		throw new Error(`TQMS search did not return vehicle ${query} with VehicleId ${requestedVehicleId}.`);
+	if (!requestedVehicleId && !query) {
+		throw new Error('A TQMS VehicleId or vehicle number is required to read VehicleResource.');
 	}
-	const tqmsVehicleId = matchingVehicle.tqmsVehicleId;
 
-	const payload = await apiClient.get<unknown>(
-		endpoints.resources.vehicle.search('VehicleId', tqmsVehicleId, 1),
-	);
-	const matches = extractResourceRows(payload).filter((value) => {
+	const readMatches = async (field: string, value: string): Promise<unknown[]> => {
+		try {
+			const payload = await apiClient.get<unknown>(
+				endpoints.resources.vehicle.search(field, value, 'all'),
+			);
+			return extractResourceRows(payload);
+		} catch (error) {
+			if (error instanceof Error
+				&& /Request failed \(404\).*No resources found for search query/iu.test(error.message)) {
+				return [];
+			}
+			throw error;
+		}
+	};
+	const getInnerContent = (value: unknown) => {
 		const candidate = asRecord(unwrapResource(value));
-		const content = asRecord(candidate?.inner_content ?? candidate?.innerContent);
-		return String(content?.VehicleId ?? '').trim() === tqmsVehicleId;
-	});
+		return asRecord(candidate?.inner_content ?? candidate?.innerContent);
+	};
+	const getVehicleId = (value: unknown) => String(getInnerContent(value)?.VehicleId ?? '').trim();
+	const normalizeVehicleNumber = (value: unknown) => String(value ?? '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]/gu, '');
+	const resolveCandidates = (idMatches: unknown[], numberMatches: unknown[]) => {
+		if (idMatches.length === 1) return idMatches;
+		if (numberMatches.length === 0) return idMatches;
+
+		const matchingBoth = requestedVehicleId
+			? numberMatches.filter((value) => getVehicleId(value) === requestedVehicleId)
+			: [];
+		if (matchingBoth.length > 0) return matchingBoth;
+		if (numberMatches.length === 1) return numberMatches;
+		return idMatches.length > 0 ? idMatches : numberMatches;
+	};
+
+	let idMatches: unknown[] = [];
+	if (requestedVehicleId) {
+		idMatches = (await readMatches('VehicleId', requestedVehicleId))
+			.filter((value) => getVehicleId(value) === requestedVehicleId);
+	}
+
+	let matches = idMatches;
+	if (idMatches.length !== 1 && query) {
+		const normalizedQuery = normalizeVehicleNumber(query);
+		const numberMatches = (await readMatches('VehicleNumber', query)).filter((value) => {
+			const content = getInnerContent(value);
+			return normalizeVehicleNumber(content?.VehicleNumber ?? content?.NormalizedVehicleNumber)
+				=== normalizedQuery;
+		});
+		matches = resolveCandidates(idMatches, numberMatches);
+	}
+
 	if (matches.length === 0) {
-		throw new Error(`No VehicleResource was found for TQMS VehicleId ${tqmsVehicleId}.`);
+		let resources: unknown[] = [];
+		try {
+			const payload = await apiClient.get<unknown>(endpoints.resources.vehicle.list());
+			resources = extractResourceRows(payload);
+		} catch (error) {
+			if (!(error instanceof Error
+				&& /Request failed \(404\).*No resources found for resource name/iu.test(error.message))) {
+				throw error;
+			}
+		}
+		idMatches = requestedVehicleId
+			? resources.filter((value) => getVehicleId(value) === requestedVehicleId)
+			: [];
+		const normalizedQuery = normalizeVehicleNumber(query);
+		const numberMatches = query
+			? resources.filter((value) => {
+				const content = getInnerContent(value);
+				return normalizeVehicleNumber(content?.VehicleNumber ?? content?.NormalizedVehicleNumber)
+					=== normalizedQuery;
+			})
+			: [];
+		matches = resolveCandidates(idMatches, numberMatches);
+	}
+
+	if (matches.length === 0) {
+		const identity = requestedVehicleId
+			? `TQMS VehicleId ${requestedVehicleId}`
+			: `vehicle number ${query}`;
+		throw new Error(`No VehicleResource was found for ${identity}${query ? ` or vehicle number ${query}` : ''}.`);
 	}
 	if (matches.length > 1) {
-		throw new Error(`Multiple VehicleResource records were found for TQMS VehicleId ${tqmsVehicleId}.`);
+		throw new Error(`Multiple VehicleResource records matched ${requestedVehicleId || query}; refusing to update an ambiguous vehicle.`);
 	}
 	const root = asRecord(unwrapResource(matches[0]));
 	const innerContent = asRecord(root?.inner_content ?? root?.innerContent);
-	if (!root || !innerContent) throw new Error(`VehicleResource for TQMS VehicleId ${tqmsVehicleId} is missing inner_content.`);
+	const tqmsVehicleId = String(innerContent?.VehicleId ?? '').trim();
+	if (!root || !innerContent) throw new Error(`VehicleResource for ${requestedVehicleId || query} is missing inner_content.`);
+	if (!tqmsVehicleId) throw new Error(`VehicleResource for ${requestedVehicleId || query} is missing its TQMS VehicleId.`);
 	if ((root.resource_name ?? root.resourceName) !== undefined
 		&& (root.resource_name ?? root.resourceName) !== 'VehicleResource') {
 		throw new Error(`VehicleResource lookup for ${tqmsVehicleId} returned another resource type.`);

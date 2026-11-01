@@ -1,8 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useEffect } from 'react';
-import { useSetAtom } from 'jotai';
+import { useMemo } from 'react';
 
 import {
   createVehicleType,
@@ -11,22 +10,17 @@ import {
 } from '@/features/vehicle/type/api/vehicle-type.api';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 import { vehicleTypeKeys } from '@/lib/query/query-keys';
-import { billingVehicleTypesAtom } from '@/features/vehicle/store/vehicle-type-atoms';
 
 const EMPTY_VEHICLE_TYPES: VehicleTypeRecord[] = [];
 
 export function useVehicleTypes() {
   const queryClient = useQueryClient();
-  const setBillingVehicleTypes = useSetAtom(billingVehicleTypesAtom);
   const query = useQuery({
     queryKey: vehicleTypeKeys.lists(),
     queryFn: fetchVehicleTypes,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
   });
-  useEffect(() => {
-    if (query.data) setBillingVehicleTypes(query.data);
-  }, [query.data, setBillingVehicleTypes]);
 
   const createMutation = useMutation({
     mutationFn: createVehicleType,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NepaliDatePicker } from '@/components/ui/nepali-date-picker';
@@ -38,7 +38,7 @@ type VehicleBillingProps = {
 	assignedBranchId?: string | null;
 };
 
-export function VehicleBilling({
+export const VehicleBilling = memo(function VehicleBilling({
 	vehicle,
 	fiscalYears,
 	selectedFiscalYearId,
@@ -56,7 +56,10 @@ export function VehicleBilling({
 	const fiscalYearValue = selectedFiscalYearId;
 	const selectedFiscalYear = fiscalYears.find((fiscalYear) => fiscalYear.id === fiscalYearValue);
 	const { records: branches, isLoading: isLoadingBranches, loadError: branchError, reload: reloadBranches } = useBranches();
-	const activeBranches = branches.filter((branch) => branch.status === 'ACTIVE');
+	const activeBranches = useMemo(
+		() => branches.filter((branch) => branch.status === 'ACTIVE'),
+		[branches],
+	);
 	const vehicleBranch = vehicle.branch.trim().toLocaleLowerCase();
 	const matchedBranch = activeBranches.find((branch) =>
 		[branch.name, branch.code].some((value) => value.trim().toLocaleLowerCase() === vehicleBranch),
@@ -64,9 +67,9 @@ export function VehicleBilling({
 	const assignedBranch = activeBranches.find((branch) => branch.id === assignedBranchId);
 	const branchValue = selectedBranchId || assignedBranch?.id || matchedBranch?.id || '';
 	const selectedBranch = activeBranches.find((branch) => branch.id === branchValue);
-	const toDateValue = (date: Date | undefined) => date
+	const toDateValue = (date: Date | undefined) => (date
 		? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-		: '';
+		: '');
 
 	useEffect(() => {
 		onBillingDetailsChange({
@@ -203,4 +206,4 @@ export function VehicleBilling({
 			</div>
 		</section>
 	);
-}
+});

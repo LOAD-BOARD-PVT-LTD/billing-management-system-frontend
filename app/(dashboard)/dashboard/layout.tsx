@@ -176,10 +176,10 @@ export default function DashboardRouteLayout({ children }: { children: ReactNode
           <AnimatePresence mode="wait">
             <motion.main
               key={pathname}
-              initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -20 }}
-              transition={{ duration: shouldReduceMotion ? 0 : 0.3, ease: 'easeOut' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: shouldReduceMotion ? 0 : 0.15, ease: 'easeOut' }}
               className={isBillingHeaderToggleRoute ? 'flex-1 p-2 lg:p-3' : 'flex-1 p-4 lg:p-6'}
             >
               <div className={isBillingHeaderToggleRoute ? 'w-full' : 'mx-auto max-w-7xl'}>{children}</div>

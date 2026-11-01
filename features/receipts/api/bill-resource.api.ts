@@ -41,6 +41,13 @@ function requiredText(record: JsonRecord, key: string, context: string): string 
   return value;
 }
 
+function dateValue(value: unknown): string {
+  const normalized = text(value);
+  if (!normalized) return '';
+  const isoDate = /^(\d{4}-\d{2}-\d{2})(?:T.*)?$/u.exec(normalized);
+  return isoDate?.[1] ?? normalized;
+}
+
 function resourceId(record: JsonRecord): string {
   for (const key of ['id', 'resourceId', 'resource_id']) {
     const value = text(record[key]);
@@ -85,8 +92,20 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   const createdBy = asRecord(content.createdBy ?? content.created_by);
   const fiscalYear = asRecord(content.fiscalYear);
   const fiscalYearId = text(content.fiscalYearId ?? fiscalYear?.id);
+  const billingDate = [
+    content.billingDate,
+    content.billing_date,
+    content.paymentDate,
+    content.payment_date,
+    content.paidAt,
+    resource.createdAt,
+    resource.created_at,
+  ].map(dateValue).find(Boolean) ?? '';
   if (!branch || !fiscalYearId) {
     throw new Error(`Could not read receipt ${id}: branch or fiscal year ID is missing.`);
+  }
+  if (!billingDate) {
+    throw new Error(`Could not read receipt ${id}: billing date is missing from the bill and resource timestamps.`);
   }
   const billingType = text(content.billingType).toUpperCase() === 'GENERAL' || (!content.vehicle && customer)
     ? 'GENERAL'
@@ -139,7 +158,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
     },
     fiscalYearId,
     fiscalYearName: text(fiscalYear?.name) || fiscalYearId,
-    billingDate: requiredText(content, 'billingDate', 'inner_content'),
+    billingDate,
     paidAt: text(content.paidAt) || undefined,
     periodStart: text(content.periodStart),
     periodEnd: text(content.periodEnd),

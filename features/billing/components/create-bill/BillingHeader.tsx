@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Check, ChevronDown, ExternalLink, MapPin, MessageCircle, Phone, Search, UserRound, X } from 'lucide-react';
 import { SearchableCombobox } from '@/components/ui/SearchableCombobox';
 import { Card } from '@/components/ui/card';
@@ -19,7 +19,7 @@ type BillingHeaderProps = {
 	onSmsPhoneChange: (phone: string) => void;
 };
 
-export function BillingHeader({
+export const BillingHeader = memo(function BillingHeader({
 	selectedVehicle,
 	onSelectVehicle,
 	onClearSelection,
@@ -206,4 +206,4 @@ export function BillingHeader({
 			)}
 		</div>
 	);
-}
+});

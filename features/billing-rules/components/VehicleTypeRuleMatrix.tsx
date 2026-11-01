@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TableActionIconButton } from '@/components/ui/table-action-icon-button';
 import type { BillingEntityRecord } from '@/features/administration/billing-entities/types/billing-entity.types';
+import { getDefaultBillingEntityId } from '@/features/administration/billing-entities/utils/billing-entity-default';
 import type { BillingRule, BillingRuleConfig, FeeHead, Frequency, Period, Validity } from '@/features/billing-rules/model/types';
+import { getPeriodForFrequency, getValidityForFrequency, validityOptionsByFrequency } from '@/features/billing-rules/utils/rule-period-policy';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 
 export interface VehicleRuleEntry {
@@ -47,7 +49,7 @@ interface FeeHeadColumn {
   feeHeadId: string;
   billingEntityId: string;
   frequency: Frequency;
-  period: Period;
+  period: Period | null;
   validity: Validity;
 }
 
@@ -57,12 +59,6 @@ interface VehicleRow {
   amounts: Record<string, string>;
   locked: boolean;
 }
-
-const validityOptions: Array<{ value: Validity; label: string }> = [
-  { value: 'SAME_DAY', label: 'सोही दिन' },
-  { value: 'END_OF_MONTH', label: 'महिनाको अन्त्य' },
-  { value: 'END_OF_FISCAL_YEAR', label: 'आर्थिक वर्षको अन्त्य' },
-];
 
 function dateInputValueToDate(value: string): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
@@ -83,13 +79,15 @@ function dateToInputValue(date: Date | undefined): string {
 }
 
 function makeColumn(feeHeadId = '', rule?: BillingRule, defaultBillingEntityId = ''): FeeHeadColumn {
+  const frequency = rule?.frequency ?? 'PERIODIC';
+  const validity = getValidityForFrequency(frequency, rule?.validity ?? 'SAME_DAY');
   return {
     id: crypto.randomUUID(),
     feeHeadId,
     billingEntityId: rule?.billingEntityId ?? defaultBillingEntityId,
-    frequency: rule?.frequency ?? 'PERIODIC',
-    period: rule?.period === 'FISCAL_YEAR' || rule?.period === 'MONTH' ? rule.period : 'MONTH',
-    validity: rule?.validity ?? 'SAME_DAY',
+    frequency,
+    period: getPeriodForFrequency(frequency, validity),
+    validity,
   };
 }
 
@@ -166,9 +164,10 @@ export function VehicleTypeRuleMatrix({
     config,
     initialRules,
     initialYearId,
-    billingEntities[0]?.id ?? '',
+    getDefaultBillingEntityId(billingEntities),
     initialRule?.vehicleCategoryId ?? undefined,
   ));
+  const defaultBillingEntityId = getDefaultBillingEntityId(billingEntities);
   const [rows, setRows] = useState(() => makeInitialRows(
     initialRules,
     initialYearId,
@@ -194,7 +193,7 @@ export function VehicleTypeRuleMatrix({
       config,
       initialRules,
       nextFiscalYearId,
-      billingEntities[0]?.id ?? '',
+      getDefaultBillingEntityId(billingEntities),
       initialRule?.vehicleCategoryId ?? undefined,
     );
     setFiscalYearId(nextFiscalYearId);
@@ -218,7 +217,7 @@ export function VehicleTypeRuleMatrix({
       : undefined;
     const nextColumn = {
       ...makeColumn(nextFeeHead?.id ?? '', existing),
-      billingEntityId: existing?.billingEntityId ?? billingEntities[0]?.id ?? '',
+      billingEntityId: existing?.billingEntityId ?? getDefaultBillingEntityId(billingEntities),
     };
     setColumns((current) => [...current, nextColumn]);
     setRows((current) => current.map((row) => ({
@@ -309,7 +308,7 @@ export function VehicleTypeRuleMatrix({
         const existing = allYearRules.find((rule) =>
           rule.feeHeadId === feeHead.id && rule.vehicleCategoryId === row.vehicleCategoryId,
         );
-        const billingEntityId = column.billingEntityId || existing?.billingEntityId || '';
+        const billingEntityId = column.billingEntityId || existing?.billingEntityId || defaultBillingEntityId;
         if (!billingEntityId) {
           setFormError(`${feeHead.name} का लागि Billing Entity चयन गर्नुहोस्।`);
           return;
@@ -324,8 +323,11 @@ export function VehicleTypeRuleMatrix({
             scope: 'VEHICLE_TYPE',
             vehicleCategoryId: row.vehicleCategoryId,
             frequency: column.frequency,
-            period: column.period,
-            validity: column.validity,
+            period: getPeriodForFrequency(
+              column.frequency,
+              getValidityForFrequency(column.frequency, column.validity),
+            ),
+            validity: getValidityForFrequency(column.frequency, column.validity),
             amount,
             status: existing?.status ?? 'ACTIVE',
             effectiveDate,
@@ -466,7 +468,7 @@ export function VehicleTypeRuleMatrix({
                             updateColumn(column.id, {
                               ...defaultColumn,
                               id: column.id,
-                              billingEntityId: existing?.billingEntityId ?? billingEntities[0]?.id ?? '',
+                              billingEntityId: existing?.billingEntityId ?? defaultBillingEntityId,
                             });
                           }}
                         >
@@ -481,7 +483,7 @@ export function VehicleTypeRuleMatrix({
                         </Select>
                         <div>
                           <Select
-                            value={column.billingEntityId || yearRules.find((rule) => rule.feeHeadId === column.feeHeadId)?.billingEntityId || ''}
+                            value={column.billingEntityId || yearRules.find((rule) => rule.feeHeadId === column.feeHeadId)?.billingEntityId || defaultBillingEntityId}
                             onValueChange={(billingEntityId) => updateColumn(column.id, { billingEntityId })}
                             disabled={isLoadingBillingEntities || billingEntities.length === 0}
                           >
@@ -499,10 +501,15 @@ export function VehicleTypeRuleMatrix({
                         </div>
                         <Select
                           value={column.frequency}
-                          onValueChange={(frequency) => updateColumn(column.id, {
-                            frequency: frequency as Frequency,
-                            period: frequency === 'ONE_TIME' ? 'FISCAL_YEAR' : 'MONTH',
-                          })}
+                          onValueChange={(value) => {
+                            const frequency = value as Frequency;
+                            const validity = getValidityForFrequency(frequency, column.validity);
+                            updateColumn(column.id, {
+                              frequency,
+                              period: getPeriodForFrequency(frequency, validity),
+                              validity,
+                            });
+                          }}
                         >
                           <SelectTrigger aria-label="शुल्क आवृत्ति छान्नुहोस्">
                             <SelectValue />
@@ -514,13 +521,19 @@ export function VehicleTypeRuleMatrix({
                         </Select>
                         <Select
                           value={column.validity}
-                          onValueChange={(validity) => updateColumn(column.id, { validity: validity as Validity })}
+                          onValueChange={(value) => {
+                            const validity = value as Validity;
+                            updateColumn(column.id, {
+                              validity,
+                              period: getPeriodForFrequency(column.frequency, validity),
+                            });
+                          }}
                         >
                           <SelectTrigger aria-label="लागु हुने समय छान्नुहोस्">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {validityOptions.map((validity) => (
+                            {validityOptionsByFrequency[column.frequency].map((validity) => (
                               <SelectItem key={validity.value} value={validity.value}>{validity.label}</SelectItem>
                             ))}
                           </SelectContent>
