@@ -29,7 +29,9 @@ export function useTqmsVehicleSearch(query: string, enabled = true) {
 	});
 
 	return {
-		vehicles: canSearch && !isDebouncing && canApplyBranchFilter ? searchQuery.data ?? [] : [],
+		vehicles: canSearch && !isDebouncing && canApplyBranchFilter
+			? searchQuery.data ?? []
+			: [],
 		isLoading: (canSearch && branchFilter.isLoading) || isDebouncing || searchQuery.isFetching,
 		error: branchFilter.error ?? (searchQuery.error instanceof Error ? searchQuery.error.message : null),
 	};

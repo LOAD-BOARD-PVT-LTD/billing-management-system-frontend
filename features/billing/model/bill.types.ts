@@ -37,7 +37,10 @@ export type BillResourceContent = {
 		vehicleNumber: string;
 		vehicleType: string;
 		ownerName: string;
+		operatorName?: string;
+		route?: string;
 		phone: string;
+		smsPhone?: string;
 		address: string;
 	};
 	customer?: BillCustomer;

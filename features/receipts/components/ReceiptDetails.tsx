@@ -3,17 +3,27 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
+import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 export function ReceiptDetails({ receipt, open, onOpenChange }: { receipt: ReceiptRecord | null; open: boolean; onOpenChange: (open: boolean) => void }) {
 	if (!receipt) return null;
+	const ownerLines = getReceiptOwnerDisplayLines(
+		receipt.customerName || receipt.bill.content.vehicle.ownerName,
+		receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName : '',
+		receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.phone : '',
+	);
 	const values = [
 		['रसिद नम्बर', receipt.receiptNumber],
 		['बिलको प्रकार', receipt.billingType === 'GENERAL' ? 'सामान्य बिल' : 'सदस्यता बिल'],
 		...(receipt.billingType === 'GENERAL' ? [] : [
 			['सवारी साधन नम्बर', receipt.vehicleNumber],
+			...(receipt.bill.content.vehicle.route ? [['रुट', receipt.bill.content.vehicle.route]] : []),
 			['अन्तिम अङ्क', receipt.finalDigits],
 		]),
-		['ग्राहक', receipt.customerName],
+		...ownerLines.map((line) => [
+			line.label.replace(/:$/u, '') || 'ग्राहक',
+			`${line.name}${line.suffix}`,
+		]),
 		...(receipt.billingType === 'GENERAL' ? [
 			['सम्पर्क नम्बर', receipt.customerPhone ?? ''],
 			['पान नम्बर', receipt.customerPanNumber ?? ''],

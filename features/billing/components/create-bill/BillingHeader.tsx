@@ -1,13 +1,30 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { Check, ChevronDown, ExternalLink, MapPin, MessageCircle, Phone, Search, UserRound, X } from 'lucide-react';
+import {
+	Check,
+	ChevronDown,
+	ExternalLink,
+	LoaderCircle,
+	MapPin,
+	MessageCircle,
+	Phone,
+	Search,
+	Truck,
+	UserRound,
+	X,
+} from 'lucide-react';
 import { SearchableCombobox } from '@/components/ui/SearchableCombobox';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useTqmsVehicleSearch } from '@/features/billing/hooks/useTqmsVehicleSearch';
 import { useUpdateBillingVehiclePhone } from '@/features/billing/hooks/useUpdateBillingVehiclePhone';
+import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import {
+	useVehicleReconciliation,
+	type ReconciliationFieldDiff,
+} from '@/features/reconciliation';
 import { VehiclePhoneUpdateDialog } from './VehiclePhoneUpdateDialog';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
@@ -17,6 +34,12 @@ type BillingHeaderProps = {
 	onSelectVehicle: (vehicle: BillingVehicle) => void;
 	onClearSelection: () => void;
 	onSmsPhoneChange: (phone: string) => void;
+	onReconciliationRequired?: (data: {
+		billingVehicle: BillingVehicle;
+		tqmsVehicle: BillingVehicle;
+		billingResource: VehicleResourceDocument;
+		diffs: ReconciliationFieldDiff[];
+	}) => void;
 };
 
 export const BillingHeader = memo(function BillingHeader({
@@ -24,21 +47,57 @@ export const BillingHeader = memo(function BillingHeader({
 	onSelectVehicle,
 	onClearSelection,
 	onSmsPhoneChange,
+	onReconciliationRequired,
 }: BillingHeaderProps) {
 	const [query, setQuery] = useState('');
 	const [isOpen, setIsOpen] = useState(false);
 	const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
 	const { toast } = useToast();
 	const { updatePhone, isSaving: isUpdatingPhone } = useUpdateBillingVehiclePhone();
+	const { reconcileLookup, isReconciling } = useVehicleReconciliation();
+
 	const { vehicles, isLoading, error } = useTqmsVehicleSearch(
 		query,
-		query.trim() !== selectedVehicle?.vehicleNumber,
+		isOpen,
 	);
 
-	const handleSelect = (vehicle: BillingVehicle) => {
-		onSelectVehicle(vehicle);
+	const handleSelect = async (vehicle: BillingVehicle) => {
 		setQuery(vehicle.vehicleNumber);
 		setIsOpen(false);
+
+		try {
+			const result = await reconcileLookup(vehicle.vehicleNumber, {
+				preloadedTqms: vehicle,
+				fallbackSmsPhone: vehicle.smsPhone,
+			});
+
+			if (result.type === 'FIRST_TIME') {
+				if (result.tqmsVehicle.id !== selectedVehicle?.id) onSelectVehicle(result.tqmsVehicle);
+				return;
+			}
+
+			if (result.type === 'MATCHED') {
+				const vehicleToSelect = result.billingVehicle;
+				if (vehicleToSelect && vehicleToSelect.id !== selectedVehicle?.id) {
+					onSelectVehicle(vehicleToSelect);
+				}
+				return;
+			}
+
+			if (result.type === 'RECONCILIATION_REQUIRED') {
+				onReconciliationRequired?.({
+					billingVehicle: result.billingVehicle,
+					tqmsVehicle: result.tqmsVehicle,
+					billingResource: result.billingResource,
+					diffs: result.diffs,
+				});
+			}
+		} catch {
+			// Fallback: if reconciliation lookup fails, proceed with the vehicle
+			if (vehicle.id !== selectedVehicle?.id) {
+				onSelectVehicle(vehicle);
+			}
+		}
 	};
 
 	const handleClear = () => {
@@ -62,7 +121,7 @@ export const BillingHeader = memo(function BillingHeader({
 		onSmsPhoneChange(input.phone);
 		setPhoneDialogOpen(false);
 		toast({
-			title: 'सक्रिय SMS नम्बर परिवर्तन भयो',
+			title: 'Billing SMS नम्बर परिवर्तन भयो',
 			description: `${selectedVehicle.vehicleNumber} का लागि नयाँ नम्बर सुरक्षित भयो।`,
 		});
 	};
@@ -70,7 +129,10 @@ export const BillingHeader = memo(function BillingHeader({
 	return (
 		<div className="relative z-20 space-y-1">
 			<div className="grid grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1 rounded-md border border-border bg-card p-1 sm:grid-cols-[120px_minmax(0,1fr)_32px_32px]">
-				<label htmlFor="billing-vehicle-search" className="hidden pl-2 text-xs font-medium text-muted-foreground sm:block">
+				<label
+					htmlFor="billing-vehicle-search"
+					className="hidden pl-2 text-xs font-medium text-muted-foreground sm:block"
+				>
 					सवारी नम्बर
 				</label>
 				<SearchableCombobox
@@ -78,11 +140,11 @@ export const BillingHeader = memo(function BillingHeader({
 					value={query}
 					open={isOpen}
 					items={vehicles}
-					isLoading={isLoading}
+					isLoading={isLoading || isReconciling}
 					errorMessage={error}
 					filterItems={false}
 					selectedKey={selectedVehicle?.id}
-					placeholder="सवारी नम्बर खोज्नुहोस्..."
+					placeholder={isReconciling ? 'विवरण प्रमाणीकरण गर्दैछ...' : 'सवारी नम्बर खोज्नुहोस्...'}
 					emptyMessage="मिल्ने सवारी भेटिएन। नम्बर जाँच्नुहोस् वा अर्को नम्बर खोज्नुहोस्।"
 					getKey={(vehicle) => vehicle.id}
 					getSearchText={(vehicle) => vehicle.vehicleNumber}
@@ -91,7 +153,7 @@ export const BillingHeader = memo(function BillingHeader({
 						if (selectedVehicle) onClearSelection();
 					}}
 					onOpenChange={setIsOpen}
-					onSelect={handleSelect}
+					onSelect={(vehicle) => void handleSelect(vehicle)}
 					renderItem={(vehicle, isSelected) => (
 						<>
 							<span className="min-w-0">
@@ -100,7 +162,9 @@ export const BillingHeader = memo(function BillingHeader({
 									{vehicle.vehicleType} · {vehicle.ownerName}
 								</span>
 							</span>
-							{isSelected && <Check aria-hidden="true" className="size-4 shrink-0 text-primary" />}
+							{isSelected && (
+								<Check aria-hidden="true" className="size-4 shrink-0 text-primary" />
+							)}
 						</>
 					)}
 					className="min-w-0"
@@ -109,10 +173,24 @@ export const BillingHeader = memo(function BillingHeader({
 				<button
 					type="button"
 					aria-label="सवारी खोज्नुहोस्"
-					onClick={() => setIsOpen(true)}
-					className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					disabled={isReconciling}
+					onClick={() => {
+						const trimmed = query.trim();
+						if (trimmed) {
+							void handleSelect({ vehicleNumber: trimmed, id: trimmed } as BillingVehicle);
+						} else {
+							setIsOpen((prev) => !prev);
+						}
+					}}
+					className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
 				>
-					{isOpen ? <ChevronDown aria-hidden="true" className="size-4" /> : <Search aria-hidden="true" className="size-4" />}
+					{isReconciling ? (
+						<LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+					) : isOpen ? (
+						<ChevronDown aria-hidden="true" className="size-4" />
+					) : (
+						<Search aria-hidden="true" className="size-4" />
+					)}
 				</button>
 				<button
 					type="button"
@@ -137,63 +215,80 @@ export const BillingHeader = memo(function BillingHeader({
 								leftIcon={<Phone className="h-3.5 w-3.5" />}
 								className="h-6 px-1.5 text-[11px]"
 							>
-								धनीको नम्बर परिवर्तन गर्नुहोस्
+								SMS नम्बर परिवर्तन गर्नुहोस्
 							</Button>
 							<Button
 								type="button"
 								variant="outline"
 								size="sm"
 								onClick={handleOwnerUpdate}
-								disabled={!selectedVehicle.tqmsVehicleId}
-								leftIcon={<ExternalLink className="h-3.5 w-3.5" />}
+								disabled={!selectedVehicle.id}
+								rightIcon={<ExternalLink className="h-3 w-3" />}
 								className="h-6 px-1.5 text-[11px]"
 							>
-								TQMS धनी अपडेट
+								मालिकको विवरण सच्याउनुहोस्
 							</Button>
 						</div>
 					</div>
-					<div className="grid divide-y divide-border/70 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-[1.1fr_1fr_0.9fr_0.9fr_1.6fr] lg:divide-x lg:divide-y-0">
-						<div className="min-w-0 px-1.5 py-1">
-							<p className="text-[11px] font-medium text-muted-foreground">सवारी प्रकार</p>
-							<p className="truncate text-xs font-semibold text-foreground" title={selectedVehicle.vehicleType}>
-								{selectedVehicle.vehicleType}
+
+					<div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 lg:grid-cols-5">
+						<div className="space-y-0.5">
+							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+								<Truck className="h-3 w-3" /> सवारी प्रकार
+							</p>
+							<p
+								className="truncate text-xs font-semibold text-foreground"
+								title={selectedVehicle.vehicleType}
+							>
+								{selectedVehicle.vehicleType || 'सवारी प्रकार उपलब्ध छैन'}
 							</p>
 						</div>
-						<div className="min-w-0 px-1.5 py-1">
-							<p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-								<UserRound aria-hidden="true" className="size-3.5" />धनीको नाम
+
+						<div className="space-y-0.5">
+							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+								<UserRound className="h-3 w-3" /> धनीको नाम
 							</p>
-							<p className="truncate text-xs font-semibold text-foreground" title={selectedVehicle.ownerName}>
-								{selectedVehicle.ownerName}
-							</p>
-						</div>
-						<div className="min-w-0 px-1.5 py-1">
-							<p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-								<Phone aria-hidden="true" className="size-3.5" />धनीको फोन
-							</p>
-							<p className="truncate text-xs font-semibold tabular-nums text-foreground">
-								{selectedVehicle.phone || 'उपलब्ध छैन'}
+							<p
+								className="truncate text-xs font-semibold text-foreground"
+								title={selectedVehicle.ownerName}
+							>
+								{selectedVehicle.ownerName || 'मालिकको विवरण उपलब्ध छैन'}
 							</p>
 						</div>
-						<div className="min-w-0 px-1.5 py-1">
-							<p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-								<MessageCircle aria-hidden="true" className="size-3.5" />सक्रिय SMS नम्बर
+
+						<div className="space-y-0.5">
+							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+								<Phone className="h-3 w-3" /> धनीको फोन
 							</p>
-							<p className="truncate text-xs font-semibold tabular-nums text-foreground">
-								{selectedVehicle.smsPhone || 'उपलब्ध छैन'}
+							<p className="truncate text-xs font-semibold text-foreground">
+								{selectedVehicle.phone || 'फोन उपलब्ध छैन'}
 							</p>
 						</div>
-						<div className="min-w-0 px-1.5 py-1 sm:col-span-2 lg:col-span-1">
-							<p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
-								<MapPin aria-hidden="true" className="size-3.5" />धनीको ठेगाना
+
+						<div className="space-y-0.5">
+							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+								<MessageCircle className="h-3 w-3" /> सक्रिय SMS नम्बर
 							</p>
-							<p className="line-clamp-2 text-xs font-semibold leading-4 text-foreground" title={selectedVehicle.ownerAddress}>
+							<p className="truncate text-xs font-semibold text-foreground">
+								{selectedVehicle.smsPhone || selectedVehicle.phone || 'उपलब्ध छैन'}
+							</p>
+						</div>
+
+						<div className="space-y-0.5">
+							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+								<MapPin className="h-3 w-3" /> धनीको ठेगाना
+							</p>
+							<p
+								className="line-clamp-2 text-xs font-semibold leading-4 text-foreground"
+								title={selectedVehicle.ownerAddress}
+							>
 								{selectedVehicle.ownerAddress || 'ठेगाना उपलब्ध छैन'}
 							</p>
 						</div>
 					</div>
 				</Card>
 			)}
+
 			{selectedVehicle && (
 				<VehiclePhoneUpdateDialog
 					key={`${selectedVehicle.id}-${phoneDialogOpen ? 'open' : 'closed'}`}

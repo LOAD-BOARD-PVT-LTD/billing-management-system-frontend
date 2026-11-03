@@ -4,6 +4,7 @@ export type DocumentOptions = {
   orientation: DocumentOrientation;
   copies: number;
   pageFormat?: 'a4' | 'receipt';
+  autoPaging?: boolean | 'slice' | 'text';
   filename?: string;
 };
 

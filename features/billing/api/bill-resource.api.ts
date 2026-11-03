@@ -27,6 +27,13 @@ function resourceId(value: unknown): string | null {
 	return null;
 }
 
+function distinctOperatorName(ownerName: string, operatorName: string | undefined): string | null {
+	const owner = ownerName.trim();
+	const operator = operatorName?.trim() ?? '';
+	if (!operator || operator.toLocaleLowerCase() === owner.toLocaleLowerCase()) return null;
+	return operator;
+}
+
 export function buildBillResourceContent(input: MembershipBillInput): BillResourcePayload & {
 	vehicle: BillResourceContent['vehicle'];
 };
@@ -34,6 +41,9 @@ export function buildBillResourceContent(input: GeneralBillInput): BillResourceP
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload;
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload {
 	const { createdBy, details, items, subtotal, discount, paymentMethod, note } = input;
+	const operatorName = input.billingType === 'GENERAL'
+		? null
+		: distinctOperatorName(input.vehicle.ownerName, input.vehicle.operatorName);
 	return {
 		billingType: input.billingType ?? 'MEMBERSHIP',
 		...(createdBy ? { createdBy } : {}),
@@ -45,7 +55,10 @@ export function buildBillResourceContent(input: CreateBillInput): BillResourcePa
 					vehicleNumber: input.vehicle.vehicleNumber,
 					vehicleType: input.vehicle.vehicleType,
 					ownerName: input.vehicle.ownerName,
+					...(operatorName ? { operatorName } : {}),
+					...(input.vehicle.route?.trim() ? { route: input.vehicle.route.trim() } : {}),
 					phone: input.vehicle.phone,
+					smsPhone: input.vehicle.smsPhone || input.vehicle.phone,
 					address: input.vehicle.ownerAddress,
 				},
 			}),

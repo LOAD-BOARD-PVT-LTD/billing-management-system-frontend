@@ -10,7 +10,6 @@ export { parseTqmsVehicleSearchResponse } from '@/features/billing/schemas/tqms-
 export { getTqmsVehicleDetails } from '@/features/billing/api/tqms-vehicle-details.api';
 export { parseTqmsVehicleDetailsResponse } from '@/features/billing/schemas/tqms-vehicle-details.schema';
 export type { TqmsVehicleDetails } from '@/features/billing/schemas/tqms-vehicle-details.schema';
-export { updateBillingVehiclePhone } from '@/features/billing/api/vehicle-resource.api';
 export { vehiclePhoneUpdateSchema } from '@/features/billing/schemas/vehicle-phone-update.schema';
 export type { BillingLine, BillingVehicle } from '@/features/billing/model/types';
 export type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';

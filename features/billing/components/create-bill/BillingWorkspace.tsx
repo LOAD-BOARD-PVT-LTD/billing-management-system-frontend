@@ -9,8 +9,18 @@ import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules'
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { buildBillResourceContent } from '@/features/billing/api/bill-resource.api';
 import { buildFeeHeadBillingItems } from '@/features/billing/utils/build-fee-head-billing-items';
+import { getVehicleApplicableBillingRules } from '@/features/billing/utils/vehicle-applicable-billing-rules';
 import { useCreateBill } from '@/features/billing/hooks/useCreateBill';
+import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import { BillingHeader } from '@/features/billing/components/create-bill/BillingHeader';
+import { useToast } from '@/components/ui/use-toast';
+import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import {
+  VehicleReconciliationView,
+  useVehicleReconciliation,
+  type ReconciliationFieldDiff,
+  type ReconciliationOption,
+} from '@/features/reconciliation';
 import { DuplicateBillWarningDialog } from '@/features/billing/components/create-bill/DuplicateBillWarningDialog';
 import { VehicleCategoryMappingGate } from '@/features/billing/components/create-bill/VehicleCategoryMappingGate';
 import { BillingItems } from '@/features/billing/components/create-bill/BillingItems';
@@ -52,6 +62,9 @@ export function BillingWorkspace() {
     reload: reloadBlacklist,
   } = useVehicleBlacklist();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
+  const { details: tqmsVehicleDetails, reload: reloadTqmsVehicleDetails } = useTqmsVehicleDetails(
+    selectedVehicle?.vehicleNumber ?? '',
+  );
   const [manualItems, setManualItems] = useState<BillingLine[]>([]);
   const [itemOverrides, setItemOverrides] = useState<Record<string, Partial<BillingLine>>>({});
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(() => new Set());
@@ -69,6 +82,14 @@ export function BillingWorkspace() {
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const createBill = useCreateBill();
   const { downloadReceipt, downloadingReceiptId } = useDownloadReceipt();
+  const { toast } = useToast();
+  const [reconciliationData, setReconciliationData] = useState<{
+    billingVehicle: BillingVehicle;
+    tqmsVehicle: BillingVehicle;
+    billingResource: VehicleResourceDocument;
+    diffs: ReconciliationFieldDiff[];
+  } | null>(null);
+  const { applyDecision, isApplying: isSubmittingReconciliation } = useVehicleReconciliation();
   const selectedVehicleIsBlacklisted = Boolean(
     selectedVehicle?.tqmsVehicleId
     && blacklistedVehicles.some((record) => (
@@ -217,7 +238,7 @@ export function BillingWorkspace() {
   }, []);
 
   const handleSmsPhoneChange = useCallback((phone: string) => {
-    setSelectedVehicle((current) => (current ? { ...current, smsPhone: phone } : current));
+    setSelectedVehicle((current) => (current ? { ...current, phone, smsPhone: phone } : current));
   }, []);
 
   const handleReloadBills = useCallback(() => {
@@ -276,11 +297,28 @@ export function BillingWorkspace() {
     setDuplicateCheckError(null);
     setIsCheckingDuplicates(true);
     const canCreateBill = await verifyVehicleCanBeBilled(selectedVehicle);
+    if (!canCreateBill) {
+      setIsCheckingDuplicates(false);
+      return;
+    }
+
+    let vehicleDetails = tqmsVehicleDetails;
+    if (!vehicleDetails) {
+      const result = await reloadTqmsVehicleDetails();
+      if (result.error) {
+        setIsCheckingDuplicates(false);
+        setDuplicateCheckError(`सवारीको रुट विवरण लोड गर्न सकिएन: ${result.error.message}`);
+        return;
+      }
+      vehicleDetails = result.data ?? null;
+    }
     setIsCheckingDuplicates(false);
-    if (!canCreateBill) return;
 
     const pendingInput: MembershipBillInput = {
-      vehicle: selectedVehicle,
+      vehicle: {
+        ...selectedVehicle,
+        route: vehicleDetails?.Compliance?.RoutePermit?.Route?.trim() ?? '',
+      },
       ...(billCreator ? { createdBy: billCreator } : {}),
       details: {
         ...billingDetails,
@@ -345,6 +383,60 @@ export function BillingWorkspace() {
     }
   };
 
+
+
+  const handleReconciliationConfirm = async (
+    option: ReconciliationOption,
+    reason: string,
+  ) => {
+    if (!reconciliationData) return;
+    const performedBy = authUser?.name?.trim() || authUser?.email || 'admin';
+
+    try {
+      const updatedVehicle = await applyDecision({
+        option,
+        reason,
+        performedBy,
+        billingVehicle: reconciliationData.billingVehicle,
+        tqmsVehicle: reconciliationData.tqmsVehicle,
+        billingResource: reconciliationData.billingResource,
+        diffs: reconciliationData.diffs,
+      });
+
+      setSelectedVehicle(updatedVehicle);
+      setReconciliationData(null);
+
+      toast({
+        title: 'सवारी विवरण मेलमिलाप सम्पन्न',
+        description: `${updatedVehicle.vehicleNumber} को बिलिङ अगाडि बढाइयो।`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'निर्णय सुरक्षित गर्न सकिएन।';
+      toast({
+        title: 'सवारी विवरण अपडेट असफल',
+        description: msg,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (reconciliationData) {
+    return (
+      <VehicleReconciliationView
+        billingVehicle={reconciliationData.billingVehicle}
+        tqmsVehicle={reconciliationData.tqmsVehicle}
+        billingResource={reconciliationData.billingResource}
+        diffs={reconciliationData.diffs}
+        receipts={existingBills}
+        isLoadingReceipts={isLoadingExistingBills}
+        receiptsError={existingBillsError}
+        isSubmitting={isSubmittingReconciliation}
+        onCancel={() => setReconciliationData(null)}
+        onConfirm={handleReconciliationConfirm}
+      />
+    );
+  }
+
   if (savedBill) {
     return (
       <PrintableBillReceipt
@@ -387,6 +479,7 @@ export function BillingWorkspace() {
           onSelectVehicle={handleSelectVehicle}
           onClearSelection={handleClearVehicleSelection}
           onSmsPhoneChange={handleSmsPhoneChange}
+          onReconciliationRequired={setReconciliationData}
         />
 
         {selectedVehicle && (
@@ -396,18 +489,22 @@ export function BillingWorkspace() {
                 feeHead.status === 'ACTIVE'
                 && (feeHead.fiscalYearId === null || feeHead.fiscalYearId === fiscalYearId)
               )));
-              const rules = billingRules.config.rules.filter((rule) => (
+              const rules = getVehicleApplicableBillingRules(
+                billingRules.config.rules,
+                mappedCategoryId,
+              ).filter((rule) => (
                 rule.status === 'ACTIVE'
                 && billingRules.config.feeHeads.some((feeHead) => feeHead.id === rule.feeHeadId && feeHead.status === 'ACTIVE')
                 && rule.fiscalYearId === fiscalYearId
                 && (rule.scope !== 'COMMON'
                   || rule.amount !== 0
                   || billingDetails?.allowManualReceiptAmountOverride === true)
-                && (rule.scope === 'COMMON'
-                  || (rule.scope === 'VEHICLE_TYPE' && rule.vehicleCategoryId === mappedCategoryId))
+              ));
+              const ruleFeeHeads = feeHeads.filter((feeHead) => (
+                rules.some((rule) => rule.feeHeadId === feeHead.id)
               ));
               const ruleItems = buildFeeHeadBillingItems(
-                feeHeads,
+                ruleFeeHeads,
                 rules,
                 billingEntities,
                 itemOverrides,

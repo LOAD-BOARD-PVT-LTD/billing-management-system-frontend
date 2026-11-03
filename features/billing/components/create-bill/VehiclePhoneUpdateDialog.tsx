@@ -46,17 +46,17 @@ export function VehiclePhoneUpdateDialog({
 		<Dialog open={open} onOpenChange={(nextOpen) => { if (!isSaving) onOpenChange(nextOpen); }}>
 			<DialogContent className="max-h-[min(85vh,calc(100dvh-2rem))] overflow-y-auto rounded-2xl sm:max-w-xl">
 				<DialogHeader className="text-left">
-					<DialogTitle className="text-xl">धनीको नम्बर परिवर्तन गर्नुहोस्</DialogTitle>
+					<DialogTitle className="text-xl">SMS नम्बर परिवर्तन गर्नुहोस्</DialogTitle>
 					<DialogDescription>
-						{vehicle.vehicleNumber} का लागि सक्रिय SMS नम्बर परिवर्तन गर्नुहोस्। TQMS मा रहेको नम्बर परिवर्तन हुँदैन।
+						{vehicle.vehicleNumber} का लागि सवारी धनीको फोन नम्बर परिवर्तन गर्नुहोस्।
 					</DialogDescription>
 				</DialogHeader>
 
 				<form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
 					<label className="block space-y-1.5 text-sm font-medium">
-						TQMS धनी नम्बर
+						धनीको हालको नम्बर
 						<Input value={vehicle.phone} readOnly className="bg-muted/40" />
-						<span className="block text-xs font-normal text-muted-foreground">TQMS मा दर्ता भएको मूल नम्बर।</span>
+						<span className="block text-xs font-normal text-muted-foreground">VehicleResource मा हाल सुरक्षित भएको नम्बर।</span>
 					</label>
 
 					<label className="block space-y-1.5 text-sm font-medium">
@@ -70,7 +70,7 @@ export function VehiclePhoneUpdateDialog({
 							placeholder="९८XXXXXXXX"
 							required
 						/>
-						<span className="block text-xs font-normal text-muted-foreground">भविष्यमा बिलिङ SMS पठाउन यो नम्बर प्रयोग हुनेछ।</span>
+						<span className="block text-xs font-normal text-muted-foreground">यो नम्बर VehicleResource मा धनीको फोन नम्बरका रूपमा सुरक्षित हुनेछ।</span>
 					</label>
 
 					<label className="block space-y-1.5 text-sm font-medium">
@@ -100,7 +100,7 @@ export function VehiclePhoneUpdateDialog({
 							onClick={() => { setPhone(vehicle.phone); setError(null); }}
 							leftIcon={<RotateCcw className="h-4 w-4" />}
 						>
-							TQMS नम्बर राख्नुहोस्
+							हालको नम्बर राख्नुहोस्
 						</Button>
 						<Button type="submit" loading={isSaving}>सेभ गर्नुहोस्</Button>
 					</div>

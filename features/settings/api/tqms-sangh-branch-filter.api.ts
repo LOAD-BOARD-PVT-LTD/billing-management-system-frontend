@@ -12,12 +12,9 @@ export const DEFAULT_TQMS_SANGH_BRANCH_FILTER: TqmsSanghBranchFilterDocument = {
 };
 
 export function matchesTqmsSanghBranch(branch: string, branchName: string): boolean {
-	const selectedBranch = branchName.trim().toLocaleLowerCase();
+	const selectedBranch = branchName.trim().replace(/\s+/gu, ' ').toLocaleLowerCase();
 	if (!selectedBranch) return true;
-	return branch
-		.split(/[;,]/u)
-		.map((branchEntry) => branchEntry.trim().toLocaleLowerCase())
-		.some((branchEntry) => Boolean(branchEntry) && branchEntry === selectedBranch);
+	return branch.trim().replace(/\s+/gu, ' ').toLocaleLowerCase().includes(selectedBranch);
 }
 
 type JsonRecord = Record<string, unknown>;

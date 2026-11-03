@@ -11,6 +11,7 @@ const COLLISION_PREFERENCES: Record<string, string> = {
 };
 
 const MANUAL_REVERSE_ENTRIES: Record<string, string> = {
+  '\u0906': 'cf',
   '\u0901': '+',
   '\u0923': ')f',
   '\u092B': 'km',

@@ -35,7 +35,7 @@ function getVehicles(payload: unknown): unknown[] {
   return [];
 }
 
-function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
+function normalizeVehicle(value: unknown, branchName: string): TqmsRegistryVehicle | null {
   const resource = asRecord(value);
   const content = asRecord(resource?.inner_content) ?? resource;
   if (!content) return null;
@@ -54,6 +54,8 @@ function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
       .map((owner) => text(owner.SanghBranch))
       .filter(Boolean),
   ));
+  const branches = branchNames.join(', ');
+  const selectedBranch = branchName.trim();
 
   return {
     id: text(resource?.id ?? resource?.ID ?? vehicleId ?? vehicleNumber),
@@ -64,7 +66,9 @@ function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
     vehicleOwnerName: text(vehicleOwner?.Name) || '—',
     operatorName: operator ? text(operator.Name) || null : null,
     phone: text(vehicleOwner?.Phone),
-    branch: branchNames.join(', '),
+    branch: selectedBranch && matchesTqmsSanghBranch(branches, selectedBranch)
+      ? selectedBranch
+      : branches,
     status: text(registration?.Status ?? content.Status) || '—',
     address: text(vehicleOwner?.Address),
     citizenshipNumber: typeof citizenship === 'string' || typeof citizenship === 'number' ? String(citizenship) : '',
@@ -72,29 +76,26 @@ function normalizeVehicle(value: unknown): TqmsRegistryVehicle | null {
   };
 }
 
-export function parseTqmsMemberRegistry(payload: unknown): TqmsRegistryVehicle[] {
+export function parseTqmsMemberRegistry(payload: unknown, branchName = ''): TqmsRegistryVehicle[] {
   const rows = getVehicles(payload);
-  return rows.map(normalizeVehicle).filter((vehicle): vehicle is TqmsRegistryVehicle => vehicle !== null);
+  return rows
+    .map((row) => normalizeVehicle(row, branchName))
+    .filter((vehicle): vehicle is TqmsRegistryVehicle => vehicle !== null);
 }
 
 export async function fetchTqmsMemberRegistry(signal?: AbortSignal, branchName = ''): Promise<TqmsRegistryVehicle[]> {
   let payload: unknown;
   try {
     payload = await apiClient.get<unknown>(
-      branchName.trim()
-        ? endpoints.resources.vehicle.search('SanghBranch', branchName, 'all')
-        : endpoints.resources.vehicle.list(),
+      endpoints.resources.vehicle.list(),
       { signal },
     );
   } catch (error) {
     if (error instanceof Error && /^Request failed \(404\):\s*No resources found for resource name\s*:?\s*VehicleResource\b/iu.test(error.message)) {
       return [];
     }
-    if (error instanceof Error && /Request failed \(404\).*No resources found for search query/iu.test(error.message)) {
-      return [];
-    }
     throw error;
   }
-  return parseTqmsMemberRegistry(payload)
+  return parseTqmsMemberRegistry(payload, branchName)
     .filter((vehicle) => matchesTqmsSanghBranch(vehicle.branch, branchName));
 }

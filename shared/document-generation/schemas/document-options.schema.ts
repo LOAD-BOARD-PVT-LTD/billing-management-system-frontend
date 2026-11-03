@@ -22,11 +22,21 @@ export function parseDocumentOptions(value: unknown): DocumentOptions {
   if (options.pageFormat !== undefined && options.pageFormat !== 'a4' && options.pageFormat !== 'receipt') {
     throw new Error('Document page format must be a4 or receipt.');
   }
+  if (
+    options.autoPaging !== undefined
+    && options.autoPaging !== true
+    && options.autoPaging !== false
+    && options.autoPaging !== 'slice'
+    && options.autoPaging !== 'text'
+  ) {
+    throw new Error('Document auto paging must be a boolean, slice, or text.');
+  }
 
   return {
     orientation: options.orientation,
     copies: options.copies,
     ...(options.pageFormat === 'receipt' ? { pageFormat: 'receipt' as const } : {}),
+    ...(options.autoPaging !== undefined ? { autoPaging: options.autoPaging } : {}),
     ...(typeof options.filename === 'string' ? { filename: options.filename } : {}),
   };
 }

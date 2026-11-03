@@ -5,6 +5,8 @@ export type BillingVehicle = {
 	vehicleNumber: string;
 	vehicleType: string;
 	ownerName: string;
+	operatorName?: string;
+	route?: string;
 	phone: string;
 	smsPhone: string;
 	ownerAddress: string;

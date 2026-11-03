@@ -19,12 +19,20 @@ import { cancelReceipt, correctReceipt, type ReceiptCorrection } from '@/feature
 import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
 import { usePrintReceipt } from '@/features/receipts/hooks/use-print-receipt';
 import { useReceiptCancelWindow } from '@/features/settings/hooks/useReceiptCancelWindow';
+import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 const PAGE_SIZE = 10;
 
 function sortValue(receipt: ReceiptRecord, column: string): string | number {
 	switch (column) {
-		case 'customer': return `${receipt.customerName} ${receipt.organizationName}`;
+		case 'customer': {
+			const lines = getReceiptOwnerDisplayLines(
+				receipt.customerName || receipt.bill.content.vehicle.ownerName,
+				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName : '',
+				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.phone : '',
+			);
+			return lines.map((line) => `${line.label} ${line.name}${line.suffix}`).join(' ');
+		}
 		case 'totalAmount': return receipt.totalAmount;
 		case 'paymentDate': return receipt.paymentDate;
 		case 'validUntil': return receipt.validUntil;
@@ -41,7 +49,14 @@ function csvValue(receipt: ReceiptRecord, column: ReceiptColumnId): string {
 		case 'receiptNumber': return receipt.receiptNumber;
 		case 'vehicleNumber': return receipt.vehicleNumber;
 		case 'finalDigits': return receipt.finalDigits;
-		case 'customer': return `${receipt.customerName} / ${receipt.organizationName}`;
+		case 'customer': {
+			const lines = getReceiptOwnerDisplayLines(
+				receipt.customerName || receipt.bill.content.vehicle.ownerName,
+				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName : '',
+				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.phone : '',
+			);
+			return lines.map((line) => `${line.label} ${line.name}${line.suffix}`).join(' / ');
+		}
 		case 'paymentDate': return receipt.billingDate;
 		case 'validUntil': return receipt.validUntil;
 		case 'paymentMethod': return receipt.paymentMethod;

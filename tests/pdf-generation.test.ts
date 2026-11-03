@@ -16,6 +16,7 @@ import {
 } from '@/shared/document-generation/utils/bill-footer';
 import { billTemplateStyles } from '@/shared/document-generation/templates/pdf/billing/bill.styles';
 import { createReceiptPdfBlob } from '@/features/receipts/services/receipt-document.service';
+import { fontasyFromUnicode } from '@/utils/fontasy-himali/fromUnicode';
 import type { BillResourceContent, SavedBill } from '@/features/billing/model/bill.types';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,10 @@ describe('5. PDF and Document Output', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  test('converts the fiscal-year label fully to Fontasy glyphs', () => {
+    assert.equal(fontasyFromUnicode('आर्थिक वर्ष:'), 'cfly{s jí{:');
   });
 
   describe('Document Currency & Words Formatting', () => {
@@ -137,6 +142,7 @@ describe('5. PDF and Document Output', () => {
         vehicleNumber: 'Ba 1 Ja 1111',
         vehicleType: 'Taxi',
         ownerName: 'Krishna Prasad',
+        route: 'Bagmati Province (P3), Kathmandu',
         phone: '9841000000',
         address: 'Kathmandu',
       },

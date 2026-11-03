@@ -7,10 +7,16 @@ import type { BillTemplateProps } from '../../../types/template.types';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '../../../utils/format-currency';
 import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import { billTemplateStyles } from './bill.styles';
+import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
+  const ownerLines = getReceiptOwnerDisplayLines(
+    content.vehicle.ownerName,
+    content.vehicle.operatorName,
+    content.vehicle.phone,
+  );
 
   return (
     <>
@@ -33,10 +39,12 @@ export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplate
         </div>
 
         <section className="document-parties">
-          <div className="document-party-line">
-            सदस्यको नाम: <strong>{content.vehicle.ownerName || '—'}</strong>
-            {content.vehicle.phone ? ` (${content.vehicle.phone})` : ''}
-          </div>
+          {ownerLines.map((line) => (
+            <div key={`${line.label}-${line.name}`} className="document-party-line">
+              {line.label ? `${line.label} ` : null}
+              <strong>{line.name}</strong>{line.suffix}
+            </div>
+          ))}
           <div className="document-party-line">
             ठेगाना: <strong>{content.vehicle.address || '—'}</strong>
           </div>
@@ -53,6 +61,7 @@ export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplate
             {content.periodStart || content.periodEnd
               ? <> को लागि मिति {formatDocumentNepaliDate(content.periodStart)} देखि {formatDocumentNepaliDate(content.periodEnd)} सम्म</>
               : null}
+            {content.billingType !== 'GENERAL' ? ' संघको नियमानुसार रकम प्राप्त भयो' : null}
           </div>
         </section>
 
@@ -96,8 +105,9 @@ export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplate
               </tr>
             ) : null}
             <tr className="document-total-row">
-              <td />
-              <td colSpan={2}>जम्मा रु.</td>
+              <td>{content.billingType !== 'GENERAL' ? 'रुट:' : null}</td>
+              <td>{content.billingType !== 'GENERAL' ? content.vehicle.route || '' : null}</td>
+              <td>जम्मा रु.</td>
               <td className="document-number">{formatDocumentCurrency(content.total)}</td>
               <td />
             </tr>

@@ -12,6 +12,7 @@ import { DEFAULT_COMPANY_BRANDING } from '@/shared/document-generation/component
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
 import { formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
 import { BILL_FOOTER_LABELS, getBillFooterDetails } from '@/shared/document-generation/utils/bill-footer';
+import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 const PAGE_WIDTH = 841.89;
 const PAGE_HEIGHT = 595.28;
@@ -250,15 +251,27 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   const rightDetailWidth = innerWidth - leftDetailWidth;
   const isGeneralBill = bill.content.billingType === 'GENERAL';
   const customerName = bill.content.customer?.name || bill.content.vehicle.ownerName || '—';
-  const customerPhone = bill.content.customer?.phone || bill.content.vehicle.phone;
+  const customerPhone = bill.content.customer?.phone || bill.content.vehicle.smsPhone || bill.content.vehicle.phone;
   const customerAddress = bill.content.customer?.address || bill.content.vehicle.address || '—';
+  const ownerLines = getReceiptOwnerDisplayLines(
+    bill.content.vehicle.ownerName,
+    bill.content.vehicle.operatorName,
+    customerPhone,
+  );
   const detailRows = [
-    [
-      `${isGeneralBill ? 'ग्राहकको नाम' : 'सदस्यको नाम'}: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}`,
-      `ठेगाना: ${customerAddress}`,
-      leftDetailWidth,
-      rightDetailWidth,
-    ],
+    ...(isGeneralBill
+      ? [[
+          `ग्राहकको नाम: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}`,
+          `ठेगाना: ${customerAddress}`,
+          leftDetailWidth,
+          rightDetailWidth,
+        ] as const]
+      : ownerLines.map((line, index) => [
+          `${line.label ? `${line.label} ` : ''}${line.name}${line.suffix}`,
+          index === 0 ? `ठेगाना: ${customerAddress}` : '',
+          index === 0 ? leftDetailWidth : innerWidth,
+          index === 0 ? rightDetailWidth : 0,
+        ] as const)),
     ...(isGeneralBill
       ? bill.content.customer?.panNumber
         ? [[`पान नं.: ${bill.content.customer.panNumber}`, '', innerWidth, 0] as const]
@@ -272,7 +285,7 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
     [
       `आर्थिक वर्ष: ${bill.content.fiscalYearName}${bill.content.periodStart || bill.content.periodEnd
         ? ` को लागि मिति ${formatDocumentNepaliDate(bill.content.periodStart)} देखि ${formatDocumentNepaliDate(bill.content.periodEnd)} सम्म`
-        : ''}`,
+        : ''}${isGeneralBill ? '' : ' संघको नियमानुसार रकम प्राप्त भयो'}`,
       '',
       innerWidth,
       0,
@@ -287,6 +300,12 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   }
   const tableTop = top + 1;
   const widths = [42, innerWidth - 42 - 95 - 95 - 110, 95, 95, 110];
+  const totalRowHeight = Math.max(
+    24,
+    bill.content.billingType !== 'GENERAL' && bill.content.vehicle.route
+      ? wrapText(bill.content.vehicle.route, widths[1] - 12, 9.5, fonts).length * 13 + 6
+      : 24,
+  );
   const itemRows = bill.content.items.map((item) => Math.max(
     23,
     wrapText(item.title, widths[1] - 12, 10, fonts).length * 14 + 8,
@@ -294,7 +313,7 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   const tableEnd = tableTop + 22
     + itemRows.reduce((sum, height) => sum + height, 0)
     + (bill.content.discount > 0 ? 23 : 0)
-    + 24;
+    + totalRowHeight;
   const noteText = `कैफियत: ${bill.content.note || bill.content.paymentMethod || '—'}`;
   const remarkRows = [
     `अक्षरमा: ${formatAmountInNepaliWords(bill.content.total)}`,
@@ -302,7 +321,7 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   ].map((text) => Math.max(18, wrapText(text, innerWidth - 12, 9.5, fonts).length * 13 + 4));
   const remarksEnd = tableEnd + remarkRows.reduce((sum, height) => sum + height, 0);
   const signatureTop = Math.max(remarksEnd + 70, PAGE_HEIGHT - 145);
-  return { widths, detailRows, tableTop, itemRows, remarkRows, signatureTop, pageHeight: Math.max(PAGE_HEIGHT, signatureTop + 74) };
+  return { widths, detailRows, tableTop, itemRows, totalRowHeight, remarkRows, signatureTop, pageHeight: Math.max(PAGE_HEIGHT, signatureTop + 74) };
 }
 
 function drawReceiptFooter(
@@ -416,9 +435,9 @@ function drawReceipt(
       { text: '' },
     ], fonts);
   }
-  top = drawTableRow(page, top, 24, layout.widths, [
-    { text: '' },
-    { text: '' },
+  top = drawTableRow(page, top, layout.totalRowHeight, layout.widths, [
+    { text: content.billingType === 'GENERAL' ? '' : 'रुट:', align: 'center' },
+    { text: content.billingType === 'GENERAL' ? '' : content.vehicle.route || '' },
     { text: 'जम्मा रु.', align: 'right', bold: true },
     { text: formatDocumentCurrency(content.total), align: 'right', bold: true },
     { text: showCopyLabel ? `प्रतिलिपि ${toNepaliDigits(String(copyNumber))}` : '', align: 'center', bold: copyCount > 1 },

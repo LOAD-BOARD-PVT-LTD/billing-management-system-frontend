@@ -162,6 +162,53 @@ describe('1. Billing Rule Configuration', () => {
       );
       assert.equal(writeCount, 0);
     });
+
+    test('rejects a fee head used by both Common and Vehicle Type rules before API writes', async () => {
+      let writeCount = 0;
+      apiClient.post = async <T>(): Promise<T> => { writeCount += 1; return undefined as T; };
+      apiClient.put = async <T>(): Promise<T> => { writeCount += 1; return undefined as T; };
+      const config: BillingRuleConfig = {
+        version: 1,
+        feeHeads: [
+          { id: 'fee-1', fiscalYearId: 'year-1', name: 'Road Tax', status: 'ACTIVE' },
+        ],
+        fiscalYears: [],
+        rules: [
+          {
+            id: 'common-rule',
+            feeHeadId: 'fee-1',
+            fiscalYearId: 'year-1',
+            billingEntityId: 'entity-1',
+            scope: 'COMMON',
+            vehicleCategoryId: null,
+            frequency: 'ONE_TIME',
+            period: null,
+            validity: 'SAME_DAY',
+            amount: 100,
+            status: 'ACTIVE',
+          },
+          {
+            id: 'vehicle-rule',
+            feeHeadId: 'fee-1',
+            fiscalYearId: 'year-1',
+            billingEntityId: 'entity-2',
+            scope: 'VEHICLE_TYPE',
+            vehicleCategoryId: 'vehicle-1',
+            frequency: 'ONE_TIME',
+            period: null,
+            validity: 'SAME_DAY',
+            amount: 100,
+            status: 'ACTIVE',
+          },
+        ],
+      };
+
+      await assert.rejects(
+        billingRulesApi.save(config, { version: 1, feeHeads: [], fiscalYears: [], rules: [] }),
+        /Road Tax.*Common र Vehicle Type/u,
+      );
+      assert.equal(writeCount, 0);
+    });
   });
 
   describe('404 Handling vs Network and Server Errors', () => {

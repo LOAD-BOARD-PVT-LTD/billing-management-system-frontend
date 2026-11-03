@@ -1,8 +1,15 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
-import type { BillingVehicle } from '../model/types';
-import type { VehiclePhoneUpdateInput } from '../schemas/vehicle-phone-update.schema';
-import { vehiclePhoneUpdateSchema } from '../schemas/vehicle-phone-update.schema';
+import { resolveTqmsDhaniOwnerIndex } from '@/features/billing/utils/resolve-tqms-vehicle-owners';
+import type { BillingVehicle } from '@/features/billing/model/types';
+import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
+
+type VehiclePhoneChangeEntry = {
+	phone: string;
+	previousPhone: string;
+	reason: string;
+	changedAt: string;
+};
 
 export type VehicleResourceDocument = {
 	id: string;
@@ -134,7 +141,7 @@ export async function readVehicleResource(
 			resources = extractResourceRows(payload);
 		} catch (error) {
 			if (!(error instanceof Error
-				&& /Request failed \(404\).*No resources found for resource name/iu.test(error.message))) {
+				&& /Request failed \(404\).*No resources found/iu.test(error.message))) {
 				throw error;
 			}
 		}
@@ -182,6 +189,24 @@ export async function readVehicleResource(
 	};
 }
 
+export async function findVehicleResource(
+	vehicleId: string,
+	vehicleNumber: string,
+): Promise<VehicleResourceDocument | null> {
+	try {
+		return await readVehicleResource(vehicleId, vehicleNumber);
+	} catch (error) {
+		if (
+			error instanceof Error &&
+			(error.message.includes('No VehicleResource was found') ||
+				/Request failed \(404\).*No resources found/iu.test(error.message))
+		) {
+			return null;
+		}
+		throw error;
+	}
+}
+
 export async function updateVehicleResource(
 	resource: VehicleResourceDocument,
 	innerContent: Record<string, unknown>,
@@ -201,55 +226,46 @@ export async function updateVehicleResource(
 	);
 }
 
-function toVehicleResourceUpdate(
-	vehicle: BillingVehicle,
-	input: VehiclePhoneUpdateInput,
-	existingExternalContent: Record<string, unknown>,
-) {
-	const { phone, reason } = vehiclePhoneUpdateSchema.parse(input);
-	const owners = vehicle.resourceContent.Owners;
-	if (!Array.isArray(owners) || owners.length === 0) {
-		throw new Error('TQMS vehicle data does not include an owner to update.');
-	}
-
-	let ownerUpdated = false;
-	const updatedOwners = owners.map((owner) => {
-		if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return owner;
-		const ownerRecord = owner as Record<string, unknown>;
-		const isMainOwner = typeof ownerRecord.Type === 'string'
-			&& ownerRecord.Type.trim().toLowerCase() === 'main owner';
-		if (!ownerUpdated && (isMainOwner || owners.length === 1)) {
-			ownerUpdated = true;
-			return { ...ownerRecord, Phone: phone };
-		}
-		return owner;
-	});
-
-	if (!ownerUpdated) {
-		throw new Error('Could not identify the main owner for this vehicle.');
-	}
-
-	return {
-		inner_content: {
-			...vehicle.resourceContent,
-			Owners: updatedOwners,
-		},
-		external_content: { ...existingExternalContent, phoneChangeReason: reason },
-	};
-}
-
-export async function updateBillingVehiclePhone(
+export async function updateVehicleOwnerPhone(
 	vehicle: BillingVehicle,
 	input: VehiclePhoneUpdateInput,
 ): Promise<void> {
-	if (!vehicle.tqmsVehicleId) {
-		throw new Error('TQMS vehicle ID is missing. Search for the vehicle again before updating its number.');
+	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
+	const ownersValue = resource.innerContent.Owners;
+	if (!Array.isArray(ownersValue)) {
+		throw new Error(`VehicleResource for ${vehicle.vehicleNumber} does not contain owner details.`);
 	}
-	const currentResource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
-	const update = toVehicleResourceUpdate(
-		{ ...vehicle, resourceContent: currentResource.innerContent },
-		input,
-		currentResource.externalContent,
+
+	const owners = ownersValue.map((owner) => asRecord(owner));
+	const validOwners = owners.flatMap((owner, index) => owner ? [{ owner, index }] : []);
+	const selectedOwner = validOwners[resolveTqmsDhaniOwnerIndex(validOwners.map(({ owner }) => owner))];
+	const dhani = selectedOwner?.owner;
+	if (!dhani) {
+		throw new Error(`VehicleResource for ${vehicle.vehicleNumber} does not contain a valid owner.`);
+	}
+	const phoneField = 'Phone' in dhani || !('phone' in dhani) ? 'Phone' : 'phone';
+	const previousPhone = String(dhani[phoneField] ?? '').trim();
+	const updatedOwners = owners.map((owner, index) => (
+		index === selectedOwner.index && owner ? { ...owner, [phoneField]: input.phone.trim() } : owner
+	));
+	const currentHistory = Array.isArray(resource.externalContent.phoneChangeHistory)
+		? resource.externalContent.phoneChangeHistory as VehiclePhoneChangeEntry[]
+		: [];
+
+	await updateVehicleResource(
+		resource,
+		{ ...resource.innerContent, Owners: updatedOwners },
+		{
+			...resource.externalContent,
+			phoneChangeHistory: [
+				...currentHistory,
+				{
+					phone: input.phone.trim(),
+					previousPhone,
+					reason: input.reason.trim(),
+					changedAt: new Date().toISOString(),
+				},
+			],
+		},
 	);
-	await updateVehicleResource(currentResource, update.inner_content, update.external_content);
 }

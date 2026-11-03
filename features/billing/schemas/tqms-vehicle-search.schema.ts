@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { BillingVehicle } from '../model/types';
+import { resolveTqmsVehicleOwners } from '../utils/resolve-tqms-vehicle-owners';
 
 const tqmsOwnerSchema = z.object({
 	Name: z.string().nullish(),
@@ -64,11 +65,8 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 		|| text(vehicle.TQMSVehicleTypeId)
 		|| text(asRecord(rawVehicle.VehicleType)?.VehicleTypeId)
 		|| text(asRecord(rawVehicle.VehicleType)?.vehicleTypeId);
-	const owners = vehicle.Owners ?? [];
-	const owner = owners.find((candidate) => text(candidate.Type).toLowerCase() === 'main owner')
-		?? owners[0];
-	const phone = text(owner?.Phone);
-	const branchNames = Array.from(new Set(owners.map((candidate) => text(candidate.SanghBranch)).filter(Boolean)));
+
+	const resolvedOwners = resolveTqmsVehicleOwners(vehicle.Owners);
 
 	return {
 		id: text(vehicle.VehicleId) || vehicleNumber,
@@ -76,11 +74,12 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 		tqmsVehicleTypeId,
 		vehicleNumber,
 		vehicleType: vehicleType || 'सवारी प्रकार उपलब्ध छैन',
-		ownerName: text(owner?.Name) || 'मालिकको विवरण उपलब्ध छैन',
-		phone,
-		smsPhone: phone,
-		ownerAddress: text(owner?.Address),
-		branch: branchNames.join(', '),
+		ownerName: resolvedOwners.ownerName,
+		operatorName: resolvedOwners.operatorName || undefined,
+		phone: resolvedOwners.phone,
+		smsPhone: resolvedOwners.phone,
+		ownerAddress: resolvedOwners.ownerAddress,
+		branch: resolvedOwners.branch,
 		fiscalYear: '',
 		billingDate: '',
 		periodStart: '',
@@ -92,7 +91,10 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 		rateDate: '',
 		previousPeriod: '',
 		remainingPeriod: '',
-		resourceContent: vehicle as Record<string, unknown>,
+		resourceContent: {
+			...rawVehicle,
+			Owners: resolvedOwners.owners,
+		},
 	};
 }
 

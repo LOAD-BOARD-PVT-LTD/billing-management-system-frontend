@@ -128,7 +128,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   const subtotal = number(content.subtotal, items.reduce((sum, item) => sum + item.amount, 0));
   const discount = number(content.discount, 0);
   const customerName = text(customer?.name) || text(vehicle.ownerName);
-  const customerPhone = text(customer?.phone) || text(vehicle.phone);
+  const customerPhone = text(customer?.phone) || text(vehicle.smsPhone) || text(vehicle.phone);
   const customerAddress = text(customer?.address) || text(vehicle.address);
   const normalizedContent: BillResourceContent = {
     billingType,
@@ -137,7 +137,10 @@ export function parseBillResource(value: unknown): ReceiptRecord {
       vehicleNumber: text(vehicle.vehicleNumber),
       vehicleType: text(vehicle.vehicleType),
       ownerName: customerName,
-      phone: customerPhone,
+      ...(text(vehicle.operatorName) ? { operatorName: text(vehicle.operatorName) } : {}),
+      ...(text(vehicle.route) ? { route: text(vehicle.route) } : {}),
+      phone: text(vehicle.phone) || customerPhone,
+      ...(text(vehicle.smsPhone) ? { smsPhone: text(vehicle.smsPhone) } : {}),
       address: customerAddress,
     },
     ...(customer ? {

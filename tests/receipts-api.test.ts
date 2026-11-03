@@ -110,6 +110,38 @@ describe('4. Bill API, Receipts, and Numbering', () => {
       assert.equal(record.status, 'PAID');
     });
 
+    test('preserves the vehicle route on the receipt', () => {
+      const record = parseBillResource({
+        ...validRawResource,
+        inner_content: {
+          ...validRawResource.inner_content,
+          vehicle: {
+            ...validRawResource.inner_content.vehicle,
+            route: 'Bagmati Province (P3), Kathmandu',
+          },
+        },
+      });
+
+      assert.equal(record.bill.content.vehicle.route, 'Bagmati Province (P3), Kathmandu');
+    });
+
+    test('uses the billing SMS override as the receipt contact while preserving the TQMS owner phone', () => {
+      const record = parseBillResource({
+        ...validRawResource,
+        inner_content: {
+          ...validRawResource.inner_content,
+          vehicle: {
+            ...validRawResource.inner_content.vehicle,
+            smsPhone: '9800000000',
+          },
+        },
+      });
+
+      assert.equal(record.customerPhone, '9800000000');
+      assert.equal(record.bill.content.vehicle.phone, '9841000000');
+      assert.equal(record.bill.content.vehicle.smsPhone, '9800000000');
+    });
+
     test('throws if resource ID is missing', () => {
       const missingId = { ...validRawResource, id: undefined, resourceId: undefined };
       assert.throws(

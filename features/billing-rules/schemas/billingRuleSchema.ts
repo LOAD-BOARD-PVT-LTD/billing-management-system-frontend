@@ -122,13 +122,40 @@ export function findDuplicateRule(rules: BillingRule[], candidate: BillingRule):
   ) ?? null;
 }
 
+export function findCrossScopeFeeHeadRule(rules: BillingRule[], candidate: BillingRule): BillingRule | null {
+  if (candidate.status !== 'ACTIVE') return null;
+  return rules.find((rule) =>
+    rule.id !== candidate.id
+    && rule.status === 'ACTIVE'
+    && rule.feeHeadId === candidate.feeHeadId
+    && rule.fiscalYearId === candidate.fiscalYearId
+    && rule.scope !== candidate.scope,
+  ) ?? null;
+}
+
+export function assertNoCrossScopeFeeHeadRules(config: BillingRuleConfig): void {
+  const feeHeadNames = new Map(config.feeHeads.map((feeHead) => [feeHead.id, feeHead.name]));
+  for (const rule of config.rules) {
+    if (!findCrossScopeFeeHeadRule(config.rules, rule)) continue;
+    const feeHeadName = feeHeadNames.get(rule.feeHeadId) ?? rule.feeHeadId;
+    throw new Error(`"${feeHeadName}" शुल्क शीर्षकलाई Common र Vehicle Type दुवै Billing Rule मा प्रयोग गर्न मिल्दैन।`);
+  }
+}
+
 export function validateBillingRuleConfig(config: BillingRuleConfig): { isValid: boolean; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
+  const feeHeadNames = new Map(config.feeHeads.map((feeHead) => [feeHead.id, feeHead.name]));
 
   for (const rule of config.rules) {
     const validation = validateBillingRuleRecord(rule);
     if (!validation.isValid) {
       errors[rule.id] = Object.values(validation.errors).join(' ');
+      continue;
+    }
+
+    if (findCrossScopeFeeHeadRule(config.rules, rule)) {
+      const feeHeadName = feeHeadNames.get(rule.feeHeadId) ?? rule.feeHeadId;
+      errors[rule.id] = `"${feeHeadName}" शुल्क शीर्षकलाई Common र Vehicle Type दुवै Billing Rule मा प्रयोग गर्न मिल्दैन।`;
       continue;
     }
 

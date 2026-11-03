@@ -39,6 +39,19 @@ function toRgbColor(value: string, context: CanvasRenderingContext2D): string {
 }
 
 function normalizePdfColors(clonedDocument: HTMLDocument): void {
+  const captureRoot = clonedDocument.querySelector<HTMLElement>('[data-pdf-render-root]');
+  if (captureRoot) {
+    captureRoot.style.setProperty('position', 'relative');
+    captureRoot.style.setProperty('left', '0');
+    captureRoot.style.setProperty('top', '0');
+    captureRoot.style.setProperty('right', 'auto');
+    captureRoot.style.setProperty('bottom', 'auto');
+    captureRoot.style.setProperty('transform', 'none');
+    captureRoot.style.setProperty('margin', '0');
+    captureRoot.style.setProperty('visibility', 'visible');
+    captureRoot.style.setProperty('opacity', '1');
+  }
+
   const context = clonedDocument.createElement('canvas').getContext('2d', { willReadFrequently: true });
   if (!context) throw new Error('Could not initialize PDF color conversion.');
 
@@ -123,7 +136,7 @@ export async function renderPdf(element: HTMLElement, inputOptions: DocumentOpti
       y: 0,
       width: pageWidth,
       windowWidth: element.offsetWidth,
-      autoPaging: false,
+      autoPaging: options.autoPaging ?? false,
       html2canvas: {
         backgroundColor: '#ffffff',
         scale: 2,
@@ -135,6 +148,55 @@ export async function renderPdf(element: HTMLElement, inputOptions: DocumentOpti
         onclone: (clonedDocument) => normalizePdfColors(clonedDocument),
       },
     });
+  }
+  return pdf.output('blob');
+}
+
+export async function renderPdfPages(elements: HTMLElement[], inputOptions: DocumentOptions): Promise<Blob> {
+  const options = parseDocumentOptions(inputOptions);
+  if (elements.length === 0) throw new Error('At least one PDF page is required.');
+
+  await document.fonts.ready;
+  await Promise.all(elements.flatMap((element) => Array.from(element.querySelectorAll('img'), async (image) => {
+    if (!image.complete) {
+      await new Promise<void>((resolve, reject) => {
+        image.addEventListener('load', () => resolve(), { once: true });
+        image.addEventListener('error', () => reject(new Error('Could not load an image in the document.')), { once: true });
+      });
+    }
+    if (!image.naturalWidth) throw new Error('Could not load an image in the document.');
+  })));
+
+  const { jsPDF } = await import('jspdf');
+  const pageWidth = options.orientation === 'landscape' ? 297 : 210;
+  const pdf = new jsPDF({
+    orientation: options.orientation,
+    unit: 'mm',
+    format: 'a4',
+    compress: true,
+  });
+
+  for (let copy = 0; copy < options.copies; copy += 1) {
+    for (const [index, element] of elements.entries()) {
+      if (copy > 0 || index > 0) pdf.addPage('a4', options.orientation);
+      await pdf.html(element, {
+        x: 0,
+        y: 0,
+        width: pageWidth,
+        windowWidth: element.offsetWidth,
+        autoPaging: false,
+        html2canvas: {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          onclone: (clonedDocument) => normalizePdfColors(clonedDocument),
+        },
+      });
+    }
   }
   return pdf.output('blob');
 }

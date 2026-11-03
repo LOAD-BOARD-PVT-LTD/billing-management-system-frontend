@@ -10,6 +10,7 @@ import {
 import type { BillingRule, BillingRuleConfig } from '@/features/billing-rules/model/types';
 import { fetchFiscalYearManagement } from '@/features/settings/api/fiscal-year-management.api';
 import { assertUniqueFeeHeadNames } from '@/features/billing-rules/utils/fee-head-name-validation';
+import { assertNoCrossScopeFeeHeadRules } from '@/features/billing-rules/schemas/billingRuleSchema';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 
 function mergeDocuments(documents: BillingRuleResourceDocument[]): BillingRuleResourceDocument {
@@ -73,6 +74,7 @@ export const billingRulesApi = {
 
   async save(config: BillingRuleConfig, previousConfig: BillingRuleConfig): Promise<BillingRuleResourceDocument> {
     assertUniqueFeeHeadNames(config.feeHeads);
+    assertNoCrossScopeFeeHeadRules(config);
 
     const defaultYears = config.fiscalYears.filter((year) => year.isDefault === true);
     if (defaultYears.length > 1) throw new Error('आर्थिक वर्षमध्ये एउटा मात्र पूर्वनिर्धारित वर्ष छान्नुहोस्।');

@@ -3,6 +3,7 @@ import type { FiscalYear } from '@/features/billing-rules/model/types';
 import type { MemberListRecord, MemberResourceRecord } from '@/features/members/model/member';
 import type { VehicleBlacklistRecord } from '@/features/vehicle/blacklist';
 import { normalizeVehicleNumber } from '@/features/vehicle/blacklist/utils/dedupe-vehicle-blacklist';
+import { getReceiptVehicleOwners } from '@/features/receipts/utils/receipt-owners';
 
 export type MemberCounts = Record<
   'total' | 'active' | 'new' | 'inactive' | 'displaced' | 'blacklisted' | 'nonMemberBlacklisted',
@@ -114,6 +115,7 @@ export function calculateMembers(
 
   const records = [...latestByVehicle.entries()].map(([id, receipt]): MemberListRecord => {
     const content = receipt.bill.content;
+    const owners = getReceiptVehicleOwners(content.vehicle.ownerName, content.vehicle.operatorName);
     const isBlacklisted = blacklistedIds.has(id);
     const isDisplaced = displacedIds.has(id);
     const isActive = activeIds.has(id);
@@ -136,10 +138,10 @@ export function calculateMembers(
       vehicleId: id,
       memberNumber: '',
       vehicleNumber: content.vehicle.vehicleNumber,
-      ownerName: content.vehicle.ownerName,
-      sanchalakName: '',
-      sawariDhaniName: content.vehicle.ownerName,
-      ownerCount: 1,
+      ownerName: owners.dhaniName,
+      sanchalakName: owners.sanchalakName,
+      sawariDhaniName: owners.dhaniName,
+      ownerCount: owners.hasMultipleOwners ? 2 : 1,
       phone: content.vehicle.phone,
       address: content.vehicle.address,
       tqmsVehicleType: content.vehicle.vehicleType,

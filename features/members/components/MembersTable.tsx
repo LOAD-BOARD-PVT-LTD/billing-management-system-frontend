@@ -13,6 +13,7 @@ import { MemberStatusBadge } from '@/features/members/components/MemberStatusBad
 import type { MemberColumnId } from '@/features/members/utils/member-table-columns';
 import { formatDocumentNepaliDate } from '@/shared/document-generation/utils/format-date';
 import { toNepaliDigits } from '@/utils/numbers';
+import { getMemberOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 type MembersTableProps = {
   records: MemberListRecord[];
@@ -62,18 +63,22 @@ export function MembersTable({
       id: 'member',
       header: 'नाम',
       headerClassName: 'min-w-44',
-      cell: (record) => (
-        <div className="space-y-0.5">
-          {record.ownerCount > 1 ? (
-            <>
-              <p className="text-xs"><span className="text-muted-foreground">संचालक:</span> <span className="font-medium">{record.sanchalakName || '—'}</span></p>
-              <p className="text-xs"><span className="text-muted-foreground">धनीको नाम:</span> <span className="font-medium">{record.sawariDhaniName || '—'}</span></p>
-            </>
-          ) : (
-            <p className="font-medium">{record.sawariDhaniName || record.ownerName || '—'}</p>
-          )}
-        </div>
-      ),
+      cell: (record) => {
+        const ownerLines = getMemberOwnerDisplayLines(
+          record.sawariDhaniName || record.ownerName,
+          record.ownerCount > 1 ? record.sanchalakName : '',
+        );
+        return (
+          <div className="space-y-0.5">
+            {ownerLines.map((line) => (
+              <p key={`${line.label}-${line.name}`} className="text-xs">
+                {line.label ? <span className="text-muted-foreground">{line.label}</span> : null}
+                {line.label ? ' ' : ''}<span className="font-medium">{line.name}{line.suffix}</span>
+              </p>
+            ))}
+          </div>
+        );
+      },
     },
     vehicle: {
       id: 'vehicle',

@@ -25,29 +25,20 @@ describe('Batch 4: Bundle Optimization & Dependency Cleanup', () => {
 		assert.ok(!registryPageContent.includes('regenerator-runtime'), 'member registry should not import regenerator-runtime');
 	});
 
-	it('confirms pdf-lib is dynamically imported inside member registry export handler', () => {
+	it('confirms member registry PDF export uses the shared document generator', () => {
 		const registryPagePath = join(process.cwd(), 'features', 'vehicle', 'tqms', 'components', 'TqmsMemberRegistryPage.tsx');
 		const registryPageContent = readFileSync(registryPagePath, 'utf8');
 
-		// Top-level imports should only be type imports
-		assert.ok(
-			!registryPageContent.includes("import fontkit from '@pdf-lib/fontkit'"),
-			'fontkit should not be statically imported at the top level',
-		);
-		assert.ok(
-			!registryPageContent.includes("import { PDFDocument"),
-			'PDFDocument should not be statically imported at the top level',
-		);
+		assert.ok(registryPageContent.includes('renderPdfPages(elements'), 'PDF export should use the shared PDF renderer page by page');
+		assert.ok(registryPageContent.includes('downloadDocument(url'), 'PDF export should download through the shared document helper');
+		assert.ok(registryPageContent.includes('PDF_ROWS_PER_PAGE = 30'), 'PDF export should limit each capture to a manageable page size');
+		assert.ok(registryPageContent.includes('data-tqms-pdf-page'), 'PDF export should render each page as a separate document element');
+		assert.ok(!registryPageContent.includes('window.open('), 'PDF export should not open a browser print window');
+		assert.ok(!registryPageContent.includes('printWindow.print()'), 'PDF export should not use browser printing');
 
-		// Dynamic imports must be present inside the handler
-		assert.ok(
-			registryPageContent.includes("import('pdf-lib')"),
-			'pdf-lib must be dynamically imported on demand',
-		);
-		assert.ok(
-			registryPageContent.includes("import('@pdf-lib/fontkit')"),
-			'@pdf-lib/fontkit must be dynamically imported on demand',
-		);
+		const rendererPath = join(process.cwd(), 'shared', 'document-generation', 'renderers', 'pdf.renderer.ts');
+		const rendererContent = readFileSync(rendererPath, 'utf8');
+		assert.ok(rendererContent.includes("querySelector<HTMLElement>('[data-pdf-render-root]')"), 'shared renderer should find explicitly marked off-screen export content');
+		assert.ok(rendererContent.includes("setProperty('left', '0')"), 'shared renderer should reposition off-screen export content for capture');
 	});
 });
-

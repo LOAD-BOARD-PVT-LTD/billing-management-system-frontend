@@ -39,6 +39,58 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(vehicles[0].branch, 'Kathmandu');
     });
 
+    test('uses the owner marked isDhani for name and contact details, regardless of TQMS owner order', () => {
+      const [vehicle] = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V102',
+        VehicleNumber: 'Ba 1 Ja 5678',
+        VehicleType: 'Taxi',
+        Owners: [
+          {
+            Name: 'Operator Name',
+            Phone: '9800000001',
+            Address: 'Operator Address',
+            SanghBranch: 'Operator Branch',
+            isSanchalk: true,
+          },
+          {
+            Name: 'Dhani Name',
+            Phone: '9800000002',
+            Address: 'Dhani Address',
+            SanghBranch: 'Dhani Branch',
+            isDhani: true,
+          },
+        ],
+      }], '5678');
+
+      assert.equal(vehicle.ownerName, 'Dhani Name');
+      assert.equal(vehicle.operatorName, 'Operator Name');
+      assert.equal(vehicle.phone, '9800000002');
+      assert.equal(vehicle.ownerAddress, 'Dhani Address');
+      assert.equal(vehicle.branch, 'Dhani Branch');
+    });
+
+    test('uses one owner marked as both dhani and sanchalak as the sole dhani', () => {
+      const [vehicle] = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V103',
+        VehicleNumber: 'Ba 1 Ja 7890',
+        VehicleType: 'Taxi',
+        Owners: [{
+          Name: 'Single Dhani',
+          Phone: '9800000003',
+          Address: 'Single Address',
+          SanghBranch: 'Single Branch',
+          isDhani: true,
+          isSanchalk: true,
+        }],
+      }], '7890');
+
+      assert.equal(vehicle.ownerName, 'Single Dhani');
+      assert.equal(vehicle.operatorName, 'Single Dhani');
+      assert.equal(vehicle.phone, '9800000003');
+      assert.equal(vehicle.ownerAddress, 'Single Address');
+      assert.equal(vehicle.branch, 'Single Branch');
+    });
+
     test('returns empty array without calling API when vehicle number is blank', async () => {
       let called = false;
       apiClient.post = async <T>(): Promise<T> => {
@@ -69,6 +121,21 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(parsed.length, 1);
       assert.equal(parsed[0].id, '55');
       assert.equal(parsed[0].vehicleNumber, 'Na 2 Kha 9999');
+    });
+
+    test('uses the main owner as member and keeps a distinct first owner as operator', () => {
+      const parsed = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V201',
+        VehicleNumber: 'Ba 1 Ja 201',
+        Owners: [
+          { Name: 'Operator Name', Type: 'Operator', Phone: '9800000000' },
+          { Name: 'Vehicle Owner', Type: 'Main Owner', Phone: '9811111111' },
+        ],
+      }], '201');
+
+      assert.equal(parsed[0].ownerName, 'Vehicle Owner');
+      assert.equal(parsed[0].operatorName, 'Operator Name');
+      assert.equal(parsed[0].phone, '9811111111');
     });
 
     test('throws when search results payload is malformed/unsupported format', () => {
@@ -103,18 +170,23 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(matchesTqmsSanghBranch('Kathmandu; Pokhara, Chitwan', 'Biratnagar'), false);
     });
 
-    test('handles multiple owners with different branches combined into vehicle branch string', () => {
+    test('matches the configured branch within an unstructured multi-branch value', () => {
+      assert.equal(matchesTqmsSanghBranch('Hetauda / Birgunj and Kathmandu', 'birgunj'), true);
+      assert.equal(matchesTqmsSanghBranch('Hetauda / Birgunj and Kathmandu', 'pokhara'), false);
+    });
+
+    test('uses the vehicle owner branch when owners have different branches', () => {
       const vehiclePayload = {
         VehicleId: 'V1',
         VehicleNumber: 'Ba 1 Ja 500',
         Owners: [
-          { Name: 'Owner 1', SanghBranch: 'Hetauda' },
-          { Name: 'Owner 2', SanghBranch: 'Birgunj' },
+          { Name: 'Operator', SanghBranch: 'Hetauda', isSanchalk: true },
+          { Name: 'Dhani', SanghBranch: 'Birgunj', isDhani: true },
         ],
       };
       const parsed = parseTqmsVehicleSearchResponse([vehiclePayload], '500');
-      assert.equal(parsed[0].branch, 'Hetauda, Birgunj');
-      assert.equal(matchesTqmsSanghBranch(parsed[0].branch, 'hetauda'), true);
+      assert.equal(parsed[0].branch, 'Birgunj');
+      assert.equal(matchesTqmsSanghBranch(parsed[0].branch, 'hetauda'), false);
       assert.equal(matchesTqmsSanghBranch(parsed[0].branch, 'birgunj'), true);
       assert.equal(matchesTqmsSanghBranch(parsed[0].branch, 'kathmandu'), false);
     });
@@ -452,6 +524,8 @@ describe('2. Membership Billing Flow & Rules', () => {
         vehicleNumber: 'Ba 3 Kha 5555',
         vehicleType: 'Truck',
         ownerName: 'Bikash Rai',
+        operatorName: 'Hari Driver',
+        route: 'Bagmati Province (P3), Kathmandu',
         phone: '9811111111',
         smsPhone: '9811111111',
         ownerAddress: 'Bharatpur',
@@ -514,6 +588,9 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(payload.billingType, 'MEMBERSHIP');
       assert.equal(payload.vehicle.vehicleNumber, 'Ba 3 Kha 5555');
       assert.equal(payload.vehicle.ownerName, 'Bikash Rai');
+      assert.equal(payload.vehicle.operatorName, 'Hari Driver');
+      assert.equal(payload.vehicle.route, 'Bagmati Province (P3), Kathmandu');
+      assert.equal(payload.vehicle.smsPhone, '9811111111');
       assert.equal(payload.branch.id, 'BR-10');
       assert.equal(payload.branch.BranchCode, 'NAR');
       assert.equal(payload.fiscalYearId, 'FY-8182');
@@ -527,6 +604,62 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(payload.items.length, 1);
       assert.equal(payload.items[0].title, 'Sangh Membership');
       assert.equal(payload.items[0].amount, 1500);
+    });
+
+    test('creates a new bill with only one owner name when TQMS marks that owner in both roles', () => {
+      const vehicle: BillingVehicle = {
+        id: 'V910',
+        tqmsVehicleId: 'V910',
+        tqmsVehicleTypeId: 'T1',
+        vehicleNumber: 'Ba 3 Kha 5556',
+        vehicleType: 'Truck',
+        ownerName: 'Single Owner',
+        operatorName: ' single owner ',
+        phone: '9811111111',
+        smsPhone: '9811111111',
+        ownerAddress: 'Bharatpur',
+        branch: 'Narayangarh',
+        fiscalYear: '',
+        billingDate: '',
+        periodStart: '',
+        periodEnd: '',
+        billingMonths: 0,
+        company: '',
+        companyShare: '',
+        rate: '',
+        rateDate: '',
+        previousPeriod: '',
+        remainingPeriod: '',
+        resourceContent: {},
+      };
+      const input: MembershipBillInput = {
+        billingType: 'MEMBERSHIP',
+        vehicle,
+        details: {
+          branchId: 'BR-10',
+          branchName: 'Narayangarh Branch',
+          branchCode: 'NAR',
+          branchAddress: 'Narayangarh',
+          branchPhone: '056-520000',
+          branchContactPerson: 'Shiva',
+          allowManualReceiptAmountOverride: false,
+          fiscalYearId: 'FY-8182',
+          fiscalYearName: '2081/82',
+          billingDate: '2081-04-15',
+          periodStart: '2081-04-01',
+          periodEnd: '2081-04-30',
+          billingMonths: 1,
+        },
+        items: [],
+        subtotal: 0,
+        discount: 0,
+        paymentMethod: 'नगद',
+        note: '',
+      };
+
+      const payload = buildBillResourceContent(input);
+      assert.equal(payload.vehicle.ownerName, 'Single Owner');
+      assert.equal('operatorName' in payload.vehicle, false);
     });
   });
 });

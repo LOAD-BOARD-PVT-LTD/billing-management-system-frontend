@@ -95,6 +95,25 @@ function memberResource(overrides: Partial<MemberResourceRecord> = {}): MemberRe
 }
 
 describe('Member blacklist identity matching', () => {
+  test('preserves both receipt owners for member list display', () => {
+    const memberReceipt = receipt();
+    memberReceipt.bill.content.vehicle.operatorName = 'Vehicle operator';
+
+    const result = calculateMembers([memberReceipt], [], 'fy-1', [], []);
+
+    assert.equal(result.records[0].ownerCount, 2);
+    assert.equal(result.records[0].sanchalakName, 'Vehicle operator');
+    assert.equal(result.records[0].sawariDhaniName, 'Vehicle owner');
+  });
+
+  test('keeps a single-owner receipt unlabelled in the member list', () => {
+    const result = calculateMembers([receipt()], [], 'fy-1', [], []);
+
+    assert.equal(result.records[0].ownerCount, 1);
+    assert.equal(result.records[0].sanchalakName, '');
+    assert.equal(result.records[0].sawariDhaniName, 'Vehicle owner');
+  });
+
   test('matches a TQMS blacklist record by normalized vehicle number when IDs differ', () => {
     const result = calculateMembers([receipt()], [], 'fy-1', [], [tqmsBlacklist()]);
 

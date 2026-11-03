@@ -1,7 +1,57 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFeeHeadBillingItems } from '@/features/billing/utils/build-fee-head-billing-items';
+import { getVehicleApplicableBillingRules } from '@/features/billing/utils/vehicle-applicable-billing-rules';
 import type { BillingRule, FeeHead } from '@/features/billing-rules/model/types';
+
+test('includes common rules and only vehicle-type rules configured for the selected category', () => {
+  const rules: BillingRule[] = [
+    {
+      id: 'common',
+      feeHeadId: 'fee-common',
+      fiscalYearId: 'year-1',
+      billingEntityId: null,
+      scope: 'COMMON',
+      vehicleCategoryId: null,
+      frequency: 'ONE_TIME',
+      period: null,
+      validity: 'SAME_DAY',
+      amount: 100,
+      status: 'ACTIVE',
+    },
+    {
+      id: 'selected-category',
+      feeHeadId: 'fee-selected',
+      fiscalYearId: 'year-1',
+      billingEntityId: null,
+      scope: 'VEHICLE_TYPE',
+      vehicleCategoryId: 'category-1',
+      frequency: 'ONE_TIME',
+      period: null,
+      validity: 'SAME_DAY',
+      amount: 200,
+      status: 'ACTIVE',
+    },
+    {
+      id: 'other-category',
+      feeHeadId: 'fee-other',
+      fiscalYearId: 'year-1',
+      billingEntityId: null,
+      scope: 'VEHICLE_TYPE',
+      vehicleCategoryId: 'category-2',
+      frequency: 'ONE_TIME',
+      period: null,
+      validity: 'SAME_DAY',
+      amount: 300,
+      status: 'ACTIVE',
+    },
+  ];
+
+  assert.deepEqual(
+    getVehicleApplicableBillingRules(rules, 'category-1').map((rule) => rule.id),
+    ['common', 'selected-category'],
+  );
+});
 
 test('builds a zero-amount row for fee heads without an applicable rule, in configured order', () => {
   const feeHeads: FeeHead[] = [

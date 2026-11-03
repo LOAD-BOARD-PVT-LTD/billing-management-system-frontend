@@ -16,7 +16,7 @@ export function useReceiptFilters(records: ReceiptRecord[], fiscalYear: string) 
   }, [filters.search]);
 
   const filteredRecords = useMemo(() => records.filter((receipt) => {
-    const searchable = `${receipt.vehicleNumber} ${receipt.receiptNumber} ${receipt.customerName} ${receipt.organizationName}`.toLocaleLowerCase();
+    const searchable = `${receipt.vehicleNumber} ${receipt.receiptNumber} ${receipt.customerName} ${receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName ?? '' : ''}`.toLocaleLowerCase();
     return (!debouncedSearch || searchable.includes(debouncedSearch))
       && (fiscalYear === 'all' || receipt.fiscalYear === fiscalYear)
       && (!filters.dateFrom || receipt.paymentDate >= filters.dateFrom)

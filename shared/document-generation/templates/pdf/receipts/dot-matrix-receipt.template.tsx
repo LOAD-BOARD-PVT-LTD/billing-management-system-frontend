@@ -7,10 +7,16 @@ import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency 
 import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import type { BillTemplateProps } from '../../../types/template.types';
 import { dotMatrixReceiptStyles } from './dot-matrix-receipt.styles';
+import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
+  const ownerLines = getReceiptOwnerDisplayLines(
+    content.vehicle.ownerName,
+    content.vehicle.operatorName,
+    content.vehicle.phone,
+  );
 
   return (
     <>
@@ -41,8 +47,12 @@ export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: 
         </div>
 
         <section className="dot-matrix-party">
-          <div>सदस्यको नाम: <strong>{content.vehicle.ownerName || '—'}</strong></div>
-          <div>सम्पर्क नं.: <strong>{content.vehicle.phone || '—'}</strong></div>
+          {ownerLines.map((line) => (
+            <div key={`${line.label}-${line.name}`}>
+              {line.label ? `${line.label} ` : null}<strong>{line.name}</strong>{line.suffix}
+            </div>
+          ))}
+          {ownerLines.length === 1 ? <div>सम्पर्क नं.: <strong>{content.vehicle.phone || '—'}</strong></div> : null}
           <div>ठेगाना: <strong>{content.vehicle.address || '—'}</strong></div>
           <div>सवारी नं.: <strong>{content.vehicle.vehicleNumber || '—'}</strong>{content.vehicle.vehicleType ? ` (${content.vehicle.vehicleType})` : ''}</div>
           <div className="dot-matrix-period">
@@ -50,6 +60,7 @@ export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: 
             {content.periodStart || content.periodEnd
               ? <> · अवधि: {formatDocumentNepaliDate(content.periodStart)} देखि {formatDocumentNepaliDate(content.periodEnd)} सम्म</>
               : null}
+            {content.billingType !== 'GENERAL' ? ' संघको नियमानुसार रकम प्राप्त भयो' : null}
           </div>
         </section>
 
@@ -70,6 +81,12 @@ export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: 
                 <td />
                 <td>छुट</td>
                 <td className="dot-matrix-number">-{formatDocumentCurrency(content.discount)}</td>
+              </tr>
+            ) : null}
+            {content.billingType !== 'GENERAL' ? (
+              <tr>
+                <td>रुट:</td>
+                <td colSpan={2}>{content.vehicle.route || ''}</td>
               </tr>
             ) : null}
             <tr className="dot-matrix-total">

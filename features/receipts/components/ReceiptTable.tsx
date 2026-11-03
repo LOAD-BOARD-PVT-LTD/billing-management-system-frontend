@@ -2,6 +2,7 @@ import { DataTable, type DataTableColumn } from '@/components/data-tables/DataTa
 import { DataTableColumnHeader, type SortDirection } from '@/components/data-tables/DataTableColumnHeader';
 import { ReceiptActions } from '@/features/receipts/components/ReceiptActions';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+import { getMemberOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 import type { ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
 import { convertADtoBS } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
@@ -47,7 +48,18 @@ export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, 
 		vehicleNumber: {
 			id: 'vehicleNumber',
 			header: heading('सवारी साधन नम्बर', 'vehicleNumber', sortColumn, sortDirection, onSort),
-			cell: (receipt) => <span className="block max-w-44 break-words font-semibold" title={receipt.vehicleNumber || 'सामान्य बिल'}>{receipt.billingType === 'GENERAL' ? 'सामान्य बिल' : receipt.vehicleNumber}</span>,
+			cell: (receipt) => (
+				<div className="max-w-44 space-y-0.5">
+					<span className="block break-words font-semibold" title={receipt.vehicleNumber || 'सामान्य बिल'}>
+						{receipt.billingType === 'GENERAL' ? 'सामान्य बिल' : receipt.vehicleNumber}
+					</span>
+					{receipt.billingType === 'MEMBERSHIP' && receipt.bill.content.vehicle.route ? (
+						<span className="block break-words text-xs text-muted-foreground">
+							रुट: {receipt.bill.content.vehicle.route}
+						</span>
+					) : null}
+				</div>
+			),
 			headerClassName: 'min-w-40',
 		},
 		finalDigits: {
@@ -58,8 +70,23 @@ export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, 
 		},
 		customer: {
 			id: 'customer',
-			header: heading('नाम / संस्था', 'customer', sortColumn, sortDirection, onSort),
-			cell: (receipt) => <div className="max-w-56 space-y-0.5"><p className="line-clamp-2 break-words" title={receipt.customerName}>{receipt.customerName}</p><p className="line-clamp-2 break-words text-[10px] text-muted-foreground" title={receipt.organizationName}>{receipt.organizationName}</p></div>,
+			header: heading('नाम', 'customer', sortColumn, sortDirection, onSort),
+			cell: (receipt) => {
+				const ownerLines = getMemberOwnerDisplayLines(
+					receipt.customerName || receipt.bill.content.vehicle.ownerName,
+					receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName : '',
+				);
+				return (
+					<div className="max-w-56 space-y-0.5">
+						{ownerLines.map((line) => (
+							<p key={`${line.label}-${line.name}`} className="line-clamp-2 break-words">
+								{line.label ? <span className="text-muted-foreground">{line.label}</span> : null}
+								{line.label ? ' ' : ''}{line.name}{line.suffix}
+							</p>
+						))}
+					</div>
+				);
+			},
 			headerClassName: 'min-w-48',
 		},
 		paymentDate: {
