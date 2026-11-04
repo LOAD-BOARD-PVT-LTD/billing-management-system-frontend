@@ -25,7 +25,7 @@ export function getMemberOwnerDisplayLines(
 
 	return [
 		{
-			label: 'संचालक:',
+			label: 'सञ्चालक:',
 			name: owners.sanchalakName,
 			suffix: '',
 		},
@@ -72,7 +72,7 @@ export function getReceiptOwnerDisplayLines(
 
 	return [
 		{
-			label: 'संचालक:',
+			label: 'सञ्चालक:',
 			name: owners.sanchalakName,
 			suffix: '',
 		},
@@ -100,6 +100,6 @@ export function getBillOwnerDisplayLines(
 
 	return [
 		{ ...lines[1], label: 'सदस्यको नाम:' },
-		{ ...lines[0], label: 'संचालकको नाम:' },
+		{ ...lines[0], label: 'सञ्चालकको नाम:' },
 	];
 }

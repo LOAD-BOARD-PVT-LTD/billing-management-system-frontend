@@ -75,7 +75,7 @@ describe('receipt vehicle owners', () => {
 					name: 'Member Name',
 					suffix: ' (9800000000) बाट संघको विधान बमोजिम',
 				},
-				{ label: 'संचालकको नाम:', name: 'Operator Name', suffix: '' },
+				{ label: 'सञ्चालकको नाम:', name: 'Operator Name', suffix: '' },
 			],
 		);
 		assert.deepEqual(
