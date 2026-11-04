@@ -3,6 +3,9 @@ import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { getReceiptVehicleOwners } from '@/features/receipts/utils/receipt-owners';
+import { getRelatedMembershipBills } from '../utils/reconciliation-history';
+
+export { getRelatedMembershipBills } from '../utils/reconciliation-history';
 
 export type ReconciliationMemberHistoryProps = {
 	billingVehicle: BillingVehicle;
@@ -12,10 +15,6 @@ export type ReconciliationMemberHistoryProps = {
 	isLoading: boolean;
 	error: string | null;
 };
-
-function normalizeVehicleKey(value: string): string {
-	return value.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
-}
 
 function text(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
@@ -49,49 +48,28 @@ function getMemberCode(resource: VehicleResourceDocument): string {
 	return '';
 }
 
-export function getRelatedMembershipBills(
-	receipts: ReceiptRecord[],
-	billingVehicle: BillingVehicle,
-	billingResource: VehicleResourceDocument,
-): ReceiptRecord[] {
-	const vehicleIds = new Set([
-		billingVehicle.tqmsVehicleId,
-		billingVehicle.id,
-		billingResource.id,
-		text(billingResource.innerContent.VehicleId ?? billingResource.innerContent.vehicleId),
-	].filter(Boolean));
-	const oldVehicleNumber = normalizeVehicleKey(billingVehicle.vehicleNumber);
-
-	return receipts
-		.filter((receipt) => {
-			if (receipt.billingType !== 'MEMBERSHIP' || receipt.status !== 'PAID') return false;
-			const billVehicleId = receipt.bill.content.vehicle.id.trim();
-			if (billVehicleId) return vehicleIds.has(billVehicleId);
-			return Boolean(oldVehicleNumber) && normalizeVehicleKey(receipt.vehicleNumber) === oldVehicleNumber;
-		})
-		.sort((left, right) => {
-			const leftDate = Date.parse(left.bill.createdAt);
-			const rightDate = Date.parse(right.bill.createdAt);
-			return (Number.isNaN(rightDate) ? 0 : rightDate) - (Number.isNaN(leftDate) ? 0 : leftDate);
-		});
-}
-
 function OwnerDetails({
 	title,
 	badge,
 	vehicle,
+	isTqms = false,
 	identifierLabel,
 	identifierValue,
 }: {
 	title: string;
 	badge: string;
 	vehicle: BillingVehicle;
+	isTqms?: boolean;
 	identifierLabel: string;
 	identifierValue: string;
 }) {
 	const rows = [
 		[identifierLabel, identifierValue],
-		['धनीको नाम', vehicle.ownerName],
+		...(vehicle.operatorName && vehicle.operatorName !== vehicle.ownerName
+			? [['सञ्चालकको नाम', vehicle.operatorName]]
+			: []),
+		['सदस्यको नाम', vehicle.ownerName],
+		...(isTqms ? [['धनी ID', getOwnerId(vehicle)]] : []),
 		['फोन नम्बर', vehicle.phone],
 		['ठेगाना', vehicle.ownerAddress],
 		['सवारी नम्बर', vehicle.vehicleNumber],
@@ -115,6 +93,20 @@ function OwnerDetails({
 			</dl>
 		</Card>
 	);
+}
+
+function getOwnerId(vehicle: BillingVehicle): string {
+	const owners = Array.isArray(vehicle.resourceContent.Owners)
+		? vehicle.resourceContent.Owners.filter((owner): owner is Record<string, unknown> => (
+			Boolean(owner) && typeof owner === 'object' && !Array.isArray(owner)
+		))
+		: [];
+	const owner = owners.find((item) => item.Name === vehicle.ownerName)
+		?? owners.find((item) => item.name === vehicle.ownerName)
+		?? owners[0];
+	if (!owner) return 'उपलब्ध छैन';
+	const id = owner.OwnerId ?? owner.ownerId ?? owner.DhaniId ?? owner.dhaniId ?? owner.Id ?? owner.id;
+	return text(id) || 'उपलब्ध छैन';
 }
 
 export function ReconciliationMemberHistory({
@@ -142,8 +134,8 @@ export function ReconciliationMemberHistory({
 	}
 
 	const memberCode = getMemberCode(billingResource);
-	const history = getRelatedMembershipBills(receipts, billingVehicle, billingResource);
-	if (!memberCode || history.length === 0) return null;
+	const history = getRelatedMembershipBills(receipts, billingVehicle, billingResource, tqmsVehicle);
+	if (history.length === 0) return null;
 
 	return (
 		<section className="space-y-3" aria-label="पुरानो सदस्य तथा बिलिङ विवरण">
@@ -159,6 +151,7 @@ export function ReconciliationMemberHistory({
 					title="TQMS अनुसार हालको धनी विवरण"
 					badge="TQMS स्रोत"
 					vehicle={tqmsVehicle}
+					isTqms
 					identifierLabel="TQMS ID"
 					identifierValue={tqmsVehicle.tqmsVehicleId || '—'}
 				/>
@@ -225,7 +218,7 @@ export function hasReconciliationHistory(
 	billingVehicle: BillingVehicle,
 	billingResource: VehicleResourceDocument,
 	receipts: ReceiptRecord[],
+	tqmsVehicle?: BillingVehicle | null,
 ): boolean {
-	return Boolean(getMemberCode(billingResource))
-		&& getRelatedMembershipBills(receipts, billingVehicle, billingResource).length > 0;
+	return getRelatedMembershipBills(receipts, billingVehicle, billingResource, tqmsVehicle).length > 0;
 }

@@ -7,12 +7,12 @@ import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency 
 import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import type { BillTemplateProps } from '../../../types/template.types';
 import { dotMatrixReceiptStyles } from './dot-matrix-receipt.styles';
-import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { getBillOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 export function DotMatrixReceiptTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
-  const ownerLines = getReceiptOwnerDisplayLines(
+  const ownerLines = getBillOwnerDisplayLines(
     content.vehicle.ownerName,
     content.vehicle.operatorName,
     content.vehicle.phone,

@@ -229,6 +229,17 @@ describe('3. General Billing & Feature Flags', () => {
       assert.equal(payload.subtotal, 7500);
       assert.equal(payload.total, 7500);
       assert.equal(payload.paymentMethod, 'बैंक ट्रान्सफर');
+
+      const vatPayload = buildBillResourceContent({
+        ...generalInput,
+        vatAmount: 975,
+        vatRatePct: 13,
+        vatBillingEntityIds: ['ENT-1'],
+      });
+      assert.equal(vatPayload.total, 8475);
+      assert.equal(vatPayload.vatAmount, 975);
+      assert.equal(vatPayload.vatRatePct, 13);
+      assert.deepEqual(vatPayload.vatBillingEntityIds, ['ENT-1']);
     });
   });
 });

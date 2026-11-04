@@ -25,13 +25,13 @@ export function getMemberOwnerDisplayLines(
 
 	return [
 		{
-			label: 'सवारी धनीको नाम:',
-			name: owners.dhaniName,
+			label: 'संचालक:',
+			name: owners.sanchalakName,
 			suffix: '',
 		},
 		{
-			label: 'सञ्चालकको नाम:',
-			name: owners.sanchalakName,
+			label: 'धनीको नाम:',
+			name: owners.dhaniName,
 			suffix: '',
 		},
 	];
@@ -72,14 +72,34 @@ export function getReceiptOwnerDisplayLines(
 
 	return [
 		{
-			label: 'सदस्यको नाम:',
-			name: owners.dhaniName,
-			suffix: `${phone.trim() ? ` (${phone.trim()})` : ''} बाट संघको विधान बमोजिम`,
-		},
-		{
-			label: 'संचालकको नाम:',
+			label: 'संचालक:',
 			name: owners.sanchalakName,
 			suffix: '',
 		},
+		{
+			label: 'धनीको नाम:',
+			name: owners.dhaniName,
+			suffix: `${phone.trim() ? ` (${phone.trim()})` : ''} बाट संघको विधान बमोजिम`,
+		},
+	];
+}
+
+export function getBillOwnerDisplayLines(
+	ownerName: string | null | undefined,
+	operatorName: string | null | undefined,
+	phone = '',
+): ReceiptOwnerDisplayLine[] {
+	const lines = getReceiptOwnerDisplayLines(ownerName, operatorName, phone);
+	if (lines.length === 1) {
+		return [{
+			...lines[0],
+			label: 'सदस्यको नाम:',
+			suffix: `${lines[0].suffix} बाट संघको विधान बमोजिम`,
+		}];
+	}
+
+	return [
+		{ ...lines[1], label: 'सदस्यको नाम:' },
+		{ ...lines[0], label: 'संचालकको नाम:' },
 	];
 }

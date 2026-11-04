@@ -4,6 +4,7 @@ import { receiptsKeys } from '@/lib/query/query-keys';
 import { formatBranchReceiptNumber } from '@/lib/receipts/receipt-number-display';
 import type { BillResourceContent, SavedBill } from '@/features/billing/model/bill.types';
 import { fetchFiscalYearManagement } from '@/features/settings/api/fiscal-year-management.api';
+import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
 import type { ReceiptRecord, ReceiptStatus } from '../model/receipt';
 
 type JsonRecord = Record<string, unknown>;
@@ -127,6 +128,11 @@ export function parseBillResource(value: unknown): ReceiptRecord {
 
   const subtotal = number(content.subtotal, items.reduce((sum, item) => sum + item.amount, 0));
   const discount = number(content.discount, 0);
+  const vatAmount = number(content.vatAmount ?? content.vat_amount, 0);
+  const vatRatePct = number(content.vatRatePct ?? content.vat_rate_pct, 0);
+  const vatBillingEntityIds = Array.isArray(content.vatBillingEntityIds)
+    ? content.vatBillingEntityIds.filter((id): id is string => typeof id === 'string')
+    : [];
   const customerName = text(customer?.name) || text(vehicle.ownerName);
   const customerPhone = text(customer?.phone) || text(vehicle.smsPhone) || text(vehicle.phone);
   const customerAddress = text(customer?.address) || text(vehicle.address);
@@ -169,7 +175,12 @@ export function parseBillResource(value: unknown): ReceiptRecord {
     items,
     subtotal,
     discount,
-    total: number(content.total, Math.max(0, subtotal - discount)),
+    ...(vatAmount > 0 || vatRatePct > 0 ? {
+      vatAmount,
+      vatRatePct,
+      vatBillingEntityIds,
+    } : {}),
+    total: number(content.total, Math.max(0, subtotal - discount + vatAmount)),
     paymentMethod: text(content.paymentMethod),
     note: text(content.note),
     ...(createdBy ? {
@@ -360,6 +371,18 @@ export async function correctReceipt(
   const vehicle = asRecord(content.vehicle);
   if (!vehicle) throw new Error('BillResource मा सवारी विवरण उपलब्ध छैन।');
   const discount = number(content.discount, 0);
+  const vatRatePct = number(content.vatRatePct, 0);
+  const vatBillingEntityIds = Array.isArray(content.vatBillingEntityIds)
+    ? content.vatBillingEntityIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const vat = calculateConfiguredVat({
+    items,
+    subtotal,
+    discount,
+    enabled: vatRatePct > 0,
+    rate: vatRatePct,
+    billingEntityIds: vatBillingEntityIds,
+  });
   const correctedAt = new Date().toISOString();
   await updateReceiptResource(receipt, {
     ...content,
@@ -370,7 +393,10 @@ export async function correctReceipt(
     paymentMethod,
     items,
     subtotal,
-    total: Math.max(0, subtotal - discount),
+    vatAmount: vat.vatAmount,
+    vatRatePct: vat.vatRatePct,
+    vatBillingEntityIds: vat.billingEntityIds,
+    total: Math.max(0, subtotal - discount + vat.vatAmount),
     note: correction.note.trim(),
     auditHistory: [
       ...auditHistory(content),

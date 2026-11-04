@@ -13,13 +13,15 @@ import { useBranches } from '@/features/administration/branches/hooks/useBranche
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
 import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
+import { useVatSettings } from '@/features/settings/hooks/useVatSettings';
 import { useCreateBill } from '@/features/billing/hooks/useCreateBill';
 import type { BillCustomer, BillDetails, SavedBill } from '@/features/billing/model/bill.types';
 import { PrintableBillReceipt } from '@/features/receipts/components/PrintableBillReceipt';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { resolveBillBranding } from '@/shared/document-generation/utils/resolve-bill-branding';
-import { formatCurrency } from '@/utils/numbers';
+import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
+import { BillingTotalsSummary } from '@/features/billing/components/create-bill/BillingTotalsSummary';
 
 type ChargeDraft = {
   id: string;
@@ -35,6 +37,7 @@ export function GeneralBillingWorkspace() {
   const { user: authUser } = useAuth();
   const { records: users } = useUsers();
   const billingRules = useBillingRules();
+  const vatSettings = useVatSettings();
   const { records: branches, isLoading: isLoadingBranches, loadError: branchError } = useBranches();
   const { records: billingEntities, isLoading: isLoadingEntities, error: entityError } = useBillingEntities();
   const createBill = useCreateBill();
@@ -74,6 +77,14 @@ export function GeneralBillingWorkspace() {
     : availableEntities.find((entity) => entity.isDefault)?.id
       ?? (availableEntities.length === 1 ? availableEntities[0].id : '');
   const subtotal = charges.reduce((sum, charge) => sum + (Number(charge.amount) || 0), 0);
+  const vat = calculateConfiguredVat({
+    items: charges.map((charge) => ({ entityId: resolvedEntityId, amount: Number(charge.amount) || 0 })),
+    subtotal,
+    discount: 0,
+    enabled: vatSettings.settings?.enabled ?? false,
+    rate: vatSettings.settings?.rate ?? 0,
+    billingEntityIds: vatSettings.settings?.billingEntityIds ?? [],
+  });
 
   const branding = useMemo(
     () => savedBill ? resolveBillBranding(savedBill, billingEntities) : {},
@@ -142,6 +153,10 @@ export function GeneralBillingWorkspace() {
       setFormError(entityError ?? 'बिलिङ इकाइ छान्नुहोस्।');
       return;
     }
+    if (vatSettings.isLoading || vatSettings.error) {
+      setFormError(vatSettings.isLoading ? 'VAT सेटिङ लोड हुँदैछ।' : `VAT सेटिङ लोड गर्न सकिएन: ${vatSettings.error}`);
+      return;
+    }
     if (!defaultFiscalYear) {
       setFormError(billingRules.error ?? 'सक्रिय आर्थिक वर्ष उपलब्ध छैन।');
       return;
@@ -193,6 +208,9 @@ export function GeneralBillingWorkspace() {
         })),
         subtotal,
         discount: 0,
+        vatAmount: vat.vatAmount,
+        vatRatePct: vat.vatRatePct,
+        vatBillingEntityIds: vat.billingEntityIds,
         paymentMethod,
         note,
       });
@@ -337,11 +355,20 @@ export function GeneralBillingWorkspace() {
         </div>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-          <p className="text-base font-semibold">जम्मा: रु. {formatCurrency(subtotal)}</p>
-          <Button type="button" onClick={() => void handleCreateBill()} disabled={createBill.isSaving || isLoadingBranches || isLoadingEntities || billingRules.isLoading} loading={createBill.isSaving} leftIcon={<FileText className="size-4" />}>
+          <BillingTotalsSummary
+            subtotal={subtotal}
+            discount={0}
+            vatAmount={vat.vatAmount}
+            vatRatePct={vat.vatRatePct}
+            vatEnabled={vatSettings.settings?.enabled === true}
+            vatApplicable={vat.vatApplicable}
+          />
+          <Button type="button" onClick={() => void handleCreateBill()} disabled={createBill.isSaving || isLoadingBranches || isLoadingEntities || billingRules.isLoading || vatSettings.isLoading || Boolean(vatSettings.error)} loading={createBill.isSaving} leftIcon={<FileText className="size-4" />}>
             बिल बनाउनुहोस्
           </Button>
         </footer>
+        {vatSettings.isLoading ? <p role="status" className="text-sm text-muted-foreground">VAT सेटिङ लोड हुँदैछ...</p> : null}
+        {vatSettings.error ? <p role="alert" className="text-sm text-destructive">VAT सेटिङ लोड गर्न सकिएन: {vatSettings.error}</p> : null}
         {formError ? <p role="alert" className="text-sm text-destructive">{formError}</p> : null}
       </section>
     </div>

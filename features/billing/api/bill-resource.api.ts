@@ -40,7 +40,18 @@ export function buildBillResourceContent(input: MembershipBillInput): BillResour
 export function buildBillResourceContent(input: GeneralBillInput): BillResourcePayload;
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload;
 export function buildBillResourceContent(input: CreateBillInput): BillResourcePayload {
-	const { createdBy, details, items, subtotal, discount, paymentMethod, note } = input;
+	const {
+		createdBy,
+		details,
+		items,
+		subtotal,
+		discount,
+		vatAmount = 0,
+		vatRatePct = 0,
+		vatBillingEntityIds = [],
+		paymentMethod,
+		note,
+	} = input;
 	const operatorName = input.billingType === 'GENERAL'
 		? null
 		: distinctOperatorName(input.vehicle.ownerName, input.vehicle.operatorName);
@@ -86,7 +97,12 @@ export function buildBillResourceContent(input: CreateBillInput): BillResourcePa
 		})),
 		subtotal,
 		discount,
-		total: Math.max(0, subtotal - discount),
+		...(vatAmount > 0 || vatRatePct > 0 ? {
+			vatAmount,
+			vatRatePct,
+			vatBillingEntityIds,
+		} : {}),
+		total: Math.max(0, subtotal - discount + vatAmount),
 		paymentMethod,
 		note: note.trim(),
 	};

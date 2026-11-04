@@ -4,6 +4,7 @@ import {
 	compareVehiclesForReconciliation,
 	normalizeReconciliationText,
 	prepareNewMemberPayload,
+	prepareOwnerChangePayload,
 	prepareTqmsUpdatePayload,
 	reconcileVehicleLookup,
 	resolveVehicleOwners,
@@ -11,6 +12,7 @@ import {
 } from '@/features/reconciliation';
 import { findVehicleResource, type VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
 import type { BillingVehicle } from '@/features/billing/model/types';
+import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { apiClient } from '@/lib/api/client';
 
 function createMockBillingVehicle(overrides: Partial<BillingVehicle> = {}): BillingVehicle {
@@ -98,6 +100,66 @@ function createMockResource(
 			...innerOverrides,
 		},
 		externalContent,
+	};
+}
+
+function createMockReceipt(vehicleId: string, vehicleNumber: string): ReceiptRecord {
+	const vehicle = createMockBillingVehicle({ tqmsVehicleId: vehicleId, vehicleNumber });
+	return {
+		id: `bill-${vehicleId}-${vehicleNumber}`,
+		billingType: 'MEMBERSHIP',
+		receiptNumber: 'MAIN.1',
+		fiscalYear: '2083/84',
+		vehicleNumber,
+		finalDigits: '',
+		customerName: vehicle.ownerName,
+		organizationName: '',
+		billingDate: '2083-01-01',
+		paymentDate: '2083-01-01',
+		validUntil: '2083-12-30',
+		paymentMethod: 'नगद',
+		status: 'PAID',
+		totalAmount: 100,
+		branchName: 'Main',
+		userName: 'Admin',
+		printedCopyCount: 0,
+		bill: {
+			id: 'bill-id',
+			receiptNumber: 'MAIN.1',
+			createdAt: '2026-01-01T00:00:00.000Z',
+			content: {
+				billingType: 'MEMBERSHIP',
+				vehicle: {
+					id: vehicleId,
+					vehicleNumber,
+					vehicleType: vehicle.vehicleType,
+					ownerName: vehicle.ownerName,
+					operatorName: vehicle.operatorName,
+					phone: vehicle.phone,
+					address: vehicle.ownerAddress,
+				},
+				branch: {
+					id: 'branch-1',
+					name: 'Main',
+					BranchCode: 'MAIN',
+					address: '',
+					phone: '',
+					contactPerson: '',
+				},
+				fiscalYearId: 'fy-1',
+				fiscalYearName: '2083/84',
+				billingDate: '2083-01-01',
+				periodStart: '2083-01-01',
+				periodEnd: '2083-01-01',
+				billingMonths: 1,
+				items: [],
+				subtotal: 100,
+				discount: 0,
+				total: 100,
+				paymentMethod: 'नगद',
+				note: '',
+			},
+		},
 	};
 }
 
@@ -258,6 +320,14 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(vehicle.operatorName, 'Gita Sharma'); // Same is sawari dhani and sanchalak
 			assert.equal(vehicle.phone, '9841555555');
 		});
+
+		test('uses saved external SMS phone without replacing the TQMS owner phone', () => {
+			const resource = createMockResource('res-sms', {}, { smsPhone: '9811111111' });
+			const vehicle = vehicleResourceToBillingVehicle(resource);
+
+			assert.equal(vehicle.phone, '9841234567');
+			assert.equal(vehicle.smsPhone, '9811111111');
+		});
 	});
 
 	describe('End-to-End Reconcile Vehicle Lookup Flow', () => {
@@ -305,7 +375,9 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 				);
 			};
 
-			const result = await reconcileVehicleLookup('BA 01 KHA 1234');
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
+				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
+			});
 
 			// Verified call sequence: VehicleResource search is performed first, followed by TQMS search
 			assert.ok(decodeURIComponent(callSequence[0]).startsWith('GET:search/VehicleResource/VehicleNumber/BA 01 KHA 1234/all'));
@@ -348,7 +420,9 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 				);
 			};
 
-			const result = await reconcileVehicleLookup('BA 01 KHA 1234');
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
+				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
+			});
 
 			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
 			assert.equal(result.billingVehicle.ownerName, 'Old Billing Owner');
@@ -385,7 +459,9 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 				Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
 			}] as T);
 
-			const result = await reconcileVehicleLookup('BA 01 KHA 1234');
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
+				receipts: [createMockReceipt('101', 'Ba 1 Ja 9876')],
+			});
 
 			assert.ok(resourcePaths.includes('search/VehicleResource/VehicleId/101/all'));
 			assert.equal(result.type, 'MATCHED');
@@ -413,6 +489,31 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 
 			assert.equal(result.type, 'FIRST_TIME');
 			assert.equal(result.tqmsVehicle.vehicleNumber, 'LU 02 KHA 5678');
+			assert.equal(result.billingResource, null);
+		});
+
+		test('bypasses reconciliation and selects current TQMS details when the resource has no bill history', async () => {
+			apiClient.get = async <T>(): Promise<T> => ([{
+				id: 'res-101',
+				resource_name: 'VehicleResource',
+				inner_content: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					VehicleType: 'Old Bus',
+					Owners: [{ Name: 'Old Owner' }],
+				},
+			}] as T);
+			apiClient.post = async <T>(): Promise<T> => ([{
+				VehicleId: '101',
+				VehicleNumber: 'BA 01 KHA 1234',
+				VehicleType: 'Bus',
+				Owners: [{ Name: 'Current TQMS Owner' }],
+			}] as T);
+
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', { receipts: [] });
+			assert.equal(result.type, 'FIRST_TIME');
+			assert.equal(result.tqmsVehicle.vehicleType, 'Bus');
+			assert.equal(result.tqmsVehicle.ownerName, 'Current TQMS Owner');
 			assert.equal(result.billingResource, null);
 		});
 	});
@@ -443,11 +544,76 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			);
 
 			assert.equal(payload.innerContent.VehicleNumber, 'BA 01 KHA 1234');
+			assert.deepEqual(payload.innerContent.Owners, resource.innerContent.Owners);
 			const audits = payload.externalContent.reconciliationAudit as Array<Record<string, unknown>>;
 			assert.equal(audits.length, 1);
 			assert.equal(audits[0].action, 'UPDATE_TQMS');
 			assert.equal(audits[0].performedBy, 'admin_user');
 			assert.equal(audits[0].reason, 'TQMS renewal update');
+		});
+	});
+
+	describe('prepareOwnerChangePayload', () => {
+		test('records a name correction without creating an ownership transfer history', () => {
+			const resource = createMockResource();
+			const previousOwners = structuredClone(resource.innerContent.Owners);
+			const tqms = createMockBillingVehicle({
+				ownerName: 'Corrected Owner Name',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					Owners: [{ Name: 'Corrected Owner Name', OwnerId: 8700 }],
+				},
+			});
+			const diffs = compareVehiclesForReconciliation(vehicleResourceToBillingVehicle(resource), tqms);
+			const payload = prepareOwnerChangePayload(
+				resource,
+				tqms,
+				diffs,
+				'NAME_CORRECTION',
+				'admin',
+				'TQMS अनुसार धनीको नाम सच्याइयो',
+			);
+
+			assert.deepEqual(payload.innerContent.Owners, tqms.resourceContent.Owners);
+			assert.deepEqual(resource.innerContent.Owners, previousOwners);
+			assert.equal(payload.externalContent.ownershipHistory, undefined);
+			assert.equal(
+				(payload.externalContent.reconciliationAudit as Array<Record<string, unknown>>)[0].reason,
+				'TQMS अनुसार धनीको नाम सच्याइयो',
+			);
+		});
+
+		test('archives the previous one-or-two owner array on confirmed ownership transfer', () => {
+			const resource = createMockResource();
+			const previousOwners = structuredClone(resource.innerContent.Owners);
+			const tqms = createMockBillingVehicle({
+				ownerName: 'New Owner',
+				operatorName: 'New Operator',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					Owners: [
+						{ Name: 'New Operator', OwnerId: 8701 },
+						{ Name: 'New Owner', OwnerId: 8702 },
+					],
+				},
+			});
+			const diffs = compareVehiclesForReconciliation(vehicleResourceToBillingVehicle(resource), tqms);
+			const payload = prepareOwnerChangePayload(
+				resource,
+				tqms,
+				diffs,
+				'OWNERSHIP_TRANSFER',
+				'admin',
+				'TQMS अनुसार धनी परिवर्तन पुष्टि',
+			);
+			const ownershipHistory = payload.externalContent.ownershipHistory as Array<Record<string, unknown>>;
+
+			assert.deepEqual(payload.innerContent.Owners, tqms.resourceContent.Owners);
+			assert.deepEqual(ownershipHistory[0].previousOwners, previousOwners);
+			assert.equal(ownershipHistory[0].transferType, 'TQMS_OWNERSHIP_TRANSFER');
+			assert.deepEqual(resource.innerContent.Owners, previousOwners);
 		});
 	});
 

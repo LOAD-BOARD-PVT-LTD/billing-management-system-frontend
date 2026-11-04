@@ -8,9 +8,12 @@ import type {
 	ReconciliationFieldDiff,
 	ReconciliationLookupResult,
 	ReconciliationOption,
+	OwnerChangeType,
 } from '../types/reconciliation.types';
+import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import {
 	prepareNewMemberPayload,
+	prepareOwnerChangePayload,
 	prepareTqmsUpdatePayload,
 	reconcileVehicleLookup,
 } from '../utils/reconciliation-helpers';
@@ -19,10 +22,12 @@ export type ReconcileLookupOptions = {
 	signal?: AbortSignal;
 	preloadedTqms?: BillingVehicle;
 	fallbackSmsPhone?: string;
+	receipts?: ReceiptRecord[];
 };
 
 export type ApplyDecisionOptions = {
-	option: ReconciliationOption;
+	option: ReconciliationOption | null;
+	ownerChangeType: OwnerChangeType | null;
 	reason: string;
 	performedBy: string;
 	billingVehicle: BillingVehicle;
@@ -59,6 +64,7 @@ export function useVehicleReconciliation() {
 	const applyDecision = useCallback(
 		async ({
 			option,
+			ownerChangeType,
 			reason,
 			performedBy,
 			billingVehicle,
@@ -70,8 +76,33 @@ export function useVehicleReconciliation() {
 			setError(null);
 
 			try {
-				if (option === 'KEEP_BILLING') {
+				if ((option === null || option === 'KEEP_BILLING') && !ownerChangeType) {
 					return billingVehicle;
+				}
+
+				if (option === null || option === 'KEEP_BILLING') {
+					if (!ownerChangeType) return billingVehicle;
+					const { innerContent, externalContent } = prepareOwnerChangePayload(
+						billingResource,
+						tqmsVehicle,
+						diffs,
+						ownerChangeType,
+						performedBy,
+						reason,
+					);
+					await updateVehicleResource(billingResource, innerContent, externalContent);
+					return {
+						...billingVehicle,
+						ownerName: tqmsVehicle.ownerName,
+						operatorName: tqmsVehicle.operatorName,
+						phone: tqmsVehicle.phone,
+						ownerAddress: tqmsVehicle.ownerAddress,
+						branch: tqmsVehicle.branch,
+						resourceContent: {
+							...billingVehicle.resourceContent,
+							Owners: tqmsVehicle.resourceContent.Owners ?? tqmsVehicle.resourceContent.owners,
+						},
+					};
 				}
 
 				if (option === 'UPDATE_TQMS') {
@@ -81,13 +112,24 @@ export function useVehicleReconciliation() {
 						diffs,
 						performedBy,
 						reason,
+						ownerChangeType,
 					);
 					await updateVehicleResource(billingResource, innerContent, externalContent);
-
+					const ownersApplied = ownerChangeType !== null;
 					return {
 						...tqmsVehicle,
+						...(ownersApplied ? {} : {
+							ownerName: billingVehicle.ownerName,
+							operatorName: billingVehicle.operatorName,
+							phone: billingVehicle.phone,
+							ownerAddress: billingVehicle.ownerAddress,
+							resourceContent: {
+								...tqmsVehicle.resourceContent,
+								Owners: billingVehicle.resourceContent.Owners ?? billingVehicle.resourceContent.owners,
+							},
+						}),
 						id: billingResource.id,
-						smsPhone: tqmsVehicle.smsPhone || billingVehicle.smsPhone,
+						smsPhone: billingVehicle.smsPhone || tqmsVehicle.smsPhone,
 					};
 				}
 

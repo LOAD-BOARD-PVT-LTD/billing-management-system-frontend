@@ -18,6 +18,7 @@ import { SearchableCombobox } from '@/components/ui/SearchableCombobox';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { getTqmsUrl } from '@/lib/config/tqms';
 import { useTqmsVehicleSearch } from '@/features/billing/hooks/useTqmsVehicleSearch';
 import { useUpdateBillingVehiclePhone } from '@/features/billing/hooks/useUpdateBillingVehiclePhone';
 import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
@@ -28,17 +29,20 @@ import {
 import { VehiclePhoneUpdateDialog } from './VehiclePhoneUpdateDialog';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
+import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 
 type BillingHeaderProps = {
 	selectedVehicle: BillingVehicle | null;
 	onSelectVehicle: (vehicle: BillingVehicle) => void;
 	onClearSelection: () => void;
 	onSmsPhoneChange: (phone: string) => void;
+	loadReceipts: () => Promise<ReceiptRecord[]>;
 	onReconciliationRequired?: (data: {
 		billingVehicle: BillingVehicle;
 		tqmsVehicle: BillingVehicle;
 		billingResource: VehicleResourceDocument;
 		diffs: ReconciliationFieldDiff[];
+		receipts: ReceiptRecord[];
 	}) => void;
 };
 
@@ -47,6 +51,7 @@ export const BillingHeader = memo(function BillingHeader({
 	onSelectVehicle,
 	onClearSelection,
 	onSmsPhoneChange,
+	loadReceipts,
 	onReconciliationRequired,
 }: BillingHeaderProps) {
 	const [query, setQuery] = useState('');
@@ -66,9 +71,11 @@ export const BillingHeader = memo(function BillingHeader({
 		setIsOpen(false);
 
 		try {
+			const billingHistory = await loadReceipts();
 			const result = await reconcileLookup(vehicle.vehicleNumber, {
 				preloadedTqms: vehicle,
 				fallbackSmsPhone: vehicle.smsPhone,
+				receipts: billingHistory,
 			});
 
 			if (result.type === 'FIRST_TIME') {
@@ -90,13 +97,15 @@ export const BillingHeader = memo(function BillingHeader({
 					tqmsVehicle: result.tqmsVehicle,
 					billingResource: result.billingResource,
 					diffs: result.diffs,
+					receipts: billingHistory,
 				});
 			}
-		} catch {
-			// Fallback: if reconciliation lookup fails, proceed with the vehicle
-			if (vehicle.id !== selectedVehicle?.id) {
-				onSelectVehicle(vehicle);
-			}
+		} catch (error) {
+			toast({
+				title: 'सवारी विवरण जाँच गर्न सकिएन',
+				description: error instanceof Error ? error.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
+				variant: 'destructive',
+			});
 		}
 	};
 
@@ -107,12 +116,12 @@ export const BillingHeader = memo(function BillingHeader({
 	};
 
 	const handleOwnerUpdate = () => {
-		if (!selectedVehicle?.id) return;
-		const url = new URL(
-			`/admin/vehicle/edit/${encodeURIComponent(selectedVehicle.id)}`,
-			'https://tqms.bitspanda.com',
+		if (!selectedVehicle?.tqmsVehicleId) return;
+		window.open(
+			getTqmsUrl(`/admin/vehicle/edit/${encodeURIComponent(selectedVehicle.tqmsVehicleId)}`),
+			'_blank',
+			'noopener,noreferrer',
 		);
-		window.open(url.toString(), '_blank', 'noopener,noreferrer');
 	};
 
 	const handlePhoneUpdate = async (input: VehiclePhoneUpdateInput) => {
@@ -121,7 +130,7 @@ export const BillingHeader = memo(function BillingHeader({
 		onSmsPhoneChange(input.phone);
 		setPhoneDialogOpen(false);
 		toast({
-			title: 'Billing SMS नम्बर परिवर्तन भयो',
+			title: 'SMS नम्बर परिवर्तन भयो',
 			description: `${selectedVehicle.vehicleNumber} का लागि नयाँ नम्बर सुरक्षित भयो।`,
 		});
 	};
@@ -222,7 +231,7 @@ export const BillingHeader = memo(function BillingHeader({
 								variant="outline"
 								size="sm"
 								onClick={handleOwnerUpdate}
-								disabled={!selectedVehicle.id}
+								disabled={!selectedVehicle.tqmsVehicleId}
 								rightIcon={<ExternalLink className="h-3 w-3" />}
 								className="h-6 px-1.5 text-[11px]"
 							>

@@ -23,6 +23,8 @@ export type MahasangReportRow = {
   previousVehicleNumber: string;
   vehicleType: string;
   ownerName: string;
+  operatorName: string;
+  ownerPhone: string;
   note: string;
   receiptNumber: string;
   membershipIncome: number;

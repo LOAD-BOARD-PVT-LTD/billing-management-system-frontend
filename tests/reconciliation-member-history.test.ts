@@ -110,7 +110,7 @@ function makeReceipt(
 }
 
 describe('Reconciliation membership history', () => {
-	it('matches historical membership bills to the old billing ID after the TQMS ID changes', () => {
+	it('matches historical membership bills by TQMS ID or vehicle number after identifiers change', () => {
 		const billingVehicle = makeVehicle();
 		const billingResource = makeResource();
 		const receipts = [
@@ -121,9 +121,25 @@ describe('Reconciliation membership history', () => {
 
 		assert.deepEqual(
 			getRelatedMembershipBills(receipts, billingVehicle, billingResource).map((receipt) => receipt.id),
-			['old-bill'],
+			['old-bill', 'new-bill'],
 		);
 		assert.equal(hasReconciliationHistory(billingVehicle, billingResource, receipts), true);
+	});
+
+	it('matches history by vehicle number even when the bill has a nonmatching vehicle ID', () => {
+		const receipt = makeReceipt('changed-id', 'older-id', 'Ba 1 Ja 1234');
+		assert.deepEqual(
+			getRelatedMembershipBills([receipt], makeVehicle(), makeResource()).map((item) => item.id),
+			['changed-id'],
+		);
+	});
+
+	it('matches history by TQMS ID even when the bill vehicle number has changed', () => {
+		const receipt = makeReceipt('changed-number', 'tqms-old', 'Ba 2 Ja 9876');
+		assert.deepEqual(
+			getRelatedMembershipBills([receipt], makeVehicle(), makeResource()).map((item) => item.id),
+			['changed-number'],
+		);
 	});
 
 	it('uses vehicle number as a fallback only for legacy bills without a vehicle ID', () => {
@@ -134,7 +150,7 @@ describe('Reconciliation membership history', () => {
 		);
 	});
 
-	it('requires both membership identity and a completed membership bill', () => {
+	it('requires a completed matching membership bill and not a member code', () => {
 		assert.equal(
 			hasReconciliationHistory(makeVehicle(), makeResource({ MemberCode: 'ORG-MAIN-0289' }), []),
 			false,
@@ -145,7 +161,7 @@ describe('Reconciliation membership history', () => {
 				makeResource({ MemberCode: '' }),
 				[makeReceipt('old-bill', 'tqms-old', 'Ba 1 Ja 1234')],
 			),
-			false,
+			true,
 		);
 		assert.equal(
 			hasReconciliationHistory(

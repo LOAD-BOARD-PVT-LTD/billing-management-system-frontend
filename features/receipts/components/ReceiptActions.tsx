@@ -13,6 +13,7 @@ import { TableActionIconButton } from '@/components/ui/table-action-icon-button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReceiptCorrection } from '@/features/receipts/api/bill-resource.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
 
 type ReceiptAction = 'print' | 'download' | 'cancel' | 'correct';
@@ -116,7 +117,15 @@ export function ReceiptActions({
 	const hasChanges = JSON.stringify(correctionValues) !== JSON.stringify(originalValues);
 	const subtotal = correctionValues.items.reduce((sum, item) => sum + item.amount, 0);
 	const discount = receipt.bill.content.discount;
-	const total = Math.max(0, subtotal - discount);
+	const correctionVat = calculateConfiguredVat({
+		items: correctionValues.items,
+		subtotal,
+		discount,
+		enabled: (receipt.bill.content.vatRatePct ?? 0) > 0,
+		rate: receipt.bill.content.vatRatePct ?? 0,
+		billingEntityIds: receipt.bill.content.vatBillingEntityIds ?? [],
+	});
+	const total = Math.max(0, subtotal - discount + correctionVat.vatAmount);
 
 	const runAction = async (action: 'print' | 'download', callback: () => Promise<void>) => {
 		setPending(action);
@@ -326,6 +335,7 @@ export function ReceiptActions({
 								<dl className="w-full max-w-sm space-y-1 rounded-lg border p-3 text-sm">
 									<div className="flex justify-between gap-4"><dt className="text-muted-foreground">जम्मा रकम</dt><dd>{formatAmount(subtotal)}</dd></div>
 									<div className="flex justify-between gap-4"><dt className="text-muted-foreground">छुट</dt><dd>{formatAmount(discount)}</dd></div>
+									{correctionVat.vatAmount > 0 ? <div className="flex justify-between gap-4"><dt className="text-muted-foreground">मू.अ.कर ({correctionVat.vatRatePct}%)</dt><dd>{formatAmount(correctionVat.vatAmount)}</dd></div> : null}
 									<div className="flex justify-between gap-4 border-t pt-1 font-semibold"><dt>कुल रकम</dt><dd>{formatAmount(total)}</dd></div>
 								</dl>
 							</div>

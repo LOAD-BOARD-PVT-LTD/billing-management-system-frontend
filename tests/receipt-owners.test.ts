@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	getBillOwnerDisplayLines,
 	getMemberOwnerDisplayLines,
 	getReceiptOwnerDisplayLines,
 	getReceiptVehicleOwners,
@@ -40,19 +41,19 @@ describe('receipt vehicle owners', () => {
 		);
 	});
 
-	test('formats two-owner bill and receipt lines in the requested member-then-sanchalak order', () => {
+	test('formats two-owner bill and receipt lines with sanchalak before dhani', () => {
 		assert.deepEqual(
 			getReceiptOwnerDisplayLines('Nabil Bank Limited', 'Nikesh Kumar Karki', '9854035770'),
 			[
 				{
-					label: 'सदस्यको नाम:',
-					name: 'Nabil Bank Limited',
-					suffix: ' (9854035770) बाट संघको विधान बमोजिम',
-				},
-				{
-					label: 'संचालकको नाम:',
+					label: 'सञ्चालक:',
 					name: 'Nikesh Kumar Karki',
 					suffix: '',
+				},
+				{
+					label: 'धनीको नाम:',
+					name: 'Nabil Bank Limited',
+					suffix: ' (9854035770) बाट संघको विधान बमोजिम',
 				},
 			],
 		);
@@ -65,12 +66,30 @@ describe('receipt vehicle owners', () => {
 		);
 	});
 
-	test('uses member-list labels for distinct owners in receipt and member tables', () => {
+	test('uses member and operator name labels in bill print output', () => {
+		assert.deepEqual(
+			getBillOwnerDisplayLines('Member Name', 'Operator Name', '9800000000'),
+			[
+				{
+					label: 'सदस्यको नाम:',
+					name: 'Member Name',
+					suffix: ' (9800000000) बाट संघको विधान बमोजिम',
+				},
+				{ label: 'संचालकको नाम:', name: 'Operator Name', suffix: '' },
+			],
+		);
+		assert.deepEqual(
+			getBillOwnerDisplayLines('Member Name', 'Member Name'),
+			[{ label: 'सदस्यको नाम:', name: 'Member Name', suffix: ' बाट संघको विधान बमोजिम' }],
+		);
+	});
+
+	test('uses the requested role labels with sanchalak before dhani in receipts and member lists', () => {
 		assert.deepEqual(
 			getMemberOwnerDisplayLines('Vehicle Owner', 'Vehicle Operator'),
 			[
-				{ label: 'सवारी धनीको नाम:', name: 'Vehicle Owner', suffix: '' },
-				{ label: 'सञ्चालकको नाम:', name: 'Vehicle Operator', suffix: '' },
+				{ label: 'सञ्चालक:', name: 'Vehicle Operator', suffix: '' },
+				{ label: 'धनीको नाम:', name: 'Vehicle Owner', suffix: '' },
 			],
 		);
 	});

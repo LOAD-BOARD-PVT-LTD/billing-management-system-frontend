@@ -13,13 +13,14 @@ import { ReceiptTable } from '@/features/receipts/components/ReceiptTable';
 import { useReceiptColumns } from '@/features/receipts/hooks/use-receipt-columns';
 import { useReceiptFilters } from '@/features/receipts/hooks/use-receipt-filters';
 import type { ReceiptRecord, ReceiptSortDirection } from '@/features/receipts/model/receipt';
-import { RECEIPT_COLUMN_OPTIONS, type ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
+import type { ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import { cancelReceipt, correctReceipt, type ReceiptCorrection } from '@/features/receipts/api/bill-resource.api';
 import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
 import { usePrintReceipt } from '@/features/receipts/hooks/use-print-receipt';
 import { useReceiptCancelWindow } from '@/features/settings/hooks/useReceiptCancelWindow';
 import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { buildReceiptExportCsv } from '@/features/receipts/utils/receipt-export';
 
 const PAGE_SIZE = 10;
 
@@ -44,40 +45,14 @@ function sortValue(receipt: ReceiptRecord, column: string): string | number {
 	}
 }
 
-function csvValue(receipt: ReceiptRecord, column: ReceiptColumnId): string {
-	switch (column) {
-		case 'receiptNumber': return receipt.receiptNumber;
-		case 'vehicleNumber': return receipt.vehicleNumber;
-		case 'finalDigits': return receipt.finalDigits;
-		case 'customer': {
-			const lines = getReceiptOwnerDisplayLines(
-				receipt.customerName || receipt.bill.content.vehicle.ownerName,
-				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName : '',
-				receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.phone : '',
-			);
-			return lines.map((line) => `${line.label} ${line.name}${line.suffix}`).join(' / ');
-		}
-		case 'paymentDate': return receipt.billingDate;
-		case 'validUntil': return receipt.validUntil;
-		case 'paymentMethod': return receipt.paymentMethod;
-		case 'status': return receipt.status === 'PAID' ? 'भुक्तानी' : receipt.status === 'CANCELLED' ? 'रद्द' : 'बाँकी';
-		case 'totalAmount': return String(receipt.totalAmount);
-	}
-}
-
 function downloadCsv(rows: ReceiptRecord[], columns: ReceiptColumnId[], fiscalYear: string) {
-	const labels = new Map(RECEIPT_COLUMN_OPTIONS.map((column) => [column.id, column.label]));
-	const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-	const csv = [
-		columns.map((column) => escape(labels.get(column) ?? column)).join(','),
-		...rows.map((receipt) => columns.map((column) => escape(csvValue(receipt, column))).join(',')),
-	].join('\r\n');
+	const csv = buildReceiptExportCsv(rows, columns);
 	const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
 	const link = document.createElement('a');
 	link.href = url;
 	link.download = `receipts-${fiscalYear.replaceAll('/', '-')}.csv`;
 	link.click();
-	URL.revokeObjectURL(url);
+	window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export function ReceiptList() {

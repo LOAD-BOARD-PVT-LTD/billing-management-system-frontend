@@ -21,8 +21,10 @@ export const settingsKeys = {
   linkedFeeRules: () => [...settingsKeys.all, 'linked-fee-rules'] as const,
   tqmsSanghBranchFilter: () => [...settingsKeys.all, 'tqms-sangh-branch-filter'] as const,
   displacedTagging: () => [...settingsKeys.all, 'displaced-tagging'] as const,
+  arrearsRuleSettings: () => [...settingsKeys.all, 'arrears-list-rules'] as const,
   fiscalYearSelector: () => [...settingsKeys.all, 'fiscal-year-selector'] as const,
   fiscalYearManagement: () => [...settingsKeys.all, 'fiscal-year-management'] as const,
+  notificationManagement: () => [...settingsKeys.all, 'notification-management'] as const,
 };
 
 export const vehicleTypeKeys = {

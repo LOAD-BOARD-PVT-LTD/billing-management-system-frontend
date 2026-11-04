@@ -20,6 +20,7 @@ import {
   useVehicleReconciliation,
   type ReconciliationFieldDiff,
   type ReconciliationOption,
+  type OwnerChangeType,
 } from '@/features/reconciliation';
 import { DuplicateBillWarningDialog } from '@/features/billing/components/create-bill/DuplicateBillWarningDialog';
 import { VehicleCategoryMappingGate } from '@/features/billing/components/create-bill/VehicleCategoryMappingGate';
@@ -39,6 +40,8 @@ import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehic
 import { PrintableBillReceipt } from '@/features/receipts/components/PrintableBillReceipt';
 import { resolveBillBranding } from '@/shared/document-generation/utils/resolve-bill-branding';
 import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
+import { useVatSettings } from '@/features/settings/hooks/useVatSettings';
+import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
 import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
 import {
   formatNepaliFiscalYearLabel,
@@ -54,6 +57,7 @@ export function BillingWorkspace() {
   const billingRules = useBillingRules();
   const linkedFeeRuleSettings = useLinkedFeeRules();
   const { settings: fiscalYearSelectorSettings } = useFiscalYearSelectorSettings();
+  const vatSettings = useVatSettings();
   const { records: billingEntities } = useBillingEntities();
   const {
     records: blacklistedVehicles,
@@ -88,6 +92,7 @@ export function BillingWorkspace() {
     tqmsVehicle: BillingVehicle;
     billingResource: VehicleResourceDocument;
     diffs: ReconciliationFieldDiff[];
+    receipts: ReceiptRecord[];
   } | null>(null);
   const { applyDecision, isApplying: isSubmittingReconciliation } = useVehicleReconciliation();
   const selectedVehicleIsBlacklisted = Boolean(
@@ -238,7 +243,7 @@ export function BillingWorkspace() {
   }, []);
 
   const handleSmsPhoneChange = useCallback((phone: string) => {
-    setSelectedVehicle((current) => (current ? { ...current, phone, smsPhone: phone } : current));
+    setSelectedVehicle((current) => (current ? { ...current, smsPhone: phone } : current));
   }, []);
 
   const handleReloadBills = useCallback(() => {
@@ -284,6 +289,8 @@ export function BillingWorkspace() {
       isLoadingRules: billingRules.isLoading,
       isLoadingLinkedFeeRules: linkedFeeRuleSettings.isLoading,
       linkedFeeRulesError: linkedFeeRuleSettings.error,
+      isLoadingVatSettings: vatSettings.isLoading,
+      vatSettingsError: vatSettings.error,
       hasPeriodicBillingRule,
       billingMonths,
       ruleAmounts,
@@ -314,6 +321,14 @@ export function BillingWorkspace() {
     }
     setIsCheckingDuplicates(false);
 
+    const vat = calculateConfiguredVat({
+      items,
+      subtotal,
+      discount,
+      enabled: vatSettings.settings?.enabled ?? false,
+      rate: vatSettings.settings?.rate ?? 0,
+      billingEntityIds: vatSettings.settings?.billingEntityIds ?? [],
+    });
     const pendingInput: MembershipBillInput = {
       vehicle: {
         ...selectedVehicle,
@@ -327,6 +342,9 @@ export function BillingWorkspace() {
       items,
       subtotal,
       discount,
+      vatAmount: vat.vatAmount,
+      vatRatePct: vat.vatRatePct,
+      vatBillingEntityIds: vat.billingEntityIds,
       paymentMethod,
       note,
     };
@@ -386,7 +404,8 @@ export function BillingWorkspace() {
 
 
   const handleReconciliationConfirm = async (
-    option: ReconciliationOption,
+    option: ReconciliationOption | null,
+    ownerChangeType: OwnerChangeType | null,
     reason: string,
   ) => {
     if (!reconciliationData) return;
@@ -395,6 +414,7 @@ export function BillingWorkspace() {
     try {
       const updatedVehicle = await applyDecision({
         option,
+        ownerChangeType,
         reason,
         performedBy,
         billingVehicle: reconciliationData.billingVehicle,
@@ -427,9 +447,9 @@ export function BillingWorkspace() {
         tqmsVehicle={reconciliationData.tqmsVehicle}
         billingResource={reconciliationData.billingResource}
         diffs={reconciliationData.diffs}
-        receipts={existingBills}
-        isLoadingReceipts={isLoadingExistingBills}
-        receiptsError={existingBillsError}
+        receipts={reconciliationData.receipts}
+        isLoadingReceipts={false}
+        receiptsError={null}
         isSubmitting={isSubmittingReconciliation}
         onCancel={() => setReconciliationData(null)}
         onConfirm={handleReconciliationConfirm}
@@ -479,6 +499,11 @@ export function BillingWorkspace() {
           onSelectVehicle={handleSelectVehicle}
           onClearSelection={handleClearVehicleSelection}
           onSmsPhoneChange={handleSmsPhoneChange}
+          loadReceipts={async () => {
+            const result = await reloadBills();
+            if (result.error) throw result.error;
+            return result.data ?? [];
+          }}
           onReconciliationRequired={setReconciliationData}
         />
 
@@ -548,6 +573,14 @@ export function BillingWorkspace() {
               const hasPeriodicBillingRule = selectedRules.some((rule) => rule.frequency === 'PERIODIC');
               const ruleAmounts = Object.fromEntries(rules.map((rule) => [rule.id, rule.amount]));
               const subtotal = includedItems.reduce((sum, item) => sum + Math.max(0, item.amount), 0);
+              const vat = calculateConfiguredVat({
+                items: includedItems,
+                subtotal,
+                discount,
+                enabled: vatSettings.settings?.enabled ?? false,
+                rate: vatSettings.settings?.rate ?? 0,
+                billingEntityIds: vatSettings.settings?.billingEntityIds ?? [],
+              });
               const saveValidationMessages = getBillValidationMessages({
                 vehicle: selectedVehicle,
                 details: billingDetails,
@@ -558,6 +591,8 @@ export function BillingWorkspace() {
                 isLoadingRules: billingRules.isLoading,
                 isLoadingLinkedFeeRules: linkedFeeRuleSettings.isLoading,
                 linkedFeeRulesError: linkedFeeRuleSettings.error,
+                isLoadingVatSettings: vatSettings.isLoading,
+                vatSettingsError: vatSettings.error,
                 hasPeriodicBillingRule,
                 billingMonths,
                 ruleAmounts,
@@ -613,6 +648,10 @@ export function BillingWorkspace() {
                       <PaymentSection
                         total={subtotal}
                         discount={discount}
+                        vatAmount={vat.vatAmount}
+                        vatRatePct={vat.vatRatePct}
+                        vatEnabled={vatSettings.settings?.enabled === true}
+                        vatApplicable={vat.vatApplicable}
                         onDiscountChange={setDiscount}
                         onSave={(paymentMethod, note) => void handleSaveBill(
                           includedItems,

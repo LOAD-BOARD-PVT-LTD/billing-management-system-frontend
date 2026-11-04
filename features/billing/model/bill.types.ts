@@ -69,6 +69,9 @@ export type BillResourceContent = {
 	}>;
 	subtotal: number;
 	discount: number;
+	vatAmount?: number;
+	vatRatePct?: number;
+	vatBillingEntityIds?: string[];
 	total: number;
 	paymentMethod: string;
 	note: string;
@@ -84,6 +87,9 @@ type CreateBillBase = {
 	items: BillingLine[];
 	subtotal: number;
 	discount: number;
+	vatAmount?: number;
+	vatRatePct?: number;
+	vatBillingEntityIds?: string[];
 	paymentMethod: string;
 	note: string;
 };

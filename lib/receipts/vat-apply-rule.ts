@@ -39,3 +39,40 @@ export function calculateVatAmount(taxableAmount: number, vatRatePct: number): n
   if (!Number.isFinite(vatRatePct) || vatRatePct <= 0) return 0;
   return Math.round((taxableAmount * vatRatePct) / 100);
 }
+
+export function calculateConfiguredVat(params: {
+  items: readonly { entityId?: string; billingEntityId?: string; amount: number }[];
+  subtotal: number;
+  discount: number;
+  enabled: boolean;
+  rate: number;
+  billingEntityIds: readonly string[];
+}): { taxableAmount: number; vatAmount: number; vatRatePct: number; billingEntityIds: string[]; vatApplicable: boolean } {
+  const vatRatePct = resolveVatRatePct({ rate: params.rate });
+  const billingEntityIds = params.enabled && vatRatePct > 0
+    ? [...new Set(params.billingEntityIds.map((id) => id.trim()).filter(Boolean))]
+    : [];
+  const enabledEntityIds = new Set(billingEntityIds);
+  const taxableBeforeDiscount = params.enabled
+    ? params.items.reduce((total, item) => {
+      const entityId = (item.entityId ?? item.billingEntityId ?? '').trim();
+      return enabledEntityIds.has(entityId) && Number.isFinite(item.amount) && item.amount > 0
+        ? total + item.amount
+        : total;
+    }, 0)
+    : 0;
+  const validSubtotal = Number.isFinite(params.subtotal) ? Math.max(0, params.subtotal) : 0;
+  const validDiscount = Number.isFinite(params.discount)
+    ? Math.min(Math.max(0, params.discount), validSubtotal)
+    : 0;
+  const discountShare = validSubtotal > 0 ? validDiscount * (taxableBeforeDiscount / validSubtotal) : 0;
+  const taxableAmount = Math.max(0, taxableBeforeDiscount - discountShare);
+
+  return {
+    taxableAmount,
+    vatAmount: calculateVatAmount(taxableAmount, vatRatePct),
+    vatRatePct,
+    billingEntityIds,
+    vatApplicable: taxableBeforeDiscount > 0,
+  };
+}

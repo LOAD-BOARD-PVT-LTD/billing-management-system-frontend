@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Download, Filter, RefreshCw, Search } from 'lucide-react';
+import Link from 'next/link';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,10 @@ import {
 } from '@/components/ui/table';
 import type { MemberVehicleDetails, VehicleDocumentPeriod } from '@/features/members/api/member-vehicle.api';
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
+import { useReceipts } from '@/features/receipts/hooks/use-receipts';
+import { getMemberOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { useArrearsRuleSettings } from '@/features/vehicle/compliance/hooks/useArrearsRuleSettings';
+import { getArrearsListRows, type ArrearsListRow, type ArrearsView } from '@/features/vehicle/compliance/utils/arrears-list';
 import {
   bikramSambatToGregorian,
   parseBikramSambatDate,
@@ -33,12 +38,19 @@ import { toNepaliDigits } from '@/utils/numbers';
 
 const PAGE_SIZE = 25;
 const DOCUMENT_OPTIONS = [
-  { value: 'all', label: 'सबै कागजात' },
   { value: 'insurance', label: 'बीमा' },
   { value: 'bluebook', label: 'ब्लुबुक' },
   { value: 'routePermit', label: 'रुट परमिट' },
   { value: 'checkPass', label: 'जाँचपास' },
 ] as const;
+
+const VIEW_OPTIONS: { value: ArrearsView; label: string }[] = [
+  { value: 'membership', label: 'सदस्यता' },
+  { value: 'neverBilled', label: 'कहिल्यै बिल नतिरेको' },
+  { value: 'paidExpired', label: 'तिरेको तर म्याद सकिएको' },
+  { value: 'monthlyPaid', label: 'मासिक तिरेको' },
+  ...DOCUMENT_OPTIONS,
+];
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'सबै मिति' },
@@ -47,11 +59,17 @@ const STATUS_OPTIONS = [
   { value: 'unknown', label: 'मिति उपलब्ध छैन' },
 ] as const;
 
-type DocumentKey = (typeof DOCUMENT_OPTIONS)[number]['value'];
+const PHONE_OPTIONS = [
+  { value: 'all', label: 'सबै फोन अवस्था' },
+  { value: 'hasPhone', label: 'फोन नम्बर भएको' },
+  { value: 'noPhone', label: 'फोन नम्बर नभएको' },
+] as const;
+
 type StatusFilter = (typeof STATUS_OPTIONS)[number]['value'];
 type DocumentStatus = Exclude<StatusFilter, 'all'>;
+type PhoneFilter = (typeof PHONE_OPTIONS)[number]['value'];
 
-const DOCUMENT_LABELS: Record<Exclude<DocumentKey, 'all'>, string> = {
+const DOCUMENT_LABELS: Record<Extract<ArrearsView, 'insurance' | 'bluebook' | 'routePermit' | 'checkPass'>, string> = {
   insurance: 'बीमा',
   bluebook: 'ब्लुबुक',
   routePermit: 'रुट परमिट',
@@ -108,19 +126,11 @@ function documentStatus(period: VehicleDocumentPeriod): DocumentStatus {
   return expiry < today ? 'expired' : 'valid';
 }
 
-function documentPeriod(vehicle: MemberVehicleDetails, key: Exclude<DocumentKey, 'all'>) {
+function documentPeriod(
+  vehicle: MemberVehicleDetails,
+  key: Extract<ArrearsView, 'insurance' | 'bluebook' | 'routePermit' | 'checkPass'>,
+) {
   return vehicle.compliance[key];
-}
-
-function vehicleSearchText(vehicle: MemberVehicleDetails): string {
-  return [
-    vehicle.vehicleNumber,
-    vehicle.vehicleId,
-    vehicle.tqmsVehicleType,
-    vehicle.sawariDhaniName,
-    vehicle.sanchalakName,
-    vehicle.phone,
-  ].join(' ').toLocaleLowerCase();
 }
 
 function formatExpiry(value: string): string {
@@ -145,42 +155,44 @@ function ExpiryCell({ period }: { period: VehicleDocumentPeriod }) {
   );
 }
 
-function downloadVehicleCsv(vehicles: MemberVehicleDetails[], documentKey: DocumentKey) {
-  const visibleDocuments = documentKey === 'all'
-    ? (['insurance', 'bluebook', 'routePermit', 'checkPass'] as const)
-    : [documentKey] as const;
-  const documentHeaders = visibleDocuments.map((key) => DOCUMENT_LABELS[key]);
-  const headers = ['सवारी नम्बर', 'सवारी प्रकार', 'धनीको नाम', 'सञ्चालक', 'फोन', ...documentHeaders];
+function downloadArrearsCsv(rows: ArrearsListRow[], view: ArrearsView) {
+  const headers = ['सवारी नम्बर', 'सवारी प्रकार', 'धनीको नाम', 'सञ्चालक', 'फोन नम्बर', 'रसिद नम्बर', 'भुक्तानी मिति', 'म्याद'];
   const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const rows = vehicles.map((vehicle) => [
-    vehicle.vehicleNumber || vehicle.vehicleId,
-    vehicle.tqmsVehicleType,
-    vehicle.sawariDhaniName,
-    vehicle.sanchalakName,
-    vehicle.phone,
-    ...visibleDocuments.map((key) => {
-      const period = documentPeriod(vehicle, key);
-      return period.expiryBs || period.expiryAd || 'मिति उपलब्ध छैन';
-    }),
+  const data = rows.map((row) => [
+    row.vehicleNumber,
+    row.vehicleType,
+    row.ownerName,
+    row.operatorName,
+    row.phone,
+    row.receiptNumber,
+    row.billingDate,
+    row.expiryDate,
   ]);
-  const csv = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
+  const csv = [headers, ...data].map((row) => row.map(escape).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'vehicle-compliance.csv';
+  link.download = `bakyauda-myad-${view}.csv`;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function VehicleCompliancePage() {
   const { vehicles, branchFilter, isLoading, isRefreshing, lastSyncedAt, error, reload } = useMemberVehicles();
+  const receiptsQuery = useReceipts();
+  const arrearsSettingsQuery = useArrearsRuleSettings();
   const [search, setSearch] = useState('');
-  const [documentKey, setDocumentKey] = useState<DocumentKey>('all');
+  const [viewType, setViewType] = useState<ArrearsView>('membership');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [phoneFilter, setPhoneFilter] = useState<PhoneFilter>('all');
   const [vehicleType, setVehicleType] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
 
   const scopedVehicles = vehicles;
+  const isDocumentView = ['insurance', 'bluebook', 'routePermit', 'checkPass'].includes(viewType);
+  const documentKey = isDocumentView ? viewType as keyof typeof DOCUMENT_LABELS : null;
 
   const vehicleTypes = useMemo(
     () => [...new Set(scopedVehicles.map((vehicle) => vehicle.tqmsVehicleType).filter(Boolean))]
@@ -188,40 +200,72 @@ export function VehicleCompliancePage() {
     [scopedVehicles],
   );
 
-  const filteredVehicles = useMemo(() => {
+  const listRows = useMemo(() => getArrearsListRows({
+    view: viewType,
+    vehicles: scopedVehicles,
+    receipts: receiptsQuery.records,
+    paidExpiredRuleId: arrearsSettingsQuery.settings?.paidExpired.billingRuleId ?? '',
+    monthlyFiscalYearId: arrearsSettingsQuery.settings?.monthlyPaid.fiscalYearId ?? '',
+    monthlyRuleId: arrearsSettingsQuery.settings?.monthlyPaid.billingRuleId ?? '',
+    branchFilter,
+  }), [
+    arrearsSettingsQuery.settings,
+    branchFilter,
+    receiptsQuery.records,
+    scopedVehicles,
+    viewType,
+  ]);
+  const filteredRows = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
-    return scopedVehicles
-      .filter((vehicle) => !term || vehicleSearchText(vehicle).includes(term))
-      .filter((vehicle) => vehicleType === 'all' || vehicle.tqmsVehicleType === vehicleType)
-      .filter((vehicle) => {
-        if (statusFilter === 'all') return true;
-        if (documentKey === 'all') {
-          return (['insurance', 'bluebook', 'routePermit', 'checkPass'] as const)
-            .some((key) => documentStatus(documentPeriod(vehicle, key)) === statusFilter);
-        }
-        return documentStatus(documentPeriod(vehicle, documentKey)) === statusFilter;
+    return listRows
+      .filter((row) => !term || [
+        row.vehicleNumber,
+        row.vehicleType,
+        row.ownerName,
+        row.operatorName,
+        row.phone,
+        row.receiptNumber,
+      ].join(' ').toLocaleLowerCase().includes(term))
+      .filter((row) => vehicleType === 'all' || row.vehicleType === vehicleType)
+      .filter((row) => phoneFilter === 'all' || (phoneFilter === 'hasPhone' ? Boolean(row.phone.trim()) : !row.phone.trim()))
+      .filter((row) => {
+        if (isDocumentView || (!dateFrom && !dateTo)) return true;
+        const date = row.billingDate.slice(0, 10);
+        return Boolean(date) && (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo);
+      })
+      .filter((row) => {
+        if (!isDocumentView || statusFilter === 'all') return true;
+        const period = row.vehicle && documentKey ? documentPeriod(row.vehicle, documentKey) : null;
+        return period ? documentStatus(period) === statusFilter : statusFilter === 'unknown';
       })
       .sort((left, right) => left.vehicleNumber.localeCompare(right.vehicleNumber, 'ne'));
-  }, [documentKey, scopedVehicles, search, statusFilter, vehicleType]);
+  }, [dateFrom, dateTo, documentKey, isDocumentView, listRows, phoneFilter, search, statusFilter, vehicleType]);
 
-  const pageCount = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const pageVehicles = filteredVehicles.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const visibleDocuments = documentKey === 'all'
-    ? (['insurance', 'bluebook', 'routePermit', 'checkPass'] as const)
-    : [documentKey] as const;
+  const pageRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const clearFilters = () => {
     setSearch('');
-    setDocumentKey('all');
+    setViewType('membership');
     setStatusFilter('all');
+    setPhoneFilter('all');
     setVehicleType('all');
+    setDateFrom('');
+    setDateTo('');
     setPage(1);
   };
   const hasFilters = Boolean(search.trim())
-    || documentKey !== 'all'
+    || viewType !== 'membership'
     || statusFilter !== 'all'
-    || vehicleType !== 'all';
+    || phoneFilter !== 'all'
+    || vehicleType !== 'all'
+    || Boolean(dateFrom || dateTo);
+  const isLoadingList = isLoading || receiptsQuery.isLoading || arrearsSettingsQuery.isLoading;
+  const combinedError = error || receiptsQuery.error || arrearsSettingsQuery.error;
+  const listRuleDisabled = (viewType === 'paidExpired' && !arrearsSettingsQuery.settings?.paidExpired.enabled)
+    || (viewType === 'monthlyPaid' && !arrearsSettingsQuery.settings?.monthlyPaid.enabled);
+  const viewLabel = VIEW_OPTIONS.find((option) => option.value === viewType)?.label ?? 'सदस्यता';
 
   return (
     <section className="space-y-3 pb-5">
@@ -234,13 +278,29 @@ export function VehicleCompliancePage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-muted-foreground sm:inline">हेर्ने प्रकार</span>
+          <Select
+            value={viewType}
+            onValueChange={(value) => {
+              setViewType(value as ArrearsView);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="h-9 min-w-48" aria-label="सूची हेर्ने प्रकार">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {VIEW_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-9 gap-2"
-            onClick={() => downloadVehicleCsv(filteredVehicles, documentKey)}
-            disabled={filteredVehicles.length === 0}
+            onClick={() => downloadArrearsCsv(filteredRows, viewType)}
+            disabled={filteredRows.length === 0}
           >
             <Download aria-hidden="true" className="size-4" />
             Excel निर्यात
@@ -298,37 +358,65 @@ export function VehicleCompliancePage() {
             </SelectContent>
           </Select>
           <Select
-            value={documentKey}
+            value={phoneFilter}
             onValueChange={(value) => {
-              setDocumentKey(value as DocumentKey);
+              setPhoneFilter(value as PhoneFilter);
               setPage(1);
             }}
           >
-            <SelectTrigger className="h-9 min-w-36 flex-1">
-              <SelectValue placeholder="कागजात प्रकार" />
+            <SelectTrigger className="h-9 min-w-40 flex-1">
+              <SelectValue placeholder="फोन अवस्था" />
             </SelectTrigger>
             <SelectContent>
-              {DOCUMENT_OPTIONS.map((option) => (
+              {PHONE_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value as StatusFilter);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="h-9 min-w-36 flex-1">
-              <SelectValue placeholder="म्याद स्थिति" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isDocumentView ? (
+            <>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="भुक्तानी मिति सुरु"
+                title="भुक्तानी मिति सुरु"
+                className="h-9 min-w-36 flex-1"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="भुक्तानी मिति अन्त्य"
+                title="भुक्तानी मिति अन्त्य"
+                className="h-9 min-w-36 flex-1"
+              />
+            </>
+          ) : null}
+          {isDocumentView ? (
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => {
+                setStatusFilter(value as StatusFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-9 min-w-36 flex-1">
+                <SelectValue placeholder="म्याद स्थिति" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
           {hasFilters ? (
             <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={clearFilters}>
               फिल्टर हटाउनुहोस्
@@ -340,24 +428,32 @@ export function VehicleCompliancePage() {
       <Card className="space-y-3 overflow-hidden rounded-lg border-border/80 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-semibold">बक्यौता / म्याद सूची</h2>
+            <h2 className="font-semibold">{viewLabel} सूची</h2>
             <p className="mt-0.5 text-xs text-muted-foreground" aria-live="polite">
-              {toNepaliDigits(filteredVehicles.length)} सवारी
+              {toNepaliDigits(filteredRows.length)} सवारी
               {lastSyncedAt ? ` · अन्तिम sync ${lastSyncedAt.toLocaleString('ne-NP')}` : ''}
               {branchFilter ? ` · ${branchFilter}` : ''}
             </p>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {visibleDocuments.map((key) => DOCUMENT_LABELS[key]).join(' · ')}
-          </span>
+          {isDocumentView && documentKey ? (
+            <span className="text-xs text-muted-foreground">{DOCUMENT_LABELS[documentKey]} म्याद</span>
+          ) : null}
         </div>
 
-        {error ? (
+        {combinedError ? (
           <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            TQMS सवारी विवरण लोड गर्न सकिएन: {error}
+            सूची विवरण लोड गर्न सकिएन: {combinedError}
           </p>
-        ) : isLoading ? (
-          <LoadingSpinner label="TQMS सवारी विवरण लोड हुँदैछ" size="sm" className="justify-center py-8" />
+        ) : isLoadingList ? (
+          <LoadingSpinner label="बक्यौता तथा म्याद विवरण लोड हुँदैछ" size="sm" className="justify-center py-8" />
+        ) : listRuleDisabled ? (
+          <div className="rounded-md border border-dashed border-border bg-muted/30 px-4 py-8 text-center">
+            <p className="text-sm font-medium">{viewLabel} सूचीका लागि नियम सक्रिय छैन।</p>
+            <p className="mt-1 text-xs text-muted-foreground">एडमिन सेटिङ्सबाट नियम सक्रिय गरी बिलिङ नियम छान्नुहोस्।</p>
+            <Button asChild size="sm" variant="outline" className="mt-3">
+              <Link href="/dashboard/settings?tab=billing-rules">एडमिन सेटिङ्स खोल्नुहोस्</Link>
+            </Button>
+          </div>
         ) : (
           <div className="overflow-x-auto rounded-md border border-border">
             <Table className="min-w-[900px]">
@@ -368,37 +464,47 @@ export function VehicleCompliancePage() {
                   <TableHead className="h-9">वाहन श्रेणी</TableHead>
                   <TableHead className="h-9">धनीको नाम</TableHead>
                   <TableHead className="h-9">फोन नम्बर</TableHead>
-                  {visibleDocuments.map((key) => (
-                    <TableHead key={key} className="h-9">{DOCUMENT_LABELS[key]} मिति</TableHead>
-                  ))}
+                  {isDocumentView
+                    ? <TableHead className="h-9">{documentKey ? DOCUMENT_LABELS[documentKey] : ''} मिति</TableHead>
+                    : <>
+                      <TableHead className="h-9">रसिद नं.</TableHead>
+                      <TableHead className="h-9">भुक्तानी मिति</TableHead>
+                      <TableHead className="h-9">म्याद</TableHead>
+                    </>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageVehicles.map((vehicle, index) => (
-                  <TableRow key={vehicle.vehicleId} className="align-middle">
+                {pageRows.map((row, index) => (
+                  <TableRow key={row.key} className="align-middle">
                     <TableCell className="py-2 text-center text-xs text-muted-foreground tabular-nums">
                       {toNepaliDigits((currentPage - 1) * PAGE_SIZE + index + 1)}
                     </TableCell>
-                    <TableCell className="py-2 font-medium">{vehicle.vehicleNumber || '—'}</TableCell>
-                    <TableCell className="py-2">{vehicle.tqmsVehicleType || '—'}</TableCell>
+                    <TableCell className="py-2 font-medium">{row.vehicleNumber || '—'}</TableCell>
+                    <TableCell className="py-2">{row.vehicleType || '—'}</TableCell>
                     <TableCell className="py-2">
-                      <p>{vehicle.sawariDhaniName || '—'}</p>
-                      {vehicle.sanchalakName && vehicle.sanchalakName !== vehicle.sawariDhaniName ? (
-                        <p className="text-xs text-muted-foreground">सञ्चालक: {vehicle.sanchalakName}</p>
-                      ) : null}
+                      {getMemberOwnerDisplayLines(row.ownerName, row.operatorName).map((ownerLine) => (
+                        <p key={`${ownerLine.label}:${ownerLine.name}`} className={ownerLine.label ? 'text-xs' : ''}>
+                          {ownerLine.label ? <span className="text-muted-foreground">{ownerLine.label} </span> : null}
+                          {ownerLine.name}
+                        </p>
+                      ))}
                     </TableCell>
-                    <TableCell className="py-2 whitespace-nowrap">{vehicle.phone || '—'}</TableCell>
-                    {visibleDocuments.map((key) => (
-                      <TableCell key={key} className="py-2">
-                        <ExpiryCell period={documentPeriod(vehicle, key)} />
-                      </TableCell>
-                    ))}
+                    <TableCell className="py-2 whitespace-nowrap">{row.phone || '—'}</TableCell>
+                    {isDocumentView && row.vehicle && documentKey
+                      ? <TableCell className="py-2"><ExpiryCell period={documentPeriod(row.vehicle, documentKey)} /></TableCell>
+                      : <>
+                        <TableCell className="py-2">{row.receiptNumber || '—'}</TableCell>
+                        <TableCell className="py-2 whitespace-nowrap">{row.billingDate ? formatExpiry(row.billingDate) : '—'}</TableCell>
+                        <TableCell className="py-2 whitespace-nowrap">{row.expiryDate ? formatExpiry(row.expiryDate) : '—'}</TableCell>
+                      </>}
                   </TableRow>
                 ))}
-                {pageVehicles.length === 0 ? (
+                {pageRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5 + visibleDocuments.length} className="h-24 text-center text-sm text-muted-foreground">
-                      {scopedVehicles.length ? 'फिल्टरसँग मिल्ने सवारी भेटिएन।' : 'TQMS मा सवारी विवरण भेटिएन।'}
+                    <TableCell colSpan={isDocumentView ? 6 : 8} className="h-24 text-center text-sm text-muted-foreground">
+                      {listRuleDisabled
+                        ? 'एडमिन सेटिङ्सबाट यस सूचीको नियम सक्रिय गर्नुहोस्।'
+                        : 'फिल्टरसँग मिल्ने सवारी भेटिएन।'}
                     </TableCell>
                   </TableRow>
                 ) : null}
@@ -407,11 +513,11 @@ export function VehicleCompliancePage() {
           </div>
         )}
 
-        {!isLoading && !error ? (
+        {!isLoadingList && !combinedError && !listRuleDisabled ? (
           <DataTablePagination
             page={currentPage}
             pageSize={PAGE_SIZE}
-            total={filteredVehicles.length}
+            total={filteredRows.length}
             onPageChange={setPage}
             formatNumber={toNepaliDigits}
             labels={{

@@ -33,13 +33,6 @@ export const billingRuleSchema = z.object({
   amount: z.number().nonnegative('रकम ० वा सोभन्दा बढी हुनुपर्छ।'),
   status: z.enum(['ACTIVE', 'INACTIVE']),
 }).superRefine((rule, context) => {
-  if (rule.scope === 'VEHICLE_TYPE' && rule.amount === 0) {
-    context.addIssue({
-      code: 'custom',
-      message: 'सवारी नियमको रकम शून्यभन्दा बढी हुनुपर्छ।',
-      path: ['amount'],
-    });
-  }
   if (!validityOptionsByFrequency[rule.frequency].some((option) => option.value === rule.validity)) {
     context.addIssue({
       code: 'custom',
@@ -87,11 +80,7 @@ export function validateBillingRuleRecord(rule: BillingRule): { isValid: boolean
   if (rule.period !== getPeriodForFrequency(rule.frequency, normalizedValidity)) {
     errors.period = 'शुल्कको अवधि आवृत्ति र मान्य अवधि अन्त्यसँग मिल्नुपर्छ।';
   }
-  if (rule.amount < 0 || (rule.scope === 'VEHICLE_TYPE' && rule.amount === 0)) {
-    errors.amount = rule.scope === 'COMMON'
-      ? 'रकम शून्य वा सोभन्दा बढी हुनुपर्छ।'
-      : 'सवारी नियमको रकम शून्यभन्दा बढी हुनुपर्छ।';
-  }
+  if (rule.amount < 0) errors.amount = 'रकम शून्य वा सोभन्दा बढी हुनुपर्छ।';
 
   return {
     isValid: Object.keys(errors).length === 0,

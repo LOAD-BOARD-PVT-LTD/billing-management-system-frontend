@@ -7,6 +7,7 @@ import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type {
 	ReconciliationFieldDiff,
 	ReconciliationOption,
+	OwnerChangeType,
 } from '../types/reconciliation.types';
 import { ReconciliationActions } from './ReconciliationActions';
 import { ReconciliationComparisonTable } from './ReconciliationComparisonTable';
@@ -16,6 +17,8 @@ import { ReconciliationValidationMessage } from './ReconciliationValidationMessa
 import { hasReconciliationHistory, ReconciliationMemberHistory } from './ReconciliationMemberHistory';
 import { VehicleReconciliationHeader } from './VehicleReconciliationHeader';
 import { VehicleReconciliationWarning } from './VehicleReconciliationWarning';
+import { OwnerChangeDecision } from './OwnerChangeDecision';
+import { isOwnerReconciliationDiff } from '../utils/reconciliation-helpers';
 
 export type VehicleReconciliationViewProps = {
 	billingVehicle: BillingVehicle;
@@ -27,7 +30,7 @@ export type VehicleReconciliationViewProps = {
 	receiptsError: string | null;
 	isSubmitting: boolean;
 	onCancel: () => void;
-	onConfirm: (option: ReconciliationOption, reason: string) => Promise<void> | void;
+	onConfirm: (option: ReconciliationOption | null, ownerChangeType: OwnerChangeType | null, reason: string) => Promise<void> | void;
 };
 
 export function VehicleReconciliationView({
@@ -44,10 +47,16 @@ export function VehicleReconciliationView({
 }: VehicleReconciliationViewProps) {
 	const [selectedOption, setSelectedOption] = useState<ReconciliationOption | null>(null);
 	const [reason, setReason] = useState('');
+	const [ownerChangeType, setOwnerChangeType] = useState<OwnerChangeType | null>(null);
+	const [isOwnerDecisionOpen, setIsOwnerDecisionOpen] = useState(true);
 	const [validationError, setValidationError] = useState<string | null>(null);
 
+	const ownerDiffs = diffs.filter(isOwnerReconciliationDiff);
+	const changedOwnerDetails = ownerDiffs.some((diff) => diff.isChanged);
+	const vehicleDiffs = diffs.filter((diff) => !isOwnerReconciliationDiff(diff));
+	const changedVehicleDetails = vehicleDiffs.some((diff) => diff.isChanged);
 	const changedDiffs = diffs.filter((diff) => diff.isChanged);
-	const showHistory = hasReconciliationHistory(billingVehicle, billingResource, receipts);
+	const showHistory = hasReconciliationHistory(billingVehicle, billingResource, receipts, tqmsVehicle);
 	const showHistoryStatus = isLoadingReceipts || Boolean(receiptsError);
 
 	const handleSelectOption = (option: ReconciliationOption) => {
@@ -61,18 +70,29 @@ export function VehicleReconciliationView({
 	};
 
 	const handleSubmit = async () => {
-		if (!selectedOption) {
-			setValidationError('कृपया अगाडि बढ्न ३ वटा विकल्पमध्ये एक छान्नुहोस्।');
+		if (changedVehicleDetails && !selectedOption) {
+			setValidationError('सवारी विवरणका लागि अगाडि बढ्ने विकल्प छान्नुहोस्।');
 			return;
 		}
 
-		if (selectedOption !== 'KEEP_BILLING' && reason.trim().length < 3) {
+		if (changedOwnerDetails && !ownerChangeType) {
+			setValidationError('धनी विवरणको परिवर्तन प्रकार छान्नुहोस्।');
+			return;
+		}
+
+		if (selectedOption === 'UPDATE_TQMS' && reason.trim().length < 3) {
 			setValidationError('विवरण अद्यावधिक गर्नका लागि कम्तीमा ३ अक्षरको कारण वा कैफियत उल्लेख गर्नुपर्छ।');
 			return;
 		}
 
 		setValidationError(null);
-		await onConfirm(selectedOption, reason.trim());
+		await onConfirm(
+			selectedOption,
+			ownerChangeType,
+			reason.trim() || (ownerChangeType === 'OWNERSHIP_TRANSFER'
+				? 'TQMS अनुसार धनी परिवर्तन पुष्टि'
+				: ownerChangeType === 'NAME_CORRECTION' ? 'TQMS अनुसार धनीको नाम सच्याइयो' : ''),
+		);
 	};
 
 	return (
@@ -94,21 +114,55 @@ export function VehicleReconciliationView({
 					error={receiptsError}
 				/>
 			) : null}
-			<ReconciliationComparisonTable diffs={diffs} showChangedOnly={!showHistory} />
-			<ReconciliationDecisionOptions
-				selectedOption={selectedOption}
-				onSelect={handleSelectOption}
-			/>
-			{selectedOption && selectedOption !== 'KEEP_BILLING' && (
+			{vehicleDiffs.some((diff) => !showHistory || diff.isChanged) ? (
+				<ReconciliationComparisonTable diffs={vehicleDiffs} showChangedOnly={!showHistory} />
+			) : null}
+			{changedVehicleDetails ? (
+				<ReconciliationDecisionOptions
+					selectedOption={selectedOption}
+					onSelect={handleSelectOption}
+				/>
+			) : null}
+			{selectedOption === 'UPDATE_TQMS' && (
 				<ReconciliationReasonField reason={reason} onReasonChange={handleReasonChange} />
 			)}
 			<ReconciliationValidationMessage message={validationError} />
-			<ReconciliationActions
-				isSubmitting={isSubmitting}
-				canConfirm={Boolean(selectedOption)}
-				onCancel={onCancel}
-				onConfirm={() => void handleSubmit()}
-			/>
+			{changedVehicleDetails ? (
+				<ReconciliationActions
+					isSubmitting={isSubmitting}
+					canConfirm={Boolean(selectedOption && (!changedOwnerDetails || ownerChangeType))}
+					onCancel={onCancel}
+					onConfirm={() => void handleSubmit()}
+				/>
+			) : null}
+			{changedOwnerDetails && !changedVehicleDetails && isSubmitting ? (
+				<p role="status" className="text-center text-sm text-muted-foreground">धनीको निर्णय सुरक्षित हुँदैछ...</p>
+			) : null}
+			{changedOwnerDetails && isOwnerDecisionOpen ? (
+				<OwnerChangeDecision
+					billingVehicle={billingVehicle}
+					tqmsVehicle={tqmsVehicle}
+					value={ownerChangeType}
+					onChange={(value) => {
+						setOwnerChangeType(value);
+						setValidationError(null);
+					}}
+					onCancel={onCancel}
+					onSave={() => {
+						if (!ownerChangeType) return;
+						setIsOwnerDecisionOpen(false);
+						if (!changedVehicleDetails) {
+							void onConfirm(
+								null,
+								ownerChangeType,
+								ownerChangeType === 'OWNERSHIP_TRANSFER'
+									? 'TQMS अनुसार धनी परिवर्तन पुष्टि'
+									: 'TQMS अनुसार धनीको नाम सच्याइयो',
+							);
+						}
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

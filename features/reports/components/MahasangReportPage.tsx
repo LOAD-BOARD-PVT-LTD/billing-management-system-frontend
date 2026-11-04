@@ -12,8 +12,20 @@ import { formatReportAmount, formatReportDate } from '@/features/reports/utils/r
 import { buildMahasangRows } from '@/features/reports/utils/summary-reports';
 import { downloadReportCsv, reportHeaderCsvRows } from '@/features/reports/utils/report-csv';
 import { toNepaliDigits } from '@/utils/numbers';
+import { getMemberOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { MahasangReportColumnMenu } from '@/features/reports/components/MahasangReportColumnMenu';
+import { useMahasangReportColumns } from '@/features/reports/hooks/use-mahasang-report-columns';
+import {
+  MAHASANG_REPORT_COLUMN_OPTIONS,
+  type MahasangReportColumnId,
+} from '@/features/reports/utils/mahasang-report-columns';
 
 function columnValue(row: MahasangReportRow, key: keyof MahasangReportRow): string | number {
+  if (key === 'ownerName') {
+    return getMemberOwnerDisplayLines(row.ownerName, row.operatorName)
+      .map((line) => `${line.label}${line.label ? ' ' : ''}${line.name}${line.suffix}`)
+      .join(' / ');
+  }
   if (['membershipIncome', 'otherIncome', 'total'].includes(key)) {
     return formatReportAmount(Number(row[key]));
   }
@@ -26,48 +38,55 @@ export function MahasangReportPage() {
   const { records, isLoading, error } = useReceipts();
   const [includeHeader, setIncludeHeader] = useState(false);
   const header = useReportHeaderDetails('महासंघ रिपोर्ट');
+  const { visibleColumns, applyColumns } = useMahasangReportColumns();
   const rows = useMemo(() => buildMahasangRows(records), [records]);
   const totalMembership = useMemo(() => rows.reduce((sum, row) => sum + row.membershipIncome, 0), [rows]);
   const totalOther = useMemo(() => rows.reduce((sum, row) => sum + row.otherIncome, 0), [rows]);
-  const columns: DataTableColumn<MahasangReportRow>[] = [
-    { id: 'vehicleNumber', header: 'गाडी नं.', cell: (row) => row.vehicleNumber },
-    { id: 'previousVehicleNumber', header: 'पुरानो गाडी नं.', cell: (row) => row.previousVehicleNumber },
-    { id: 'vehicleType', header: 'सवारी प्रकार', cell: (row) => row.vehicleType },
-    { id: 'ownerName', header: 'धनीको नाम', cell: (row) => row.ownerName },
-    { id: 'note', header: 'कैफियत', cell: (row) => row.note },
-    { id: 'receiptNumber', header: 'रसिद नं.', cell: (row) => toNepaliDigits(row.receiptNumber) },
-    { id: 'membershipIncome', header: 'सदस्यताबाट', cell: (row) => formatReportAmount(row.membershipIncome) },
-    { id: 'otherIncome', header: 'अन्य आम्दानी', cell: (row) => formatReportAmount(row.otherIncome) },
-    { id: 'total', header: 'जम्मा', cell: (row) => formatReportAmount(row.total) },
-    { id: 'periodMonths', header: 'अवधि महिना', cell: (row) => toNepaliDigits(row.periodMonths) },
-    { id: 'paymentMethod', header: 'भुक्तानी तरिका', cell: (row) => row.paymentMethod },
-    { id: 'billingDate', header: 'का. मिति', cell: (row) => formatReportDate(row.billingDate) },
-    { id: 'periodStart', header: 'देखि', cell: (row) => formatReportDate(row.periodStart) },
-    { id: 'periodEnd', header: 'सम्म', cell: (row) => formatReportDate(row.periodEnd) },
-  ];
-  const exportColumns = [
-    ['vehicleNumber', 'गाडी नं.'],
-    ['previousVehicleNumber', 'पुरानो गाडी नं.'],
-    ['vehicleType', 'सवारी प्रकार'],
-    ['ownerName', 'धनीको नाम'],
-    ['note', 'कैफियत'],
-    ['receiptNumber', 'रसिद नं.'],
-    ['membershipIncome', 'सदस्यताबाट'],
-    ['otherIncome', 'अन्य आम्दानी'],
-    ['total', 'जम्मा'],
-    ['periodMonths', 'अवधि महिना'],
-    ['paymentMethod', 'भुक्तानी तरिका'],
-    ['billingDate', 'का. मिति'],
-    ['periodStart', 'देखि'],
-    ['periodEnd', 'सम्म'],
-  ] as const;
+  const allColumns: Record<MahasangReportColumnId, DataTableColumn<MahasangReportRow>> = {
+    vehicleNumber: { id: 'vehicleNumber', header: 'गाडी नं.', cell: (row) => row.vehicleNumber },
+    previousVehicleNumber: { id: 'previousVehicleNumber', header: 'पुरानो गाडी नं.', cell: (row) => row.previousVehicleNumber },
+    vehicleType: { id: 'vehicleType', header: 'सवारी प्रकार', cell: (row) => row.vehicleType },
+    ownerName: {
+      id: 'ownerName',
+      header: 'धनीको नाम',
+      cell: (row) => (
+        <div className="space-y-0.5">
+          {getMemberOwnerDisplayLines(row.ownerName, row.operatorName).map((line) => (
+            <p key={`${line.label}-${line.name}`} className="text-xs">
+              {line.label ? <span className="text-muted-foreground">{line.label}</span> : null}
+              {line.label ? ' ' : ''}<span className="font-medium">{line.name}{line.suffix}</span>
+            </p>
+          ))}
+        </div>
+      ),
+    },
+    ownerPhone: { id: 'ownerPhone', header: 'धनीको फोन', cell: (row) => row.ownerPhone },
+    note: { id: 'note', header: 'कैफियत', cell: (row) => row.note },
+    receiptNumber: { id: 'receiptNumber', header: 'रसिद नं.', cell: (row) => toNepaliDigits(row.receiptNumber) },
+    membershipIncome: { id: 'membershipIncome', header: 'सदस्यताबाट', cell: (row) => formatReportAmount(row.membershipIncome) },
+    otherIncome: { id: 'otherIncome', header: 'अन्य आम्दानी', cell: (row) => formatReportAmount(row.otherIncome) },
+    total: { id: 'total', header: 'जम्मा', cell: (row) => formatReportAmount(row.total) },
+    periodMonths: { id: 'periodMonths', header: 'अवधि महिना', cell: (row) => toNepaliDigits(row.periodMonths) },
+    paymentMethod: { id: 'paymentMethod', header: 'भुक्तानी तरिका', cell: (row) => row.paymentMethod },
+    billingDate: { id: 'billingDate', header: 'का. मिति', cell: (row) => formatReportDate(row.billingDate) },
+    periodStart: { id: 'periodStart', header: 'देखि', cell: (row) => formatReportDate(row.periodStart) },
+    periodEnd: { id: 'periodEnd', header: 'सम्म', cell: (row) => formatReportDate(row.periodEnd) },
+  };
+  const columns = visibleColumns.map((id) => allColumns[id]);
+  const exportLabels = Object.fromEntries(
+    MAHASANG_REPORT_COLUMN_OPTIONS.map((column) => [column.id, column.label]),
+  ) as Record<MahasangReportColumnId, string>;
 
+  const exportRows = rows.map((row, index) => ({ ...row, serialNumber: toNepaliDigits(index + 1) }));
   const exportCsv = () => downloadReportCsv(
-    rows,
-    exportColumns.map(([key, label]) => ({
-      label,
-      value: (row) => columnValue(row, key),
-    })),
+    exportRows,
+    [
+      { label: 'सि.नं.', value: (row) => row.serialNumber },
+      ...visibleColumns.map((key) => ({
+        label: exportLabels[key],
+        value: (row: typeof exportRows[number]) => columnValue(row, key),
+      })),
+    ],
     'mahasang-report',
     includeHeader ? reportHeaderCsvRows(header.details) : [],
   );
@@ -76,7 +95,7 @@ export function MahasangReportPage() {
     <section className="space-y-4 pb-8">
       <ReportPageShell
         title="महासंघ रिपोर्ट"
-        description="सवारी बिलका कारोबार र सदस्यता आम्दानीको विवरण। पुरानो सवारी नम्बर BillResource मा नभएकाले उपलब्ध छैन।"
+        description="सवारी बिलका कारोबार, धनी/सञ्चालक विवरण र आम्दानी हेर्नुहोस्। उपलब्ध स्तम्भ छानेर तालिका र CSV निर्यात अनुकूलन गर्नुहोस्।"
         details={header.details}
         detailsError={header.error}
         includeHeaderDetails={includeHeader}
@@ -91,11 +110,17 @@ export function MahasangReportPage() {
         <ReportMetric label="अन्य आम्दानी" value={`रु ${formatReportAmount(totalOther)}`} description="सामान्य बिलिङ सुविधा उपलब्ध भएपछि गणना हुनेछ" />
       </div>
       <section className="rounded-xl border border-border/80 bg-card p-4 shadow-sm sm:p-5">
-        <h2 className="mb-3 text-base font-semibold">महासंघ कारोबार विवरण</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">महासंघ कारोबार विवरण</h2>
+            <p className="mt-1 text-xs text-muted-foreground">सि.नं. सधैँ देखिन्छ। पुरानो गाडी नम्बर हालको BillResource मा उपलब्ध नभएकाले — देखाइएको छ।</p>
+          </div>
+          <MahasangReportColumnMenu visibleColumns={visibleColumns} onApply={applyColumns} />
+        </div>
         <ReportDataTable
           rows={rows}
           columns={columns}
-          searchableText={(row) => `${row.vehicleNumber} ${row.ownerName} ${row.receiptNumber} ${row.vehicleType} ${row.note}`}
+          searchableText={(row) => `${row.vehicleNumber} ${row.previousVehicleNumber} ${row.ownerName} ${row.operatorName} ${row.ownerPhone} ${row.receiptNumber} ${row.vehicleType} ${row.note}`}
           getRowId={(row) => row.id}
           isLoading={isLoading}
           loadingLabel="महासंघ रिपोर्ट लोड हुँदैछ..."

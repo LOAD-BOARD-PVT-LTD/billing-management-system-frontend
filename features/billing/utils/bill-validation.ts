@@ -11,6 +11,8 @@ export function getBillValidationMessages(input: {
   isLoadingRules: boolean;
   isLoadingLinkedFeeRules: boolean;
   linkedFeeRulesError: string | null;
+  isLoadingVatSettings?: boolean;
+  vatSettingsError?: string | null;
   hasPeriodicBillingRule: boolean;
   billingMonths: number;
   ruleAmounts: Record<string, number>;
@@ -28,6 +30,8 @@ export function getBillValidationMessages(input: {
     isLoadingRules,
     isLoadingLinkedFeeRules,
     linkedFeeRulesError,
+    isLoadingVatSettings = false,
+    vatSettingsError = null,
     hasPeriodicBillingRule,
     billingMonths,
     ruleAmounts,
@@ -53,6 +57,8 @@ export function getBillValidationMessages(input: {
   if (isLoadingRules) messages.push('बिलिङ नियम लोड हुँदैछ।');
   if (vehicle && isLoadingLinkedFeeRules) messages.push('जोडिएको शुल्क नियम लोड हुँदैछ।');
   if (vehicle && linkedFeeRulesError) messages.push(`जोडिएको शुल्क नियम लोड गर्न सकिएन: ${linkedFeeRulesError}`);
+  if (isLoadingVatSettings) messages.push('VAT सेटिङ लोड हुँदैछ।');
+  if (vatSettingsError) messages.push(`VAT सेटिङ लोड गर्न सकिएन: ${vatSettingsError}`);
   if (hasPeriodicBillingRule && (!Number.isInteger(billingMonths) || billingMonths < 1 || billingMonths > 12)) {
     messages.push('आवधिक बिलिङका लागि १ देखि १२ सम्मको बिलिङ महिना छान्नुहोस्।');
   }
@@ -83,4 +89,3 @@ export function getBillValidationMessages(input: {
   }
   return messages;
 }
-

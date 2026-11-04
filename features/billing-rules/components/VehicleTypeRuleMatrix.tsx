@@ -135,7 +135,7 @@ function makeInitialRows(
       const existing = yearRules.find((rule) =>
         rule.vehicleCategoryId === selectedVehicleCategoryId && rule.feeHeadId === column.feeHeadId,
       );
-      return [column.id, existing ? String(existing.amount) : ''];
+      return [column.id, existing ? String(existing.amount) : '0'];
     })),
   }];
 }
@@ -222,7 +222,7 @@ export function VehicleTypeRuleMatrix({
     setColumns((current) => [...current, nextColumn]);
     setRows((current) => current.map((row) => ({
       ...row,
-      amounts: { ...row.amounts, [nextColumn.id]: '' },
+      amounts: { ...row.amounts, [nextColumn.id]: '0' },
     })));
   };
 
@@ -240,7 +240,7 @@ export function VehicleTypeRuleMatrix({
       id: crypto.randomUUID(),
       vehicleCategoryId: '',
       locked: false,
-      amounts: Object.fromEntries(columns.map((column) => [column.id, ''])),
+      amounts: Object.fromEntries(columns.map((column) => [column.id, '0'])),
     }]);
   };
 
@@ -296,15 +296,12 @@ export function VehicleTypeRuleMatrix({
           setFormError('चयन गरिएको शुल्क शीर्षक यो आर्थिक वर्षमा उपलब्ध छैन।');
           return;
         }
-        const rawAmount = row.amounts[column.id] ?? '';
-        if (!rawAmount.trim()) continue;
-        const amount = Number(rawAmount);
+        const rawAmount = row.amounts[column.id] ?? '0';
+        const amount = rawAmount.trim() ? Number(rawAmount) : 0;
         if (!Number.isFinite(amount) || amount < 0) {
           setFormError(`${feeHead.name} को रकम शून्य वा त्यसभन्दा बढी हुनुपर्छ।`);
           return;
         }
-        if (amount === 0) continue;
-
         const existing = allYearRules.find((rule) =>
           rule.feeHeadId === feeHead.id && rule.vehicleCategoryId === row.vehicleCategoryId,
         );

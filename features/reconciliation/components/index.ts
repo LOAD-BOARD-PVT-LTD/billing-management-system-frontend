@@ -4,6 +4,7 @@ export * from './ReconciliationDecisionOptions';
 export * from './ReconciliationMemberHistory';
 export * from './ReconciliationReasonField';
 export * from './ReconciliationValidationMessage';
+export * from './OwnerChangeDecision';
 export * from './VehicleReconciliationHeader';
 export * from './VehicleReconciliationView';
 export * from './VehicleReconciliationWarning';

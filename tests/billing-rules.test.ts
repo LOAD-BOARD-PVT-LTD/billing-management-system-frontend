@@ -10,7 +10,7 @@ import { apiClient } from '@/lib/api/client';
 import type { BillingRuleConfig } from '@/features/billing-rules/model/types';
 import { assertUniqueFeeHeadNames } from '@/features/billing-rules/utils/fee-head-name-validation';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
-import { billingRuleSchema } from '@/features/billing-rules/schemas/billingRuleSchema';
+import { billingRuleSchema, validateBillingRuleRecord } from '@/features/billing-rules/schemas/billingRuleSchema';
 import { getPeriodForFrequency, getPeriodLabel, validityOptionsByFrequency } from '@/features/billing-rules/utils/rule-period-policy';
 
 describe('1. Billing Rule Configuration', () => {
@@ -85,6 +85,18 @@ describe('1. Billing Rule Configuration', () => {
         };
 
         assert.equal(billingRuleSchema.safeParse(baseRule).success, true);
+        assert.equal(billingRuleSchema.safeParse({
+          ...baseRule,
+          scope: 'VEHICLE_TYPE',
+          vehicleCategoryId: 'vehicle-1',
+          amount: 0,
+        }).success, true);
+        assert.equal(validateBillingRuleRecord({
+          ...baseRule,
+          scope: 'VEHICLE_TYPE',
+          vehicleCategoryId: 'vehicle-1',
+          amount: 0,
+        }).isValid, true);
         assert.equal(billingRuleSchema.safeParse({
           ...baseRule,
           period: 'FISCAL_YEAR',
@@ -307,6 +319,28 @@ describe('1. Billing Rule Configuration', () => {
       assert.equal(doc.config.rules[0].vehicleCategoryId, '5');
       assert.equal(doc.config.rules[0].period, 'MONTH');
       assert.equal(doc.config.rules[0].validity, 'END_OF_MONTH');
+    });
+
+    test('preserves a zero amount for Vehicle Type rules', () => {
+      const doc = mapBillingRuleResource({
+        id: 208,
+        resource_name: 'BillingRuleResource',
+        inner_content: {
+          resourceType: 'BILLING_RULE',
+          scope: 'VEHICLE_TYPE',
+          vehicleCategoryId: 5,
+          frequency: 'PERIODIC',
+          period: 'MONTH',
+          validity: 'END_OF_MONTH',
+          amount: 0,
+          status: 'ACTIVE',
+          feeHead: { id: 10, name: 'Monthly Route Fee' },
+          fiscalYear: { id: 2, name: '2081/82' },
+        },
+      });
+
+      assert.equal(doc.config.rules.length, 1);
+      assert.equal(doc.config.rules[0].amount, 0);
     });
 
     test('normalizes periodic rules to monthly period and frequency-compatible validity', () => {

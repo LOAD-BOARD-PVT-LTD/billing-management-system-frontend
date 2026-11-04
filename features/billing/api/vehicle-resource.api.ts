@@ -1,15 +1,7 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
-import { resolveTqmsDhaniOwnerIndex } from '@/features/billing/utils/resolve-tqms-vehicle-owners';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
-
-type VehiclePhoneChangeEntry = {
-	phone: string;
-	previousPhone: string;
-	reason: string;
-	changedAt: string;
-};
 
 export type VehicleResourceDocument = {
 	id: string;
@@ -226,46 +218,17 @@ export async function updateVehicleResource(
 	);
 }
 
-export async function updateVehicleOwnerPhone(
+export async function updateVehicleSmsPhone(
 	vehicle: BillingVehicle,
 	input: VehiclePhoneUpdateInput,
 ): Promise<void> {
 	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
-	const ownersValue = resource.innerContent.Owners;
-	if (!Array.isArray(ownersValue)) {
-		throw new Error(`VehicleResource for ${vehicle.vehicleNumber} does not contain owner details.`);
-	}
-
-	const owners = ownersValue.map((owner) => asRecord(owner));
-	const validOwners = owners.flatMap((owner, index) => owner ? [{ owner, index }] : []);
-	const selectedOwner = validOwners[resolveTqmsDhaniOwnerIndex(validOwners.map(({ owner }) => owner))];
-	const dhani = selectedOwner?.owner;
-	if (!dhani) {
-		throw new Error(`VehicleResource for ${vehicle.vehicleNumber} does not contain a valid owner.`);
-	}
-	const phoneField = 'Phone' in dhani || !('phone' in dhani) ? 'Phone' : 'phone';
-	const previousPhone = String(dhani[phoneField] ?? '').trim();
-	const updatedOwners = owners.map((owner, index) => (
-		index === selectedOwner.index && owner ? { ...owner, [phoneField]: input.phone.trim() } : owner
-	));
-	const currentHistory = Array.isArray(resource.externalContent.phoneChangeHistory)
-		? resource.externalContent.phoneChangeHistory as VehiclePhoneChangeEntry[]
-		: [];
-
 	await updateVehicleResource(
 		resource,
-		{ ...resource.innerContent, Owners: updatedOwners },
+		resource.innerContent,
 		{
 			...resource.externalContent,
-			phoneChangeHistory: [
-				...currentHistory,
-				{
-					phone: input.phone.trim(),
-					previousPhone,
-					reason: input.reason.trim(),
-					changedAt: new Date().toISOString(),
-				},
-			],
+			smsPhone: input.phone.trim(),
 		},
 	);
 }

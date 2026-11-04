@@ -1,4 +1,4 @@
-import { Check, Database, RefreshCw, UserPlus, type LucideIcon } from 'lucide-react';
+import { Check, Database, RefreshCw, type LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import type { ReconciliationOption } from '../types/reconciliation.types';
 
@@ -8,7 +8,7 @@ export type ReconciliationDecisionOptionsProps = {
 };
 
 const decisionOptions: Array<{
-	value: ReconciliationOption;
+	value: Exclude<ReconciliationOption, 'CREATE_NEW_MEMBER'>;
 	title: string;
 	description: string;
 	Icon: LucideIcon;
@@ -34,15 +34,6 @@ const decisionOptions: Array<{
 		selectedClass: 'border-emerald-600 ring-2 ring-emerald-600/20 bg-emerald-50/30 dark:bg-emerald-950/10',
 		hoverClass: 'hover:border-emerald-600/50 hover:bg-muted/30',
 	},
-	{
-		value: 'CREATE_NEW_MEMBER',
-		title: 'नयाँ धनी दर्ता',
-		description: 'पुरानो सदस्य र बिलिङ इतिहास सुरक्षित राख्दै यस सवारीका लागि नयाँ सदस्य विवरण सिर्जना गर्नुहोस्।',
-		Icon: UserPlus,
-		iconClass: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
-		selectedClass: 'border-purple-600 ring-2 ring-purple-600/20 bg-purple-50/30 dark:bg-purple-950/10',
-		hoverClass: 'hover:border-purple-600/50 hover:bg-muted/30',
-	},
 ];
 
 export function ReconciliationDecisionOptions({
@@ -54,7 +45,7 @@ export function ReconciliationDecisionOptions({
 			<p className="text-xs font-semibold text-foreground">
 				कृपया अगाडि बढ्ने विकल्प छान्नुहोस् (Select Action):
 			</p>
-			<div className="grid gap-2.5 sm:grid-cols-3">
+			<div className="grid gap-2.5 sm:grid-cols-2">
 				{decisionOptions.map(({ value, title, description, Icon, iconClass, selectedClass, hoverClass }) => {
 					const isSelected = selectedOption === value;
 					return (
@@ -85,10 +76,8 @@ export function ReconciliationDecisionOptions({
 									className={`grid size-4 place-items-center rounded-full border ${
 										isSelected
 											? value === 'KEEP_BILLING'
-												? 'border-primary bg-primary text-primary-foreground'
-												: value === 'UPDATE_TQMS'
-													? 'border-emerald-600 bg-emerald-600 text-white'
-													: 'border-purple-600 bg-purple-600 text-white'
+														? 'border-primary bg-primary text-primary-foreground'
+														: 'border-emerald-600 bg-emerald-600 text-white'
 											: 'border-muted-foreground/40'
 									}`}
 								>

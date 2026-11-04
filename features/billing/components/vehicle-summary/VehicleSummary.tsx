@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { ExternalLink, LoaderCircle, Truck } from 'lucide-react';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import type { BillingVehicle } from '@/features/billing/model/types';
+import { getTqmsUrl } from '@/lib/config/tqms';
 
 function SummaryValue({
 	label,
@@ -15,21 +16,21 @@ function SummaryValue({
 	detailsLabel: string;
 }) {
 	return (
-		<div className="grid min-w-0 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)_18px] items-center gap-1 border-b border-border/60 px-1.5 py-0 last:border-b-0">
-			<p className="min-w-0 text-xs leading-4 text-muted-foreground">{label}</p>
-			<p className="min-w-0 break-words text-sm font-medium leading-4 text-foreground">{value || '-'}</p>
+		<div className="grid min-w-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)_20px] items-start gap-2 border-b border-border/60 px-2.5 py-2 last:border-b-0 hover:bg-muted/30">
+			<dt className="min-w-0 text-xs font-medium leading-5 text-muted-foreground">{label}</dt>
+			<dd className="min-w-0 break-words text-xs font-medium leading-5 text-foreground">{value || '-'}</dd>
 			{href ? (
 				<a
 					href={href}
 					target="_blank"
-					rel="noreferrer"
+					rel="noopener noreferrer"
 					aria-label={`${label} ${detailsLabel}`}
 					title={`${label} ${detailsLabel}`}
-					className="grid size-[18px] shrink-0 place-items-center rounded-sm border border-border text-muted-foreground hover:bg-muted"
+					className="mt-0.5 grid size-5 shrink-0 place-items-center rounded border border-border/70 text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				>
 					<ExternalLink aria-hidden="true" className="size-3" />
 				</a>
-			) : null}
+			) : <span aria-hidden="true" />}
 		</div>
 	);
 }
@@ -42,7 +43,7 @@ export const VehicleSummary = memo(function VehicleSummary({ vehicle }: { vehicl
 	const routePermit = compliance?.RoutePermit;
 	const bluebook = compliance?.Bluebook ?? compliance?.BlueBook ?? details?.Bluebook ?? details?.BlueBook;
 	const vehicleDetailsUrl = vehicle.tqmsVehicleId
-		? `https://tqms.bitspanda.com/admin/vehicle/view/${encodeURIComponent(vehicle.tqmsVehicleId)}`
+		? getTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.tqmsVehicleId)}`)
 		: null;
 	const formatDate = (bs?: string | number | null, ad?: string | number | null) => {
 		for (const value of [bs, ad]) {
@@ -58,26 +59,28 @@ export const VehicleSummary = memo(function VehicleSummary({ vehicle }: { vehicl
 	) => `${formatDate(startBs, startAd)} / ${formatDate(endBs, endAd)}`;
 
 	return (
-		<aside className="overflow-hidden rounded-md border border-border bg-card">
-			<h2 className="flex items-center gap-1 border-b border-border px-1.5 py-1 text-sm font-semibold text-foreground">
-				<Truck aria-hidden="true" className="size-4 text-primary" />
+		<aside className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm">
+			<h2 className="flex min-h-10 items-center gap-2 border-b border-border/70 bg-muted/30 px-3 py-2 text-sm font-semibold leading-5 text-foreground">
+				<span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+					<Truck aria-hidden="true" className="size-3.5" />
+				</span>
 				सवारी विवरण
 				{isLoading && <LoaderCircle aria-label="TQMS विवरण लोड हुँदैछ" className="ml-auto size-4 animate-spin text-muted-foreground" />}
 			</h2>
 			{error && (
-				<div role="alert" className="border-b border-border px-2 py-1.5 text-xs text-destructive">
-					<p>TQMS सवारी विवरण लोड गर्न सकिएन: {error}</p>
-					<button type="button" onClick={() => void reload()} className="font-medium underline underline-offset-2">
+				<div role="alert" className="border-b border-border px-3 py-2 text-xs leading-5 text-destructive">
+					<p>{`TQMS सवारी विवरण लोड गर्न सकिएन: ${error}`}</p>
+					<button type="button" onClick={() => void reload()} className="mt-0.5 font-medium underline underline-offset-2">
 						पुनः प्रयास गर्नुहोस्
 					</button>
 				</div>
 			)}
 			{!vehicle.vehicleNumber && (
-				<p role="status" className="border-b border-border px-2 py-1.5 text-xs text-muted-foreground">
+				<p role="status" className="border-b border-border px-3 py-2 text-xs leading-5 text-muted-foreground">
 					यस सवारीको TQMS विवरण उपलब्ध छैन।
 				</p>
 			)}
-			<div className="px-1 py-0">
+			<dl>
 				<SummaryValue
 					label="बीमा कम्पनी"
 					value={insurance?.Company?.trim() || '-'}
@@ -113,7 +116,7 @@ export const VehicleSummary = memo(function VehicleSummary({ vehicle }: { vehicl
 					value={period(bluebook?.StartBs, bluebook?.StartAd, bluebook?.ExpiryBs, bluebook?.ExpiryAd)}
 					detailsLabel="विवरण हेर्नुहोस्"
 				/>
-			</div>
+			</dl>
 		</aside>
 	);
 });

@@ -8,9 +8,12 @@ import type {
 	ReconciliationAuditEntry,
 	ReconciliationFieldDiff,
 	ReconciliationLookupResult,
+	OwnerChangeType,
 	ResolvedVehicleOwners,
 	VehicleOwnershipHistoryEntry,
 } from '../types/reconciliation.types';
+import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+import { hasVehicleBillingHistory } from './reconciliation-history';
 import { resolveTqmsVehicleOwners } from '@/features/billing/utils/resolve-tqms-vehicle-owners';
 
 export function normalizeReconciliationText(value: unknown): string {
@@ -221,6 +224,10 @@ export function compareVehiclesForReconciliation(
 	return fields;
 }
 
+export function isOwnerReconciliationDiff(diff: ReconciliationFieldDiff): boolean {
+	return ['ownerName', 'operatorName', 'phone', 'ownerAddress', 'owners'].includes(diff.key);
+}
+
 export function vehicleResourceToBillingVehicle(
 	resource: VehicleResourceDocument,
 	fallbackSmsPhone?: string,
@@ -232,7 +239,10 @@ export function vehicleResourceToBillingVehicle(
 	const vehicleType = String(
 		inner.VehicleType ?? inner.vehicleType ?? 'सवारी प्रकार उपलब्ध छैन',
 	).trim();
-	const smsPhone = fallbackSmsPhone || resolved.phone;
+	const savedSmsPhone = resource.externalContent.smsPhone;
+	const smsPhone = (typeof savedSmsPhone === 'string' && savedSmsPhone.trim())
+		? savedSmsPhone.trim()
+		: fallbackSmsPhone || resolved.phone;
 
 	return {
 		id: resource.id,
@@ -273,6 +283,7 @@ export async function reconcileVehicleLookup(
 		signal?: AbortSignal;
 		preloadedTqms?: BillingVehicle;
 		fallbackSmsPhone?: string;
+		receipts?: ReceiptRecord[];
 	},
 ): Promise<ReconciliationLookupResult> {
 	const query = vehicleNumber.trim();
@@ -296,24 +307,16 @@ export async function reconcileVehicleLookup(
 	}
 
 	if (!tqmsVehicle) {
-		if (billingResource) {
-			const billingVehicle = vehicleResourceToBillingVehicle(
-				billingResource,
-				options?.fallbackSmsPhone,
-			);
-			return {
-				type: 'MATCHED',
-				billingVehicle,
-				tqmsVehicle: null,
-				billingResource,
-				diffs: [],
-			};
-		}
 		throw new Error(`सवारी नम्बर "${query}" TQMS मा फेला परेन।`);
 	}
 
-	if (!billingResource) {
-		// First time vehicle in internal Billing system
+	const hasBillingHistory = hasVehicleBillingHistory(
+		options?.receipts ?? [],
+		[tqmsVehicle.tqmsVehicleId, billingResource?.innerContent.VehicleId?.toString() ?? ''],
+		[query, tqmsVehicle.vehicleNumber, billingResource?.innerContent.VehicleNumber?.toString() ?? ''],
+	);
+
+	if (!hasBillingHistory) {
 		return {
 			type: 'FIRST_TIME',
 			tqmsVehicle,
@@ -321,6 +324,10 @@ export async function reconcileVehicleLookup(
 			billingResource: null,
 			diffs: [],
 		};
+	}
+
+	if (!billingResource) {
+		throw new Error('Эही सवारीको पुरानो बिल भेटियो, तर VehicleResource विवरण फेला परेन। बिलिङ प्रशासकलाई सम्पर्क गर्नुहोस्।');
 	}
 
 	// Step 3: Compare all details between Billing and TQMS, including owners array
@@ -357,10 +364,16 @@ export function prepareTqmsUpdatePayload(
 	diffs: ReconciliationFieldDiff[],
 	performedBy: string,
 	reason: string,
+	ownerChangeType?: OwnerChangeType | null,
 ): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
+	const tqmsContent = { ...(tqmsVehicle.resourceContent || {}) };
+	if (!ownerChangeType) {
+		delete tqmsContent.Owners;
+		delete tqmsContent.owners;
+	}
 	const innerContent: Record<string, unknown> = {
 		...existingResource.innerContent,
-		...(tqmsVehicle.resourceContent || {}),
+		...tqmsContent,
 		VehicleNumber: tqmsVehicle.vehicleNumber,
 		VehicleId: tqmsVehicle.tqmsVehicleId || existingResource.innerContent.VehicleId,
 		VehicleType: tqmsVehicle.vehicleType,
@@ -377,7 +390,7 @@ export function prepareTqmsUpdatePayload(
 		performedBy,
 		reason: reason.trim(),
 		changedFields: diffs
-			.filter((d) => d.isChanged)
+			.filter((d) => d.isChanged && (ownerChangeType || !isOwnerReconciliationDiff(d)))
 			.map((d) => ({
 				field: d.key,
 				label: d.label,
@@ -390,7 +403,71 @@ export function prepareTqmsUpdatePayload(
 		...existingResource.externalContent,
 		reconciliationAudit: [...currentAudits, auditEntry],
 	};
+	if (ownerChangeType === 'OWNERSHIP_TRANSFER') {
+		const currentOwnershipHistory = Array.isArray(existingResource.externalContent?.ownershipHistory)
+			? existingResource.externalContent.ownershipHistory as VehicleOwnershipHistoryEntry[]
+			: [];
+		externalContent.ownershipHistory = [
+			...currentOwnershipHistory,
+			{
+				previousOwners: existingResource.innerContent.Owners ?? existingResource.innerContent.owners ?? [],
+				transferredAt: new Date().toISOString(),
+				performedBy,
+				reason: reason.trim(),
+				transferType: 'TQMS_OWNERSHIP_TRANSFER',
+			},
+		];
+	}
 
+	return { innerContent, externalContent };
+}
+
+export function prepareOwnerChangePayload(
+	existingResource: VehicleResourceDocument,
+	tqmsVehicle: BillingVehicle,
+	diffs: ReconciliationFieldDiff[],
+	ownerChangeType: OwnerChangeType,
+	performedBy: string,
+	reason: string,
+): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
+	const tqmsOwners = tqmsVehicle.resourceContent.Owners ?? tqmsVehicle.resourceContent.owners ?? [];
+	const innerContent: Record<string, unknown> = { ...existingResource.innerContent, Owners: tqmsOwners };
+	delete innerContent.owners;
+	const changedFields = diffs.filter((diff) => isOwnerReconciliationDiff(diff) && diff.isChanged);
+	const auditEntries = Array.isArray(existingResource.externalContent?.reconciliationAudit)
+		? existingResource.externalContent.reconciliationAudit as ReconciliationAuditEntry[]
+		: [];
+	const auditEntry: ReconciliationAuditEntry = {
+		action: 'UPDATE_TQMS',
+		timestamp: new Date().toISOString(),
+		performedBy,
+		reason: reason.trim(),
+		changedFields: changedFields.map((diff) => ({
+			field: diff.key,
+			label: diff.label,
+			oldValue: diff.billingValue,
+			newValue: diff.tqmsValue,
+		})),
+	};
+	const externalContent: Record<string, unknown> = {
+		...existingResource.externalContent,
+		reconciliationAudit: [...auditEntries, auditEntry],
+	};
+	if (ownerChangeType === 'OWNERSHIP_TRANSFER') {
+		const ownershipHistory = Array.isArray(existingResource.externalContent?.ownershipHistory)
+			? existingResource.externalContent.ownershipHistory as VehicleOwnershipHistoryEntry[]
+			: [];
+		externalContent.ownershipHistory = [
+			...ownershipHistory,
+			{
+				previousOwners: existingResource.innerContent.Owners ?? existingResource.innerContent.owners ?? [],
+				transferredAt: new Date().toISOString(),
+				performedBy,
+				reason: reason.trim(),
+				transferType: 'TQMS_OWNERSHIP_TRANSFER',
+			},
+		];
+	}
 	return { innerContent, externalContent };
 }
 

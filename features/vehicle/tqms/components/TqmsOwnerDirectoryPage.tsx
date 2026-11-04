@@ -18,6 +18,7 @@ import {
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
 import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import { toNepaliDigits } from '@/utils/numbers';
+import { getTqmsUrl } from '@/lib/config/tqms';
 
 type OwnerGroup = {
   key: string;
@@ -249,7 +250,7 @@ export function TqmsOwnerDirectoryPage() {
                                     <TableCell className="py-2">{vehicle.vehicleId}</TableCell>
                                     <TableCell className="py-2 text-right">
                                       <a
-                                        href={`https://tqms.bitspanda.com/admin/vehicle/view/${encodeURIComponent(vehicle.vehicleId)}`}
+                                        href={getTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.vehicleId)}`)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center gap-1 text-primary hover:underline"

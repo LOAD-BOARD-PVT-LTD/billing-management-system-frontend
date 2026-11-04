@@ -2,6 +2,12 @@ import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
 
 export type ReconciliationOption = 'KEEP_BILLING' | 'UPDATE_TQMS' | 'CREATE_NEW_MEMBER';
+export type OwnerChangeType = 'NAME_CORRECTION' | 'OWNERSHIP_TRANSFER';
+export type ReconciliationDecision = {
+	option: ReconciliationOption | null;
+	ownerChangeType: OwnerChangeType | null;
+	reason: string;
+};
 
 export type ReconciliationFieldDiff = {
 	key: string;
@@ -69,4 +75,3 @@ export type ReconciliationDecisionInput = {
 	reason: string;
 	performedBy: string;
 };
-

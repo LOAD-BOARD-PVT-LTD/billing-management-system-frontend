@@ -59,13 +59,13 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
   },
   {
     id: 'paid-expired-rules', category: 'billing-rules', title: 'तिरेको तर म्याद सकिएको नियम',
-    description: 'भुक्तानी र म्याद सकिएको अवस्थाका लागि विशेष नीति।', icon: ReceiptText,
-    unavailableReason: 'यस अवस्थाका लागि छुट्टै नीति सेटिङ वा API हाल जडान छैन।',
+    description: 'भुक्तानी र म्याद सकिएको अवस्थाका लागि बिलिङ नियम छान्नुहोस्।', icon: ReceiptText,
+    searchTerms: ['arrears', 'expired', 'तिरेको म्याद सकिएको'],
   },
   {
-    id: 'monthly-payment-rules', category: 'billing-rules', title: 'मासिक भुक्तानी नियम',
-    description: 'मासिक अवधि र आवर्ती शुल्क हालको बिलिङ नियम मोड्युलबाट व्यवस्थापन हुन्छ।', icon: CalendarDays,
-    href: '/dashboard/billing-rules', actionLabel: 'बिलिङ नियम खोल्नुहोस्',
+    id: 'monthly-payment-rules', category: 'billing-rules', title: 'मासिक तिरेको नियम',
+    description: 'मासिक भुक्तानी देखाउन आर्थिक वर्ष र बिलिङ नियम छान्नुहोस्।', icon: CalendarDays,
+    searchTerms: ['monthly payment', 'मासिक तिरेको'],
   },
   {
     id: 'tqms-data-sync', category: 'integrations', title: 'TQMS डाटा सिंक',
@@ -78,25 +78,31 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     unavailableReason: 'CTS वा बीमा एकीकरण व्यवस्थापनका लागि सेटिङ सेवा हाल जडान छैन।',
   },
   {
+    id: 'notification-center', category: 'sms-notifications', title: 'सूचना केन्द्र तथा SMS ड्यासबोर्ड',
+    description: 'प्रत्येक सूचना, SMS स्थिति र हालको ड्यासबोर्ड समीक्षा।', icon: MessageSquareText,
+    href: '/dashboard/notifications', actionLabel: 'सूचना केन्द्र खोल्नुहोस्',
+    searchTerms: ['notification center', 'sms dashboard', 'message overview'],
+  },
+  {
     id: 'sms-provider', category: 'sms-notifications', title: 'SMS प्रदायक सेटिङ्स',
     description: 'प्रदायक credentials र sender configuration।', icon: MessageSquareText,
-    unavailableReason: 'SMS प्रदायक credentials पढ्ने वा सुरक्षित गर्ने सेटिङ सेवा छैन; कुनै secret field देखाइएको छैन।',
+    href: '/dashboard/notifications?tab=automation', actionLabel: 'सेटिङ हेर्नुहोस्',
     searchTerms: ['sms api key', 'api key', 'sms provider'],
   },
   {
     id: 'payment-sms', category: 'sms-notifications', title: 'भुक्तानीपछि स्वचालित SMS',
     description: 'सफल भुक्तानीपछि सवारी धनीलाई पठाइने सूचना।', icon: ReceiptText,
-    unavailableReason: 'स्वचालित SMS configuration हाल उपलब्ध छैन।',
+    href: '/dashboard/notifications?tab=automation', actionLabel: 'स्वचालित SMS हेर्नुहोस्',
   },
   {
     id: 'sms-templates', category: 'sms-notifications', title: 'SMS टेम्प्लेट तथा परीक्षण SMS',
     description: 'सन्देशका टेम्प्लेट सम्पादन र परीक्षण सन्देश पठाउने सुविधा।', icon: MessageSquareText,
-    unavailableReason: 'टेम्प्लेट सम्पादन वा परीक्षण SMS का लागि हाल सेवा जडान छैन।',
+    href: '/dashboard/notifications?tab=templates', actionLabel: 'टेम्प्लेट हेर्नुहोस्',
   },
   {
     id: 'sms-delivery-history', category: 'sms-notifications', title: 'SMS पठाउने अवस्था तथा अभियान इतिहास',
     description: 'डेलिभरी विवरण र अभियान इतिहास।', icon: FileClock,
-    unavailableReason: 'SMS delivery status वा अभियान इतिहास endpoint उपलब्ध छैन।',
+    href: '/dashboard/notifications?tab=history', actionLabel: 'इतिहास हेर्नुहोस्',
   },
   {
     id: 'tqms-branch-filter', category: 'organization', title: 'TQMS संघ शाखा फिल्टर',
@@ -109,19 +115,8 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     searchTerms: ['displaced tags', 'displaced tagging', 'विस्थापित सुविधा'],
   },
   {
-    id: 'organization-features-policies', category: 'organization', title: 'संस्थागत सुविधाहरू तथा नीतिहरू',
-    description: 'संस्थाले प्रयोग गर्ने billing entity र शाखा व्यवस्थापन।', icon: Building2,
-    href: '/dashboard/billing-entities', actionLabel: 'संस्था विवरण खोल्नुहोस्',
-  },
-  {
-    id: 'organization-branches', category: 'organization', title: 'संस्था तथा शाखा व्यवस्थापन',
-    description: 'हालका संस्था र शाखा व्यवस्थापन मोड्युलहरू।', icon: Building2,
-    href: '/dashboard/branches', actionLabel: 'शाखा व्यवस्थापन खोल्नुहोस्',
-  },
-  {
     id: 'organization-vat', category: 'organization', title: 'VAT तथा कर सेटिङ्स',
-    description: 'VAT applicability र दरका लागि संस्था-स्तरको configuration।', icon: ReceiptText,
-    unavailableReason: 'अनुवादमा VAT सेटिङ उल्लेख भए पनि हालको billing entity schema/API मा VAT configuration छैन।',
+    description: 'मुख्य संस्थाको VAT अवस्था, दर र VAT लाग्ने Billing Entity व्यवस्थापन गर्नुहोस्।', icon: ReceiptText,
     searchTerms: ['vat दर', 'vat rate', 'vat'],
   },
   {

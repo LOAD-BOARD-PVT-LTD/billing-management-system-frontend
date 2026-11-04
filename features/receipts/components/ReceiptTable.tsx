@@ -3,8 +3,8 @@ import { DataTableColumnHeader, type SortDirection } from '@/components/data-tab
 import { ReceiptActions } from '@/features/receipts/components/ReceiptActions';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { getMemberOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { formatReceiptDate } from '@/features/receipts/utils/receipt-date';
 import type { ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
-import { convertADtoBS } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
 
 interface ReceiptTableProps {
@@ -21,16 +21,6 @@ interface ReceiptTableProps {
 	canCancel: (receipt: ReceiptRecord) => boolean;
 	cancelUnavailableReason: (receipt: ReceiptRecord) => string | undefined;
 	isLoading?: boolean;
-}
-
-function displayDate(value: string) {
-	const date = new Date(`${value}T00:00:00`);
-	if (Number.isNaN(date.getTime())) return value;
-	try {
-		return toNepaliDigits(convertADtoBS(date).replaceAll('-', '/'));
-	} catch {
-		return toNepaliDigits(value.replaceAll('-', '/'));
-	}
 }
 
 function heading(label: string, id: string, sortColumn: string, sortDirection: SortDirection, onSort: ReceiptTableProps['onSort']) {
@@ -92,13 +82,13 @@ export function ReceiptTable({ rows, visibleColumns, sortColumn, sortDirection, 
 		paymentDate: {
 			id: 'paymentDate',
 			header: heading('भु. मिति (बाट)', 'paymentDate', sortColumn, sortDirection, onSort),
-			cell: (receipt) => <span className="whitespace-nowrap">{displayDate(receipt.billingDate)}</span>,
+			cell: (receipt) => <span className="whitespace-nowrap">{formatReceiptDate(receipt.billingDate)}</span>,
 			cellClassName: 'whitespace-nowrap',
 		},
 		validUntil: {
 			id: 'validUntil',
 			header: heading('भु. मिति सम्म', 'validUntil', sortColumn, sortDirection, onSort),
-			cell: (receipt) => <div className="space-y-1"><span className="block whitespace-nowrap">{displayDate(receipt.validUntil)}</span>{receipt.lastCorrection ? <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600" title={`सुधार मिति: ${receipt.lastCorrection.at}; कारण: ${receipt.lastCorrection.reason}`}>सुधार भयो</span> : null}</div>,
+			cell: (receipt) => <div className="space-y-1"><span className="block whitespace-nowrap">{formatReceiptDate(receipt.validUntil)}</span>{receipt.lastCorrection ? <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600" title={`सुधार मिति: ${receipt.lastCorrection.at}; कारण: ${receipt.lastCorrection.reason}`}>सुधार भयो</span> : null}</div>,
 			cellClassName: 'whitespace-nowrap',
 		},
 		paymentMethod: {

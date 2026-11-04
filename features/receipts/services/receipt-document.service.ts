@@ -12,7 +12,7 @@ import { DEFAULT_COMPANY_BRANDING } from '@/shared/document-generation/component
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
 import { formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
 import { BILL_FOOTER_LABELS, getBillFooterDetails } from '@/shared/document-generation/utils/bill-footer';
-import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { getBillOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 const PAGE_WIDTH = 841.89;
 const PAGE_HEIGHT = 595.28;
@@ -253,7 +253,7 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   const customerName = bill.content.customer?.name || bill.content.vehicle.ownerName || '—';
   const customerPhone = bill.content.customer?.phone || bill.content.vehicle.smsPhone || bill.content.vehicle.phone;
   const customerAddress = bill.content.customer?.address || bill.content.vehicle.address || '—';
-  const ownerLines = getReceiptOwnerDisplayLines(
+  const ownerLines = getBillOwnerDisplayLines(
     bill.content.vehicle.ownerName,
     bill.content.vehicle.operatorName,
     customerPhone,
@@ -313,6 +313,7 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   const tableEnd = tableTop + 22
     + itemRows.reduce((sum, height) => sum + height, 0)
     + (bill.content.discount > 0 ? 23 : 0)
+    + ((bill.content.vatAmount ?? 0) > 0 ? 23 : 0)
     + totalRowHeight;
   const noteText = `कैफियत: ${bill.content.note || bill.content.paymentMethod || '—'}`;
   const remarkRows = [
@@ -432,6 +433,15 @@ function drawReceipt(
       { text: '' },
       { text: `-${formatDocumentCurrency(content.discount)}`, align: 'right' },
       { text: `-${formatDocumentCurrency(content.discount)}`, align: 'right' },
+      { text: '' },
+    ], fonts);
+  }
+  if ((content.vatAmount ?? 0) > 0) {
+    top = drawTableRow(page, top, 23, layout.widths, [
+      { text: 'मू.अ.कर:', align: 'center' },
+      { text: content.vatRatePct ? `${content.vatRatePct}%` : '' },
+      { text: 'मूल्य अभिवृद्धि कर', align: 'right' },
+      { text: formatDocumentCurrency(content.vatAmount ?? 0), align: 'right' },
       { text: '' },
     ], fonts);
   }

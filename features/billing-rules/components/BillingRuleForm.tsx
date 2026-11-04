@@ -113,7 +113,7 @@ export function BillingRuleForm({
       amount: 0,
       status: 'ACTIVE',
     });
-  const [amount, setAmount] = useState(initialRule ? String(initialRule.amount) : '');
+  const [amount, setAmount] = useState(initialRule ? String(initialRule.amount) : '0');
   const [effectiveDate, setEffectiveDate] = useState(initialRule?.effectiveDate ?? '');
   const [meetingReference, setMeetingReference] = useState(initialRule?.meetingReference ?? '');
   const [meetingDocument, setMeetingDocument] = useState<File | null>(null);
@@ -123,7 +123,7 @@ export function BillingRuleForm({
   const [commonRows, setCommonRows] = useState<CommonRuleFormRow[]>(() => [{
     id: crypto.randomUUID(),
     feeHeadId: initialRule?.feeHeadId ?? initialFeeHeadId,
-    amount: initialRule ? String(initialRule.amount) : '',
+    amount: initialRule ? String(initialRule.amount) : '0',
     frequency: initialRule?.frequency ?? 'ONE_TIME',
     validity: initialRule
       ? getValidityForFrequency(initialRule.frequency, initialRule.validity)
@@ -270,10 +270,8 @@ export function BillingRuleForm({
     const parsedAmount = Number(amount);
     if (!rule.feeHeadId) errors.feeHeadId = t('billing.ruleForm.feeHeadRequired');
     if (!amount.trim()) errors.amount = t('billing.ruleForm.amountRequired');
-    else if (!Number.isFinite(parsedAmount) || parsedAmount < 0 || (rule.scope === 'VEHICLE_TYPE' && parsedAmount === 0)) {
-      errors.amount = rule.scope === 'COMMON'
-        ? t('billing.ruleForm.amountNonnegative')
-        : t('billing.ruleForm.amountPositive');
+    else if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      errors.amount = t('billing.ruleForm.amountNonnegative');
     }
     if (!hasValidBillingEntity) errors.billingEntityId = isLoadingBillingEntities
       ? t('billing.ruleForm.billingEntityUnavailable')
@@ -534,7 +532,7 @@ export function BillingRuleForm({
                       onClick={() => setCommonRows((rows) => [...rows, {
                         id: crypto.randomUUID(),
                         feeHeadId: feeHeadsForYear.find((feeHead) => !rows.some((row) => row.feeHeadId === feeHead.id))?.id ?? '',
-                        amount: '',
+                        amount: '0',
                         frequency: 'ONE_TIME',
                         validity: 'SAME_DAY',
                         billingEntityId: defaultBillingEntityId || null,
@@ -659,7 +657,7 @@ export function BillingRuleForm({
                     id="common-rule-amount"
                     aria-label="रकम"
                     type="number"
-                    min={rule.scope === 'COMMON' ? '0' : '0.01'}
+                    min="0"
                     step="0.01"
                     value={amount}
                     onChange={(event) => {

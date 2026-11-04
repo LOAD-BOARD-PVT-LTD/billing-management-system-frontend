@@ -7,12 +7,12 @@ import type { BillTemplateProps } from '../../../types/template.types';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '../../../utils/format-currency';
 import { formatDocumentNepaliDate, formatDocumentTime } from '../../../utils/format-date';
 import { billTemplateStyles } from './bill.styles';
-import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { getBillOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 
 export function BillTemplate({ bill, branding: brandingOverrides }: BillTemplateProps) {
   const { content } = bill;
   const branding = { ...DEFAULT_COMPANY_BRANDING, ...brandingOverrides };
-  const ownerLines = getReceiptOwnerDisplayLines(
+  const ownerLines = getBillOwnerDisplayLines(
     content.vehicle.ownerName,
     content.vehicle.operatorName,
     content.vehicle.phone,

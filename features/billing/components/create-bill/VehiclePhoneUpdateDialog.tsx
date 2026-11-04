@@ -5,7 +5,6 @@ import { RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { vehiclePhoneUpdateSchema, type VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
 import type { BillingVehicle } from '@/features/billing/model/types';
 
@@ -23,12 +22,11 @@ export function VehiclePhoneUpdateDialog({
 	onSubmit: (input: VehiclePhoneUpdateInput) => Promise<void>;
 }) {
 	const [phone, setPhone] = useState(vehicle.smsPhone || vehicle.phone);
-	const [reason, setReason] = useState('');
 	const [error, setError] = useState<string | null>(null);
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		const result = vehiclePhoneUpdateSchema.safeParse({ phone, reason });
+		const result = vehiclePhoneUpdateSchema.safeParse({ phone });
 		if (!result.success) {
 			setError(result.error.issues[0]?.message ?? 'कृपया विवरण जाँच गर्नुहोस्।');
 			return;
@@ -48,7 +46,7 @@ export function VehiclePhoneUpdateDialog({
 				<DialogHeader className="text-left">
 					<DialogTitle className="text-xl">SMS नम्बर परिवर्तन गर्नुहोस्</DialogTitle>
 					<DialogDescription>
-						{vehicle.vehicleNumber} का लागि सवारी धनीको फोन नम्बर परिवर्तन गर्नुहोस्।
+						{vehicle.vehicleNumber} का लागि SMS पठाउने नम्बर परिवर्तन गर्नुहोस्। धनीको TQMS फोन नम्बर यथावत् रहनेछ।
 					</DialogDescription>
 				</DialogHeader>
 
@@ -56,7 +54,7 @@ export function VehiclePhoneUpdateDialog({
 					<label className="block space-y-1.5 text-sm font-medium">
 						धनीको हालको नम्बर
 						<Input value={vehicle.phone} readOnly className="bg-muted/40" />
-						<span className="block text-xs font-normal text-muted-foreground">VehicleResource मा हाल सुरक्षित भएको नम्बर।</span>
+						<span className="block text-xs font-normal text-muted-foreground">यो TQMS बाट आएको धनीको फोन नम्बर हो र परिवर्तन हुँदैन।</span>
 					</label>
 
 					<label className="block space-y-1.5 text-sm font-medium">
@@ -70,20 +68,7 @@ export function VehiclePhoneUpdateDialog({
 							placeholder="९८XXXXXXXX"
 							required
 						/>
-						<span className="block text-xs font-normal text-muted-foreground">यो नम्बर VehicleResource मा धनीको फोन नम्बरका रूपमा सुरक्षित हुनेछ।</span>
-					</label>
-
-					<label className="block space-y-1.5 text-sm font-medium">
-						परिवर्तनको कारण
-						<Textarea
-							value={reason}
-							onChange={(event) => { setReason(event.target.value); setError(null); }}
-							placeholder="नम्बर परिवर्तन गर्नुको कारण लेख्नुहोस्"
-							maxLength={500}
-							rows={3}
-							required
-						/>
-						<span className="block text-right text-xs font-normal text-muted-foreground">{reason.length}/500</span>
+						<span className="block text-xs font-normal text-muted-foreground">यो नम्बर छुट्टै SMS नम्बरका रूपमा VehicleResource को external content मा सुरक्षित हुनेछ।</span>
 					</label>
 
 					{error && (
