@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
+import { updateVehicleDisplacement } from '@/features/billing/api/vehicle-resource.api';
 import type { MemberResourceInput, MemberResourceRecord } from '@/features/members/model/member';
 
 type JsonRecord = Record<string, unknown>;
@@ -107,106 +108,21 @@ export async function searchMemberResources(field: string, value: string, limit:
   return unwrapRows(payload).map(parseMemberResource);
 }
 
-function resourceId(value: unknown): string {
-  const record = asRecord(value);
-  if (!record) return '';
-  for (const key of ['id', 'resourceId', 'resource_id', 'ID']) {
-    const id = text(record[key]);
-    if (id) return id;
-  }
-  for (const key of ['data', 'result', 'resource']) {
-    const id = resourceId(record[key]);
-    if (id) return id;
-  }
-  return '';
-}
-
-function taggedContent(
-  input: MemberResourceInput,
-  innerContent: JsonRecord,
-  statusBeforeDisplaced: string,
-  isAlreadyDisplaced: boolean,
-) {
-  return {
-    ...innerContent,
-    vehicleId: input.vehicleId,
-    vehicleNumber: input.vehicleNumber,
-    status: 'DISPLACED',
+export async function tagMemberDisplaced(input: MemberResourceInput): Promise<void> {
+  const vehicleId = input.vehicleId.trim();
+  if (!vehicleId) throw new Error('A TQMS vehicle ID is required to tag a vehicle as displaced.');
+  await updateVehicleDisplacement(vehicleId, input.vehicleNumber, {
     isDisplaced: true,
-    statusBeforeDisplaced,
-    displacementPrevious: isAlreadyDisplaced
-      ? innerContent.displacementPrevious
-      : {
-        status: innerContent.status,
-        isDisplaced: innerContent.isDisplaced,
-        reason: innerContent.reason,
-        taggedAt: innerContent.taggedAt,
-        performedBy: innerContent.performedBy,
-        tags: innerContent.tags,
-      },
-    reason: input.reason.trim(),
+    reason: input.reason,
     taggedAt: input.taggedAt,
     performedBy: input.performedBy,
-  };
-}
-
-export async function tagMemberDisplaced(
-  input: MemberResourceInput,
-  existing?: MemberResourceRecord,
-): Promise<void> {
-  const vehicleId = input.vehicleId.trim();
-  if (!vehicleId) throw new Error('A billing vehicle ID is required to tag a member.');
-  if (!input.reason.trim()) throw new Error('विस्थापितको कारण लेख्नुहोस्।');
-  if (existing) {
-    const current = await readMemberResource(existing.id);
-    const statusBeforeDisplaced = current.isDisplaced ? current.statusBeforeDisplaced : current.status;
-    await apiClient.put<void>(
-      endpoints.resources.member.update(current.id),
-      {
-        ...current.resource,
-        id: /^\d+$/u.test(current.id) ? Number(current.id) : current.id,
-        resource_name: 'MemberResource',
-        inner_content: taggedContent(input, current.innerContent, statusBeforeDisplaced, current.isDisplaced),
-      },
-    );
-    return;
-  }
-  const created = await apiClient.post<unknown>(endpoints.resources.member.create(), {
-    resource_name: 'MemberResource',
-    inner_content: taggedContent(input, { createdForDisplacement: true }, '', false),
-    external_content: null,
   });
-  if (!resourceId(created)) throw new Error('The created MemberResource did not return a resource ID.');
 }
 
-export async function removeMemberDisplaced(record: MemberResourceRecord): Promise<void> {
-  const current = await readMemberResource(record.id);
-  if (current.createdForDisplacement) {
-    await apiClient.delete<void>(endpoints.resources.member.delete(current.id));
-    return;
-  }
-  const innerContent = { ...current.innerContent };
-  const previous = asRecord(innerContent.displacementPrevious) ?? {};
-  for (const key of ['status', 'isDisplaced', 'reason', 'taggedAt', 'performedBy', 'tags']) {
-    if (key in previous) innerContent[key] = previous[key];
-    else delete innerContent[key];
-  }
-  delete innerContent.statusBeforeDisplaced;
-  delete innerContent.displacementPrevious;
-  await apiClient.put<void>(
-    endpoints.resources.member.update(current.id),
-    {
-      ...current.resource,
-      id: /^\d+$/u.test(current.id) ? Number(current.id) : current.id,
-      resource_name: 'MemberResource',
-      inner_content: innerContent,
-    },
-  );
-}
-
-export async function readMemberResource(id: string): Promise<MemberResourceRecord> {
-  const payload = await apiClient.get<unknown>(endpoints.resources.member.read(id));
-  const rows = unwrapRows(payload);
-  if (rows.length !== 1) throw new Error(`Expected one MemberResource for ID ${id}.`);
-  return parseMemberResource(rows[0]);
+export async function removeMemberDisplaced(
+  record: Pick<MemberResourceInput, 'vehicleId' | 'vehicleNumber'>,
+): Promise<void> {
+  const vehicleId = record.vehicleId.trim();
+  if (!vehicleId) throw new Error('A TQMS vehicle ID is required to remove the displaced tag.');
+  await updateVehicleDisplacement(vehicleId, record.vehicleNumber, { isDisplaced: false });
 }

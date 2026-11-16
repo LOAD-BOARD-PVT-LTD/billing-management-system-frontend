@@ -10,6 +10,16 @@ export type VehicleResourceDocument = {
 	externalContent: Record<string, unknown>;
 };
 
+export const VEHICLE_MANAGEMENT_TAGS = ['swoyam', 'sangh'] as const;
+export type VehicleManagementTag = (typeof VEHICLE_MANAGEMENT_TAGS)[number];
+
+export type VehicleDisplacementInput = {
+	isDisplaced: boolean;
+	reason?: string;
+	performedBy?: string | null;
+	taggedAt?: string;
+};
+
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
 		? value as Record<string, unknown>
@@ -44,6 +54,46 @@ function parseExternalContent(value: unknown): Record<string, unknown> {
 	const record = asRecord(value);
 	if (!record) throw new Error('VehicleResource external_content is not an object.');
 	return record;
+}
+
+function getResourceCreatedAt(value: unknown): number | null {
+	const root = asRecord(unwrapResource(value));
+	if (!root) return null;
+	const innerContent = asRecord(root.inner_content ?? root.innerContent);
+	const externalContent = parseExternalContent(root.external_content ?? root.externalContent);
+	const createdAt = root.createdTime ?? root.createdAt ?? root.created_at
+		?? innerContent?.createdTime ?? innerContent?.createdAt ?? innerContent?.created_at
+		?? externalContent?.createdTime ?? externalContent?.createdAt ?? externalContent?.created_at;
+	if (typeof createdAt !== 'string' && typeof createdAt !== 'number') return null;
+	const timestamp = Date.parse(String(createdAt));
+	return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+export function selectLatestVehicleResource(values: unknown[]): unknown | null {
+	if (values.length === 1) return values[0];
+	const ranked = values.map((value) => {
+		const root = asRecord(unwrapResource(value));
+		const id = String(root?.id ?? '').trim();
+		const numericId = /^\d+$/u.test(id) ? Number(id) : null;
+		return { value, createdAt: getResourceCreatedAt(value), numericId };
+	});
+	ranked.sort((left, right) => {
+		if (left.createdAt !== null || right.createdAt !== null) {
+			if (left.createdAt === null) return 1;
+			if (right.createdAt === null) return -1;
+			if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
+		}
+		if (left.numericId !== null && right.numericId !== null && left.numericId !== right.numericId) {
+			return right.numericId - left.numericId;
+		}
+		return 0;
+	});
+	const [latest, next] = ranked;
+	if (latest.createdAt === next.createdAt
+		&& (latest.numericId === null || next.numericId === null || latest.numericId === next.numericId)) {
+		return null;
+	}
+	return latest.value;
 }
 
 function extractResourceRows(payload: unknown): unknown[] {
@@ -98,14 +148,29 @@ export async function readVehicleResource(
 		.toLowerCase()
 		.replace(/[^a-z0-9]/gu, '');
 	const resolveCandidates = (idMatches: unknown[], numberMatches: unknown[]) => {
-		if (idMatches.length === 1) return idMatches;
-		if (numberMatches.length === 0) return idMatches;
-
 		const matchingBoth = requestedVehicleId
 			? numberMatches.filter((value) => getVehicleId(value) === requestedVehicleId)
 			: [];
-		if (matchingBoth.length > 0) return matchingBoth;
+		if (idMatches.length > 0) {
+			const latestById = selectLatestVehicleResource(idMatches);
+			if (latestById) return [latestById];
+			if (matchingBoth.length === 1) return matchingBoth;
+			throw new Error('Could not determine the current VehicleResource from its history records.');
+		}
+		if (matchingBoth.length > 0) {
+			const latestMatchingBoth = selectLatestVehicleResource(matchingBoth);
+			if (latestMatchingBoth) return [latestMatchingBoth];
+			throw new Error('Could not determine the current VehicleResource from its history records.');
+		}
+		if (numberMatches.length === 0) return idMatches;
 		if (numberMatches.length === 1) return numberMatches;
+		const numberMatchVehicleIds = numberMatches.map(getVehicleId);
+		if (numberMatchVehicleIds[0]
+			&& numberMatchVehicleIds.every((candidateId) => candidateId === numberMatchVehicleIds[0])) {
+			const latestByNumber = selectLatestVehicleResource(numberMatches);
+			if (latestByNumber) return [latestByNumber];
+			throw new Error('Could not determine the current VehicleResource from its history records.');
+		}
 		return idMatches.length > 0 ? idMatches : numberMatches;
 	};
 
@@ -230,5 +295,103 @@ export async function updateVehicleSmsPhone(
 			...resource.externalContent,
 			smsPhone: input.phone.trim(),
 		},
+	);
+}
+
+function getVehicleMetadata(resource: VehicleResourceDocument): Record<string, unknown> {
+	return {
+		...(Array.isArray(resource.innerContent.tags) ? { tags: resource.innerContent.tags } : {}),
+		...asRecord(resource.externalContent.metadata),
+		...asRecord(resource.resource.metadata),
+		...asRecord(resource.innerContent.metadata),
+	};
+}
+
+function getMetadataTags(metadata: Record<string, unknown>): string[] {
+	const tags = metadata.tags ?? [];
+	if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string')) {
+		throw new Error('VehicleResource metadata.tags must be a list of strings.');
+	}
+	return tags.map((tag) => tag.trim()).filter(Boolean);
+}
+
+export async function readVehicleManagementTags(vehicle: BillingVehicle): Promise<VehicleManagementTag[]> {
+	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
+	const tags = new Set(getMetadataTags(getVehicleMetadata(resource)).map((tag) => tag.toLowerCase()));
+	return VEHICLE_MANAGEMENT_TAGS.filter((tag) => tags.has(tag));
+}
+
+export async function updateVehicleManagementTags(
+	vehicle: BillingVehicle,
+	managementTags: VehicleManagementTag[],
+): Promise<void> {
+	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
+	const metadata = getVehicleMetadata(resource);
+	const currentTags = getMetadataTags(metadata);
+	const managedTagSet = new Set<string>(VEHICLE_MANAGEMENT_TAGS);
+	const nextTags = [
+		...currentTags.filter((tag) => !managedTagSet.has(tag.toLowerCase())),
+		...VEHICLE_MANAGEMENT_TAGS.filter((tag) => managementTags.includes(tag)),
+	];
+	await updateVehicleResource(
+		resource,
+		{
+			...resource.innerContent,
+			metadata: {
+				...metadata,
+				tags: [...new Set(nextTags)],
+			},
+		},
+		resource.externalContent,
+	);
+}
+
+export async function updateVehicleDisplacement(
+	vehicleId: string,
+	vehicleNumber: string,
+	input: VehicleDisplacementInput,
+): Promise<void> {
+	if (input.isDisplaced && !input.reason?.trim()) {
+		throw new Error('विस्थापितको कारण लेख्नुहोस्।');
+	}
+	const resource = await readVehicleResource(vehicleId, vehicleNumber);
+	const metadata = {
+		...(Array.isArray(resource.innerContent.tags) ? { tags: resource.innerContent.tags } : {}),
+		...asRecord(resource.externalContent.metadata),
+		...asRecord(resource.resource.metadata),
+		...asRecord(resource.innerContent.metadata),
+	};
+	const tags = metadata.tags ?? [];
+	if (!Array.isArray(tags) || tags.some((tag) => typeof tag !== 'string')) {
+		throw new Error('VehicleResource metadata.tags must be a list of strings.');
+	}
+	const currentTags = tags.map((tag) => tag.trim()).filter(Boolean);
+	const tagsWithoutDisplaced = currentTags.filter((tag) => tag.toLocaleLowerCase() !== 'displaced');
+	const nextTags = input.isDisplaced
+		? [...tagsWithoutDisplaced, 'displaced']
+		: tagsWithoutDisplaced;
+	const nextMetadata: Record<string, unknown> = {
+		...metadata,
+		tags: [...new Set(nextTags)],
+		isDisplaced: input.isDisplaced,
+	};
+
+	if (input.isDisplaced) {
+		nextMetadata.displacedReason = input.reason?.trim() ?? '';
+		nextMetadata.displacedAt = input.taggedAt ?? new Date().toISOString();
+		nextMetadata.displacedBy = input.performedBy?.trim() || null;
+	} else {
+		delete nextMetadata.displacedReason;
+		delete nextMetadata.displacedAt;
+		delete nextMetadata.displacedBy;
+	}
+
+	await updateVehicleResource(
+		resource,
+		{
+			...resource.innerContent,
+			metadata: nextMetadata,
+		},
+		resource.externalContent,
 	);
 }

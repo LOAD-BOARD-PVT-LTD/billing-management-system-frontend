@@ -9,6 +9,10 @@ import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules'
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { buildBillResourceContent } from '@/features/billing/api/bill-resource.api';
 import { buildFeeHeadBillingItems } from '@/features/billing/utils/build-fee-head-billing-items';
+import {
+  getCoveredLinkedFeeHeadIds,
+  resolveLinkedBillingRuleIds,
+} from '@/features/billing/utils/resolve-linked-billing-rules';
 import { getVehicleApplicableBillingRules } from '@/features/billing/utils/vehicle-applicable-billing-rules';
 import { useCreateBill } from '@/features/billing/hooks/useCreateBill';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
@@ -42,6 +46,10 @@ import { resolveBillBranding } from '@/shared/document-generation/utils/resolve-
 import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
 import { useVatSettings } from '@/features/settings/hooks/useVatSettings';
 import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
+import {
+  resolveReceiptPeriodEndStrategy,
+  type ReceiptPeriodEndStrategy,
+} from '@/lib/receipts/period';
 import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
 import {
   formatNepaliFiscalYearLabel,
@@ -277,6 +285,7 @@ export function BillingWorkspace() {
     paymentMethod: string,
     note: string,
     hasPeriodicBillingRule: boolean,
+    periodicRuleIds: ReadonlySet<string>,
     ruleAmounts: Record<string, number>,
   ) => {
     const validationMessages = getBillValidationMessages({
@@ -321,8 +330,13 @@ export function BillingWorkspace() {
     }
     setIsCheckingDuplicates(false);
 
+    const billedItems = items.map((item) => (
+      item.ruleId && periodicRuleIds.has(item.ruleId)
+        ? { ...item, billingMonths }
+        : item
+    ));
     const vat = calculateConfiguredVat({
-      items,
+      items: billedItems,
       subtotal,
       discount,
       enabled: vatSettings.settings?.enabled ?? false,
@@ -339,7 +353,7 @@ export function BillingWorkspace() {
         ...billingDetails,
         billingMonths: hasPeriodicBillingRule ? billingMonths : 0,
       },
-      items,
+      items: billedItems,
       subtotal,
       discount,
       vatAmount: vat.vatAmount,
@@ -534,32 +548,20 @@ export function BillingWorkspace() {
                 billingEntities,
                 itemOverrides,
               );
-              const selectedLinkedItemIds = new Set(selectedItemIds);
-              const autoLinkedItemIds = new Set<string>();
-              if (linkedFeeRuleSettings.settings?.enabled) {
-                const activeLinks = linkedFeeRuleSettings.settings.rules.filter((linkedRule) => (
-                  linkedRule.active && linkedRule.fiscalYearId === fiscalYearId
-                ));
-                for (const linkedRule of activeLinks) {
-                  const sourceSelected = rules.some((rule) => (
-                    rule.feeHeadId === linkedRule.sourceFeeHeadId && selectedItemIds.has(rule.id)
-                  ));
-                  if (!sourceSelected) continue;
-                  const linkedFeeAlreadyPaid = linkedRule.oncePerFiscalYear && existingBills.some((receipt) => (
-                    receipt.status === 'PAID'
-                    && receipt.bill.content.vehicle.id === selectedVehicle.id
-                    && receipt.bill.content.fiscalYearId === fiscalYearId
-                    && receipt.bill.content.items.some((item) => item.feeHeadId === linkedRule.linkedFeeHeadId)
-                  ));
-                  if (linkedFeeAlreadyPaid) continue;
-                  rules
-                    .filter((rule) => rule.feeHeadId === linkedRule.linkedFeeHeadId && !suppressedLinkedItemIds.has(rule.id))
-                    .forEach((rule) => {
-                      selectedLinkedItemIds.add(rule.id);
-                      autoLinkedItemIds.add(rule.id);
-                    });
-                }
-              }
+              const coveredFeeHeadIds = getCoveredLinkedFeeHeadIds(
+                existingBills,
+                selectedVehicle.tqmsVehicleId,
+                fiscalYearId,
+              );
+              const { selectedRuleIds: selectedLinkedItemIds, autoLinkedRuleIds: autoLinkedItemIds } =
+                resolveLinkedBillingRuleIds({
+                  settings: linkedFeeRuleSettings.settings,
+                  fiscalYearId,
+                  rules,
+                  selectedRuleIds: selectedItemIds,
+                  coveredFeeHeadIds,
+                  suppressedRuleIds: suppressedLinkedItemIds,
+                });
               const items = [...ruleItems, ...manualItems.map((item) => ({
                 ...item,
                 ...itemOverrides[item.id],
@@ -570,7 +572,19 @@ export function BillingWorkspace() {
               const selectedRules = rules.filter((rule) => (
                 !billingDetails?.allowManualReceiptAmountOverride || selectedLinkedItemIds.has(rule.id)
               ));
-              const hasPeriodicBillingRule = selectedRules.some((rule) => rule.frequency === 'PERIODIC');
+              const periodicRules = selectedRules.filter((rule) => rule.frequency === 'PERIODIC');
+              const hasPeriodicBillingRule = periodicRules.length > 0;
+              const periodicRuleId = periodicRules[0]?.id ?? null;
+              const periodicRuleIds = new Set(periodicRules.map((rule) => rule.id));
+              const periodEndStrategy: ReceiptPeriodEndStrategy | null = hasPeriodicBillingRule
+                ? resolveReceiptPeriodEndStrategy(periodicRules.map((rule) => (
+                  rule.validity === 'END_OF_MONTH'
+                    ? 'END_OF_MONTH'
+                    : rule.validity === 'END_OF_FISCAL_YEAR'
+                      ? 'FISCAL_YEAR_END'
+                      : 'MATCH_START_DAY'
+                )))
+                : null;
               const ruleAmounts = Object.fromEntries(rules.map((rule) => [rule.id, rule.amount]));
               const subtotal = includedItems.reduce((sum, item) => sum + Math.max(0, item.amount), 0);
               const vat = calculateConfiguredVat({
@@ -620,6 +634,8 @@ export function BillingWorkspace() {
                     selectedFiscalYearId={fiscalYearId}
                     isLoadingBillingRules={billingRules.isLoading}
                     billingRulesError={billingRules.error}
+                    billingMonths={billingMonths}
+                    periodEndStrategy={periodEndStrategy}
                     onFiscalYearChange={setSelectedFiscalYearId}
                     onReloadBillingRules={billingRules.load}
                     onBillingDetailsChange={handleBillingDetailsChange}
@@ -633,7 +649,7 @@ export function BillingWorkspace() {
                         entities={billingEntities}
                         isLoadingRules={billingRules.isLoading}
                         rulesError={billingRules.error}
-                        hasPeriodicRule={hasPeriodicBillingRule}
+                        periodicRuleId={periodicRuleId}
                         billingMonths={billingMonths}
                         onBillingMonthsChange={setBillingMonths}
                         allowManualAmountOverride={billingDetails?.allowManualReceiptAmountOverride ?? false}
@@ -659,6 +675,7 @@ export function BillingWorkspace() {
                           paymentMethod,
                           note,
                           hasPeriodicBillingRule,
+                          periodicRuleIds,
                           ruleAmounts,
                         )}
                         isSaving={createBill.isSaving}

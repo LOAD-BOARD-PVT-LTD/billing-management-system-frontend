@@ -116,6 +116,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   const items = rawItems.map((item, index) => {
     const row = asRecord(item);
     if (!row) throw new Error(`Could not read receipt ${id}: item ${index + 1} is invalid.`);
+    const billingMonths = number(row.billingMonths, 0);
     return {
       feeHeadId: text(row.feeHeadId),
       title: text(row.title),
@@ -123,6 +124,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
       billingEntity: text(row.billingEntity),
       ruleId: text(row.ruleId) || null,
       amount: number(row.amount),
+      ...(billingMonths > 0 ? { billingMonths } : {}),
     };
   });
 

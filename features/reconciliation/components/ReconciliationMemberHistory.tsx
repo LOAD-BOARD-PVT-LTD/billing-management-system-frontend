@@ -3,6 +3,7 @@ import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { getReceiptVehicleOwners } from '@/features/receipts/utils/receipt-owners';
+import { findMemberNumberForVehicle } from '@/features/members/utils/member-calculations';
 import { getRelatedMembershipBills } from '../utils/reconciliation-history';
 
 export { getRelatedMembershipBills } from '../utils/reconciliation-history';
@@ -20,7 +21,29 @@ function text(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }
 
-function getMemberCode(resource: VehicleResourceDocument): string {
+function getMemberCode(
+	resource: VehicleResourceDocument,
+	billingVehicle: BillingVehicle,
+	tqmsVehicle: BillingVehicle,
+	receipts: ReceiptRecord[],
+): string {
+	const memberNumber = findMemberNumberForVehicle(
+		receipts,
+		[
+			billingVehicle.tqmsVehicleId,
+			resource.innerContent.VehicleId,
+			resource.innerContent.vehicleId,
+			tqmsVehicle.tqmsVehicleId,
+		],
+		[
+			billingVehicle.vehicleNumber,
+			resource.innerContent.VehicleNumber,
+			resource.innerContent.vehicleNumber,
+			tqmsVehicle.vehicleNumber,
+		],
+	);
+	if (memberNumber) return memberNumber;
+
 	const memberRecords = [resource.innerContent, resource.externalContent].flatMap((content) => {
 		const member = content.Member ?? content.member ?? content.Membership ?? content.membership;
 		const memberRecord = member && typeof member === 'object' && !Array.isArray(member)
@@ -133,7 +156,7 @@ export function ReconciliationMemberHistory({
 		);
 	}
 
-	const memberCode = getMemberCode(billingResource);
+	const memberCode = getMemberCode(billingResource, billingVehicle, tqmsVehicle, receipts);
 	const history = getRelatedMembershipBills(receipts, billingVehicle, billingResource, tqmsVehicle);
 	if (history.length === 0) return null;
 

@@ -11,6 +11,9 @@ type BillingItemRowProps = {
 	item: BillingLine;
 	feeHeads: FeeHead[];
 	entities: BillingEntityRecord[];
+	showBillingMonths: boolean;
+	billingMonths: number;
+	onBillingMonthsChange: (months: number) => void;
 	allowManualAmountOverride: boolean;
 	allowSelection: boolean;
 	isSelected: boolean;
@@ -25,6 +28,9 @@ export const BillingItemRow = memo(function BillingItemRow({
 	item,
 	feeHeads,
 	entities,
+	showBillingMonths,
+	billingMonths,
+	onBillingMonthsChange,
 	allowManualAmountOverride,
 	allowSelection,
 	isSelected,
@@ -61,11 +67,27 @@ export const BillingItemRow = memo(function BillingItemRow({
 					</Select>
 				</div>
 			) : (
-				<span className="col-start-2 min-w-0 sm:col-start-auto">
+				<span className="col-start-2 flex min-w-0 flex-wrap items-center justify-between gap-1 sm:col-start-auto">
 					<span className="truncate text-sm" title={item.title}>{item.title}</span>
-					{item.isUnconfigured ? (
-						<span className="ml-2 whitespace-nowrap text-xs text-muted-foreground">नियम छैन</span>
-					) : null}
+					<span className="flex shrink-0 items-center gap-1">
+						{item.isUnconfigured ? (
+							<span className="whitespace-nowrap text-xs text-muted-foreground">नियम छैन</span>
+						) : null}
+						{showBillingMonths ? (
+							<label className="flex items-center gap-1 whitespace-nowrap text-xs font-medium text-foreground">
+								महिना
+								<Input
+									aria-label={`${item.title} को बिलिङ महिना संख्या`}
+									type="number"
+									min="1"
+									max="12"
+									value={billingMonths}
+									onChange={(event) => onBillingMonthsChange(Math.max(1, Math.min(12, Number(event.target.value) || 1)))}
+									className="h-6 w-12 rounded-md px-1 py-0 text-center text-xs"
+								/>
+							</label>
+						) : null}
+					</span>
 				</span>
 			)}
 			<div className="col-start-2 flex min-w-0 items-center gap-2 sm:col-start-auto">

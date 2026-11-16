@@ -19,6 +19,10 @@ function vehicle(vehicleId: string, vehicleNumber: string): MemberVehicleDetails
     phone: '9800000000',
     address: '',
     identityNumber: '',
+    isDisplaced: false,
+    displacedReason: '',
+    displacedAt: '',
+    displacedBy: null,
     compliance: {
       insurance: emptyPeriod,
       bluebook: emptyPeriod,

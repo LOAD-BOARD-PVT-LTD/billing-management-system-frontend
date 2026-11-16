@@ -89,8 +89,8 @@ export function MembersPage() {
   const [removeTarget, setRemoveTarget] = useState<MemberListRecord | null>(null);
 
   const calculation = useMemo(
-    () => calculateMembers(receipts, fiscalYears, fiscalYearId, memberResources, blacklistedVehicles),
-    [receipts, fiscalYears, fiscalYearId, memberResources, blacklistedVehicles],
+    () => calculateMembers(receipts, fiscalYears, fiscalYearId, memberResources, blacklistedVehicles, memberVehicles),
+    [receipts, fiscalYears, fiscalYearId, memberResources, blacklistedVehicles, memberVehicles],
   );
   const vehicleDetailsById = useMemo(
     () => new Map(memberVehicles.map((vehicle) => [vehicle.vehicleId, vehicle])),
@@ -164,11 +164,6 @@ export function MembersPage() {
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageRecords = filteredRecords.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const resourceByVehicleId = useMemo(
-    () => new Map(memberResources.map((record) => [record.vehicleId, record])),
-    [memberResources],
-  );
-
   const reload = () => Promise.all([
     reloadReceipts(),
     reloadFiscalYears(),
@@ -187,7 +182,7 @@ export function MembersPage() {
         reason,
         taggedAt: new Date().toISOString(),
         performedBy: user?.email ?? null,
-      }, resourceByVehicleId.get(record.vehicleId));
+      });
       toast({ title: 'विस्थापित ट्याग लगाइयो।' });
       setTagTarget(null);
     } catch (error) {
@@ -201,13 +196,11 @@ export function MembersPage() {
 
   const handleRemoveDisplaced = async (record: MemberListRecord) => {
     if (!displacedTaggingEnabled) return;
-    const resource = resourceByVehicleId.get(record.vehicleId);
-    if (!resource) {
-      toast({ title: 'विस्थापित रेकर्ड भेटिएन।', variant: 'destructive' });
-      return;
-    }
     try {
-      await removeDisplaced(resource);
+      await removeDisplaced({
+        vehicleId: record.vehicleId,
+        vehicleNumber: record.vehicleNumber,
+      });
       toast({ title: 'विस्थापित ट्याग हटाइयो।' });
       setRemoveTarget(null);
     } catch (error) {

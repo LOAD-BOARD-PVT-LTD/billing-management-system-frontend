@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { endpoints } from '@/lib/api/endpoints';
+import { selectLatestVehicleResource } from '@/features/billing/api/vehicle-resource.api';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -30,6 +31,10 @@ export type MemberVehicleDetails = {
   phone: string;
   address: string;
   identityNumber: string;
+  isDisplaced: boolean;
+  displacedReason: string;
+  displacedAt: string;
+  displacedBy: string | null;
   compliance: VehicleCompliance;
 };
 
@@ -85,6 +90,18 @@ function rows(value: unknown): unknown[] {
 export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails {
   const resource = asRecord(value);
   const content = asRecord(resource?.inner_content ?? resource?.innerContent);
+  const externalContent = asRecord(resource?.external_content ?? resource?.externalContent);
+  const metadata = {
+    ...asRecord(content?.metadata),
+    ...asRecord(externalContent?.metadata),
+    ...asRecord(resource?.metadata),
+    ...asRecord(content?.metadata),
+  };
+  const tags = Array.isArray(metadata.tags)
+    ? metadata.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim())
+    : Array.isArray(content?.tags)
+      ? content.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim())
+      : [];
   const owners = Array.isArray(content?.Owners)
     ? content.Owners.map(asRecord).filter((owner): owner is JsonRecord => owner !== null)
     : [];
@@ -140,6 +157,10 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
       ?? mainOwner?.IdentityNumber
       ?? mainOwner?.IdentificationNumber,
     ),
+    isDisplaced: metadata.isDisplaced === true || tags.some((tag) => tag.toLocaleLowerCase() === 'displaced'),
+    displacedReason: text(metadata.displacedReason),
+    displacedAt: text(metadata.displacedAt),
+    displacedBy: text(metadata.displacedBy) || null,
     compliance: {
       insurance: period(compliance?.Insurance ?? compliance?.insurance),
       checkPass: period(compliance?.CheckPass ?? compliance?.checkPass),
@@ -159,5 +180,20 @@ export async function fetchMemberVehicleDetails(signal?: AbortSignal): Promise<M
     }
     throw error;
   }
-  return rows(payload).map(parseMemberVehicleResource);
+  const resourcesByVehicleId = new Map<string, unknown[]>();
+  for (const resource of rows(payload)) {
+    const root = asRecord(resource);
+    const content = asRecord(root?.inner_content ?? root?.innerContent);
+    const vehicleId = text(content?.VehicleId ?? content?.vehicleId);
+    if (!vehicleId) continue;
+    const resources = resourcesByVehicleId.get(vehicleId) ?? [];
+    resources.push(resource);
+    resourcesByVehicleId.set(vehicleId, resources);
+  }
+
+  return [...resourcesByVehicleId.values()].map((resources) => {
+    const latest = resources.length === 1 ? resources[0] : selectLatestVehicleResource(resources);
+    if (!latest) throw new Error('Could not determine the current VehicleResource from its history records.');
+    return parseMemberVehicleResource(latest);
+  });
 }

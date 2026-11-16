@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type { MemberResourceRecord } from '@/features/members/model/member';
 import type { VehicleBlacklistRecord } from '@/features/vehicle/blacklist';
-import { calculateMembers } from '@/features/members/utils/member-calculations';
+import {
+  calculateMembers,
+  findMemberNumberForVehicle,
+} from '@/features/members/utils/member-calculations';
 
 function receipt(): ReceiptRecord {
   return {
@@ -95,6 +98,24 @@ function memberResource(overrides: Partial<MemberResourceRecord> = {}): MemberRe
 }
 
 describe('Member blacklist identity matching', () => {
+  test('finds the member number by vehicle ID or normalized vehicle number', () => {
+    const first = receipt();
+    const second = receipt();
+    second.id = 'bill-2';
+    second.receiptNumber = 'R-2';
+    second.bill.id = 'bill-2';
+    second.bill.receiptNumber = 'R-2';
+    second.bill.createdAt = '2026-10-31T10:00:00.000Z';
+    second.bill.content.vehicle.id = 'billing-vehicle-2';
+    second.bill.content.vehicle.vehicleNumber = 'BA-09-KHA-9999';
+
+    const receipts = [first, second];
+    assert.equal(findMemberNumberForVehicle(receipts, ['billing-vehicle-1'], []), 'ORG-BR-0001');
+    assert.equal(findMemberNumberForVehicle(receipts, ['changed-tqms-id'], ['BA 09 KHA 9999']), 'ORG-BR-0002');
+    assert.equal(findMemberNumberForVehicle(receipts, [], ['BA-09-KHA-9999']), 'ORG-BR-0002');
+    assert.equal(findMemberNumberForVehicle(receipts, [], ['BA-09-KHA-0000']), '');
+  });
+
   test('preserves both receipt owners for member list display', () => {
     const memberReceipt = receipt();
     memberReceipt.bill.content.vehicle.operatorName = 'Vehicle operator';
@@ -129,6 +150,21 @@ describe('Member blacklist identity matching', () => {
     assert.equal(result.records[0].isBlacklisted, true);
     assert.equal(result.records[0].status, 'BLACKLISTED');
     assert.equal(result.counts.blacklisted, 1);
+  });
+
+  test('uses VehicleResource metadata rather than MemberResource for displaced status', () => {
+    const legacyMemberResource = memberResource({ isDisplaced: true, isBlacklisted: false });
+    const fromLegacyMemberResource = calculateMembers([receipt()], [], 'fy-1', [legacyMemberResource], []);
+    assert.equal(fromLegacyMemberResource.records[0].isDisplaced, false);
+
+    const fromVehicleResource = calculateMembers([receipt()], [], 'fy-1', [], [], [{
+      vehicleId: 'billing-vehicle-1',
+      vehicleNumber: 'BA 09 KHA 5555',
+      isDisplaced: true,
+    }]);
+    assert.equal(fromVehicleResource.records[0].isDisplaced, true);
+    assert.equal(fromVehicleResource.records[0].status, 'DISPLACED');
+    assert.equal(fromVehicleResource.counts.displaced, 1);
   });
 
   test('does not match an unrelated vehicle number as a member blacklist', () => {

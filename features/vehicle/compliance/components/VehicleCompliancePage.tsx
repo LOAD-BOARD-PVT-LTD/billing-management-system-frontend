@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { NepaliDatePicker } from '@/components/ui/nepali-date-picker';
 import {
   Select,
   SelectContent,
@@ -114,6 +115,20 @@ function expiryDate(period: VehicleDocumentPeriod): Date | null {
 
 function toWesternDigits(value: string): string {
   return value.replace(/[०-९]/g, (digit) => String('०१२३४५६७८९'.indexOf(digit)));
+}
+
+function dateFromLocalValue(value: string): Date | undefined {
+  if (!value) return undefined;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function toLocalDateValue(date: Date | undefined): string {
+  if (!date) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function documentStatus(period: VehicleDocumentPeriod): DocumentStatus {
@@ -375,26 +390,24 @@ export function VehicleCompliancePage() {
           </Select>
           {!isDocumentView ? (
             <>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(event) => {
-                  setDateFrom(event.target.value);
+              <NepaliDatePicker
+                id="compliance-payment-date-from"
+                value={dateFromLocalValue(dateFrom)}
+                onChange={(date) => {
+                  setDateFrom(toLocalDateValue(date));
                   setPage(1);
                 }}
-                aria-label="भुक्तानी मिति सुरु"
-                title="भुक्तानी मिति सुरु"
+                placeholder="भुक्तानी मिति सुरु"
                 className="h-9 min-w-36 flex-1"
               />
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(event) => {
-                  setDateTo(event.target.value);
+              <NepaliDatePicker
+                id="compliance-payment-date-to"
+                value={dateFromLocalValue(dateTo)}
+                onChange={(date) => {
+                  setDateTo(toLocalDateValue(date));
                   setPage(1);
                 }}
-                aria-label="भुक्तानी मिति अन्त्य"
-                title="भुक्तानी मिति अन्त्य"
+                placeholder="भुक्तानी मिति अन्त्य"
                 className="h-9 min-w-36 flex-1"
               />
             </>

@@ -94,6 +94,7 @@ export function buildBillResourceContent(input: CreateBillInput): BillResourcePa
 			billingEntity: item.entity.trim(),
 			ruleId: item.ruleId ?? null,
 			amount: item.amount,
+			...(item.billingMonths && item.billingMonths > 0 ? { billingMonths: item.billingMonths } : {}),
 		})),
 		subtotal,
 		discount,

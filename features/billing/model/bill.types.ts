@@ -66,6 +66,7 @@ export type BillResourceContent = {
 		billingEntity: string;
 		ruleId: string | null;
 		amount: number;
+		billingMonths?: number;
 	}>;
 	subtotal: number;
 	discount: number;

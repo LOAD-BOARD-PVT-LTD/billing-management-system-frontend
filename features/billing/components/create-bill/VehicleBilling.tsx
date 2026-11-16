@@ -7,8 +7,15 @@ import { useBranches } from '@/features/administration/branches/hooks/useBranche
 import type { FiscalYear } from '@/features/billing-rules/model/types';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { BillDetails } from '@/features/billing/model/bill.types';
-import { fontasyFromUnicode } from '@/utils/fontasy-himali';
-import { bikramSambatToGregorian, parseBikramSambatDate } from '@/utils/nepali-calender-dates/nepali-date';
+import {
+	bikramSambatToGregorian,
+	formatBikramSambatDate,
+	parseBikramSambatDate,
+} from '@/utils/nepali-calender-dates/nepali-date';
+import {
+	resolveReceiptAutoPeriodToDateBs,
+	type ReceiptPeriodEndStrategy,
+} from '@/lib/receipts/period';
 
 function parseDate(value: string): Date | undefined {
 	const normalizedValue = value.trim();
@@ -32,6 +39,8 @@ type VehicleBillingProps = {
 	selectedFiscalYearId: string;
 	isLoadingBillingRules: boolean;
 	billingRulesError: string | null;
+	billingMonths: number;
+	periodEndStrategy: ReceiptPeriodEndStrategy | null;
 	onFiscalYearChange: (id: string) => void;
 	onReloadBillingRules: () => void;
 	onBillingDetailsChange: (details: BillDetails) => void;
@@ -44,6 +53,8 @@ export const VehicleBilling = memo(function VehicleBilling({
 	selectedFiscalYearId,
 	isLoadingBillingRules,
 	billingRulesError,
+	billingMonths,
+	periodEndStrategy,
 	onFiscalYearChange,
 	onReloadBillingRules,
 	onBillingDetailsChange,
@@ -70,6 +81,22 @@ export const VehicleBilling = memo(function VehicleBilling({
 	const toDateValue = (date: Date | undefined) => (date
 		? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 		: '');
+
+	useEffect(() => {
+		if (!periodStart || !periodEndStrategy) return;
+		const periodToBs = resolveReceiptAutoPeriodToDateBs({
+			periodFromBs: formatBikramSambatDate(periodStart),
+			billingMonths,
+			periodEndStrategy,
+			hasRecurringRule: true,
+			advanceMatchStartDay: periodEndStrategy === 'MATCH_START_DAY',
+			periodToDateManuallyEdited: false,
+			currentPeriodToBs: '',
+			selectedFiscalYear: selectedFiscalYear?.code ?? selectedFiscalYear?.name,
+		});
+		const periodToDate = parseBikramSambatDate(periodToBs);
+		if (periodToDate) setPeriodEnd(bikramSambatToGregorian(periodToDate));
+	}, [billingMonths, periodEndStrategy, periodStart, selectedFiscalYear?.code, selectedFiscalYear?.name]);
 
 	useEffect(() => {
 		onBillingDetailsChange({
@@ -146,17 +173,15 @@ export const VehicleBilling = memo(function VehicleBilling({
 								: (
 									<SelectValue placeholder="वित्तीय वर्ष छान्नुहोस्">
 										{selectedFiscalYear && (
-											<span className="font-fontasy-himali-tt-input">
-												{fontasyFromUnicode(selectedFiscalYear.name)}
-											</span>
+											<span>{selectedFiscalYear.name}</span>
 										)}
 									</SelectValue>
 								)}
 						</SelectTrigger>
 						<SelectContent>
 							{fiscalYears.map((fiscalYear) => (
-								<SelectItem key={fiscalYear.id} value={fiscalYear.id} className="font-fontasy-himali-tt-input">
-									{fontasyFromUnicode(fiscalYear.name)}
+								<SelectItem key={fiscalYear.id} value={fiscalYear.id}>
+									{fiscalYear.name}
 								</SelectItem>
 							))}
 						</SelectContent>

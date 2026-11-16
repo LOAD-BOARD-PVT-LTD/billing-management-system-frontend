@@ -1,6 +1,7 @@
 import type { BillingVehicle } from '@/features/billing/model/types';
 import {
   readVehicleResource,
+  selectLatestVehicleResource,
   updateVehicleResource,
   type VehicleResourceDocument,
 } from '@/features/billing/api/vehicle-resource.api';
@@ -142,10 +143,59 @@ async function searchBlacklistedVehicles(signal?: AbortSignal): Promise<VehicleB
   return unwrapResourceRows(payload).map(mapResourceToStatusRecord);
 }
 
+function getExplicitBlacklistState(value: unknown): boolean | null {
+  const root = asRecord(value);
+  const innerContent = asRecord(root?.inner_content ?? root?.innerContent);
+  if (typeof innerContent?.isBlacklisted === 'boolean') return innerContent.isBlacklisted;
+
+  const externalContent = parseExternalContent(root?.external_content ?? root?.externalContent);
+  const metadataCandidates = [
+    asRecord(innerContent?.metadata),
+    asRecord(externalContent.metadata),
+    asRecord(root?.metadata),
+  ];
+  for (const metadata of metadataCandidates) {
+    if (typeof metadata?.isBlacklisted === 'boolean') return metadata.isBlacklisted;
+  }
+  return null;
+}
+
+async function getCurrentBlacklistStates(signal?: AbortSignal): Promise<Map<string, boolean | null>> {
+  let payload: unknown;
+  try {
+    payload = await apiClient.get<unknown>(endpoints.resources.vehicle.list(), { signal });
+  } catch (error) {
+    if (error instanceof Error && /Request failed \(404\).*No resources found/iu.test(error.message)) {
+      return new Map();
+    }
+    throw error;
+  }
+
+  const resourcesByVehicleId = new Map<string, unknown[]>();
+  unwrapResourceRows(payload).forEach((resource) => {
+    const root = asRecord(resource);
+    const innerContent = asRecord(root?.inner_content ?? root?.innerContent);
+    const vehicleId = asText(innerContent?.VehicleId);
+    if (!vehicleId) return;
+    const resources = resourcesByVehicleId.get(vehicleId) ?? [];
+    resources.push(resource);
+    resourcesByVehicleId.set(vehicleId, resources);
+  });
+
+  return new Map([...resourcesByVehicleId].map(([vehicleId, resources]) => {
+    const latest = resources.length === 1 ? resources[0] : selectLatestVehicleResource(resources);
+    return [vehicleId, latest ? getExplicitBlacklistState(latest) : null];
+  }));
+}
+
 export async function fetchVehicleBlacklist(signal?: AbortSignal, branchName = ''): Promise<VehicleBlacklistRecord[]> {
-  const records = await searchBlacklistedVehicles(signal);
+  const [records, currentStates] = await Promise.all([
+    searchBlacklistedVehicles(signal),
+    getCurrentBlacklistStates(signal),
+  ]);
   return dedupeVehicleBlacklistRecords(records
     .filter((record) => record.isBlacklisted)
+    .filter((record) => currentStates.get(record.vehicleId) !== false)
     .filter((record) => matchesTqmsSanghBranch(record.branch, branchName)))
     .sort((left, right) => (right.blacklistedAt ?? '').localeCompare(left.blacklistedAt ?? ''));
 }
@@ -170,12 +220,14 @@ async function saveMetadata(
     ...asRecord(innerContent.metadata),
   };
   const tags = updateManagedTags(metadata.tags, metadata.isBlacklisted);
+  const { isBlacklisted, ...metadataFields } = metadata;
+  delete existingMetadata.isBlacklisted;
   innerContent.metadata = {
     ...existingMetadata,
-    ...metadata,
+    ...metadataFields,
     tags,
   };
-  innerContent.isBlacklisted = metadata.isBlacklisted;
+  innerContent.isBlacklisted = isBlacklisted;
   await updateVehicleResource(resource, innerContent, resource.externalContent);
 }
 

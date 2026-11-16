@@ -2,6 +2,7 @@ import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type { FiscalYear } from '@/features/billing-rules/model/types';
 import type { MemberListRecord, MemberResourceRecord } from '@/features/members/model/member';
 import type { VehicleBlacklistRecord } from '@/features/vehicle/blacklist';
+import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import { normalizeVehicleNumber } from '@/features/vehicle/blacklist/utils/dedupe-vehicle-blacklist';
 import { getReceiptVehicleOwners } from '@/features/receipts/utils/receipt-owners';
 
@@ -32,8 +33,9 @@ export function calculateMembers(
   receipts: ReceiptRecord[],
   fiscalYears: FiscalYear[],
   selectedFiscalYearId: string,
-  displacedResources: MemberResourceRecord[],
+  memberResources: MemberResourceRecord[],
   blacklistedVehicles: VehicleBlacklistRecord[],
+  vehicleResources: Pick<MemberVehicleDetails, 'vehicleId' | 'vehicleNumber' | 'isDisplaced'>[] = [],
 ): { records: MemberListRecord[]; counts: MemberCounts } {
   const latestByVehicle = new Map<string, ReceiptRecord>();
   const firstSeenByVehicle = new Map<string, number>();
@@ -72,7 +74,7 @@ export function calculateMembers(
     : new Set<string>();
 
   const billingVehicleIds = new Set(latestByVehicle.keys());
-  const blacklistedMemberResources = displacedResources.filter((record) => record.isBlacklisted);
+  const blacklistedMemberResources = memberResources.filter((record) => record.isBlacklisted);
   const memberIdentityKeys = new Set(
     [...latestByVehicle.entries()].flatMap(([id, receipt]) => (
       vehicleIdentityKeys(id, receipt.bill.content.vehicle.vehicleNumber)
@@ -97,11 +99,18 @@ export function calculateMembers(
       .map((record) => record.vehicleId.trim() || normalizeVehicleNumber(record.vehicleNumber))
       .filter(Boolean),
   );
-  const displacedIds = new Set(
-    displacedResources
+  const displacedIdentityKeys = new Set(
+    vehicleResources
       .filter((record) => record.isDisplaced)
-      .map((record) => record.vehicleId.trim())
-      .filter((id) => billingVehicleIds.has(id)),
+      .flatMap((record) => vehicleIdentityKeys(record.vehicleId, record.vehicleNumber)),
+  );
+  const displacedIds = new Set(
+    [...latestByVehicle.entries()]
+      .filter(([id, receipt]) => vehicleIdentityKeys(
+        id,
+        receipt.bill.content.vehicle.vehicleNumber,
+      ).some((key) => displacedIdentityKeys.has(key)))
+      .map(([id]) => id),
   );
   const activeIds = new Set(
     [...currentPaidIds].filter((id) => !blacklistedIds.has(id) && !displacedIds.has(id)),
@@ -190,4 +199,38 @@ export function calculateMembers(
       nonMemberBlacklisted: nonMemberBlacklistedIds.size,
     },
   };
+}
+
+export function findMemberNumberForVehicle(
+  receipts: ReceiptRecord[],
+  vehicleIds: readonly unknown[],
+  vehicleNumbers: readonly unknown[],
+): string {
+  const memberRecords = calculateMembers(receipts, [], '', [], []).records;
+  const normalizedIds = new Set(
+    vehicleIds.map((id) => String(id ?? '').trim().toLocaleLowerCase()).filter(Boolean),
+  );
+  const matchingById = memberRecords.find((record) => normalizedIds.has(record.vehicleId.toLocaleLowerCase()));
+  if (matchingById) return matchingById.memberNumber;
+
+  const normalizedNumbers = new Set(
+    vehicleNumbers.map((number) => normalizeVehicleNumber(String(number ?? ''))).filter(Boolean),
+  );
+  if (normalizedNumbers.size === 0) return '';
+
+  const latestReceiptByVehicle = new Map<string, ReceiptRecord>();
+  for (const receipt of receipts) {
+    const id = vehicleId(receipt);
+    if (!id) continue;
+    const current = latestReceiptByVehicle.get(id);
+    if (!current || dateValue(receipt) > dateValue(current)) latestReceiptByVehicle.set(id, receipt);
+  }
+
+  return memberRecords
+    .filter((record) => normalizedNumbers.has(normalizeVehicleNumber(record.vehicleNumber)))
+    .sort((left, right) => {
+      const leftReceipt = latestReceiptByVehicle.get(left.vehicleId);
+      const rightReceipt = latestReceiptByVehicle.get(right.vehicleId);
+      return (rightReceipt ? dateValue(rightReceipt) : 0) - (leftReceipt ? dateValue(leftReceipt) : 0);
+    })[0]?.memberNumber ?? '';
 }

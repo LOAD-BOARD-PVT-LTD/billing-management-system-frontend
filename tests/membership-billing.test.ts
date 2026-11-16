@@ -570,6 +570,7 @@ describe('2. Membership Billing Flow & Rules', () => {
             entityId: 'ENT-5',
             entity: 'Sangh Chitwan',
             ruleId: 'RULE-1',
+            billingMonths: 2,
             amount: 1500,
           },
         ],
@@ -604,6 +605,7 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(payload.items.length, 1);
       assert.equal(payload.items[0].title, 'Sangh Membership');
       assert.equal(payload.items[0].amount, 1500);
+      assert.equal(payload.items[0].billingMonths, 2);
     });
 
     test('creates a new bill with only one owner name when TQMS marks that owner in both roles', () => {

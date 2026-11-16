@@ -92,7 +92,7 @@ describe('4. Bill API, Receipts, and Numbering', () => {
         periodStart: '2081-02-01',
         periodEnd: '2081-02-30',
         items: [
-          { feeHeadId: 'FH-1', title: 'Route Fee', billingEntityId: 'E1', amount: 1200 },
+          { feeHeadId: 'FH-1', title: 'Route Fee', billingEntityId: 'E1', amount: 1200, billingMonths: 2 },
         ],
         subtotal: 1200,
         discount: 100,
@@ -108,6 +108,7 @@ describe('4. Bill API, Receipts, and Numbering', () => {
       assert.equal(record.vehicleNumber, 'Ba 1 Ja 5555');
       assert.equal(record.totalAmount, 1100);
       assert.equal(record.status, 'PAID');
+      assert.equal(record.bill.content.items[0].billingMonths, 2);
     });
 
     test('preserves the vehicle route on the receipt', () => {

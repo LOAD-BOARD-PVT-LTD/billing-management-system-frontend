@@ -1,7 +1,6 @@
 import { memo, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import type { BillingEntityRecord } from '@/features/administration/billing-entities/types/billing-entity.types';
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import { BillingItemRow } from '@/features/billing/components/create-bill/BIllingItemRow';
@@ -14,7 +13,7 @@ type BillingItemsProps = {
 	entities: BillingEntityRecord[];
 	isLoadingRules: boolean;
 	rulesError: string | null;
-	hasPeriodicRule: boolean;
+	periodicRuleId: string | null;
 	billingMonths: number;
 	onBillingMonthsChange: (months: number) => void;
 	allowManualAmountOverride: boolean;
@@ -33,7 +32,7 @@ export const BillingItems = memo(function BillingItems({
 	entities,
 	isLoadingRules,
 	rulesError,
-	hasPeriodicRule,
+	periodicRuleId,
 	billingMonths,
 	onBillingMonthsChange,
 	allowManualAmountOverride,
@@ -65,19 +64,6 @@ export const BillingItems = memo(function BillingItems({
 					<h2 className="text-xs font-semibold text-foreground">शुल्क शीर्षकहरू</h2>
 					<span className="text-xs font-medium text-primary">जम्मा रु. {formatCurrency(selectedTotal)}</span>
 				</div>
-				{hasPeriodicRule && (
-					<label className="flex items-center gap-1 text-xs font-medium text-foreground">
-						महिना संख्या
-						<Input
-							type="number"
-							min="1"
-							max="12"
-							value={billingMonths}
-							onChange={(event) => onBillingMonthsChange(Math.max(1, Math.min(12, Number(event.target.value) || 1)))}
-							className="h-6 w-14 rounded-md px-1 py-0 text-center text-xs"
-						/>
-					</label>
-				)}
 			</div>
 			{rulesError ? (
 				<div role="alert" className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-destructive">
@@ -99,6 +85,9 @@ export const BillingItems = memo(function BillingItems({
 							item={item}
 							feeHeads={feeHeads}
 							entities={activeEntities}
+							showBillingMonths={item.ruleId === periodicRuleId}
+							billingMonths={billingMonths}
+							onBillingMonthsChange={onBillingMonthsChange}
 							allowManualAmountOverride={allowManualAmountOverride}
 							allowSelection={Boolean(item.ruleId || item.isManual || item.isUnconfigured)}
 							isSelected={selectedItemIds.has(item.id)}

@@ -13,6 +13,7 @@ import type { CompanyBrandingOptions } from '@/shared/document-generation/types/
 import { formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
 import { BILL_FOOTER_LABELS, getBillFooterDetails } from '@/shared/document-generation/utils/bill-footer';
 import { getBillOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
+import { formatReceiptItemLabel } from '@/features/receipts/utils/receipt-item-label';
 
 const PAGE_WIDTH = 841.89;
 const PAGE_HEIGHT = 595.28;
@@ -308,12 +309,11 @@ function receiptLayout(bill: SavedBill, fonts: ReceiptFonts) {
   );
   const itemRows = bill.content.items.map((item) => Math.max(
     23,
-    wrapText(item.title, widths[1] - 12, 10, fonts).length * 14 + 8,
+    wrapText(formatReceiptItemLabel(item), widths[1] - 12, 10, fonts).length * 14 + 8,
   ));
   const tableEnd = tableTop + 22
     + itemRows.reduce((sum, height) => sum + height, 0)
     + (bill.content.discount > 0 ? 23 : 0)
-    + ((bill.content.vatAmount ?? 0) > 0 ? 23 : 0)
     + totalRowHeight;
   const noteText = `कैफियत: ${bill.content.note || bill.content.paymentMethod || '—'}`;
   const remarkRows = [
@@ -420,7 +420,7 @@ function drawReceipt(
     const rowHeight = layout.itemRows[index];
     top = drawTableRow(page, top, rowHeight, layout.widths, [
       { text: formatDocumentCount(index + 1), align: 'center' },
-      { text: item.title },
+      { text: formatReceiptItemLabel(item) },
       { text: formatDocumentCurrency(item.amount), align: 'right' },
       { text: formatDocumentCurrency(item.amount), align: 'right' },
       { text: '' },
@@ -433,15 +433,6 @@ function drawReceipt(
       { text: '' },
       { text: `-${formatDocumentCurrency(content.discount)}`, align: 'right' },
       { text: `-${formatDocumentCurrency(content.discount)}`, align: 'right' },
-      { text: '' },
-    ], fonts);
-  }
-  if ((content.vatAmount ?? 0) > 0) {
-    top = drawTableRow(page, top, 23, layout.widths, [
-      { text: 'मू.अ.कर:', align: 'center' },
-      { text: content.vatRatePct ? `${content.vatRatePct}%` : '' },
-      { text: 'मूल्य अभिवृद्धि कर', align: 'right' },
-      { text: formatDocumentCurrency(content.vatAmount ?? 0), align: 'right' },
       { text: '' },
     ], fonts);
   }
@@ -475,7 +466,7 @@ function drawReceipt(
   if (voided) {
     const watermark = 'रद्द';
     const fontasyWatermark = fontasyFromUnicode(watermark);
-    const watermarkSize = 72;
+    const watermarkSize = 100;
     page.drawText(fontasyWatermark, {
       x: centerX - fonts.nepali.widthOfTextAtSize(fontasyWatermark, watermarkSize) / 2,
       y: page.getHeight() - layout.tableTop - 108,
@@ -483,7 +474,7 @@ function drawReceipt(
       font: fonts.nepali,
       color: rgb(0.68, 0.68, 0.68),
       opacity: 0.55,
-      rotate: degrees(-25),
+      rotate: degrees(0),
     });
   }
 }

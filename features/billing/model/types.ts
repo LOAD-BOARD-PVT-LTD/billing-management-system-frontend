@@ -33,6 +33,7 @@ export type BillingLine = {
 	feeHeadId?: string;
 	entityId?: string;
 	ruleId?: string;
+	billingMonths?: number;
 	isManual?: boolean;
 	isUnconfigured?: boolean;
 };

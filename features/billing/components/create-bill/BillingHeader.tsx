@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import {
 	Check,
 	ChevronDown,
@@ -17,11 +17,19 @@ import {
 import { SearchableCombobox } from '@/components/ui/SearchableCombobox';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/use-toast';
 import { getTqmsUrl } from '@/lib/config/tqms';
 import { useTqmsVehicleSearch } from '@/features/billing/hooks/useTqmsVehicleSearch';
 import { useUpdateBillingVehiclePhone } from '@/features/billing/hooks/useUpdateBillingVehiclePhone';
-import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import {
+	readVehicleManagementTags,
+	VEHICLE_MANAGEMENT_TAGS,
+	type VehicleManagementTag,
+	type VehicleResourceDocument,
+} from '@/features/billing/api/vehicle-resource.api';
+import { useUpdateBillingVehicleManagementTags } from '@/features/billing/hooks/useUpdateBillingVehicleManagementTags';
 import {
 	useVehicleReconciliation,
 	type ReconciliationFieldDiff,
@@ -30,6 +38,11 @@ import { VehiclePhoneUpdateDialog } from './VehiclePhoneUpdateDialog';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+
+const MANAGEMENT_TAG_LABELS: Record<VehicleManagementTag, string> = {
+	swoyam: 'स्वयम्',
+	sangh: 'संघ',
+};
 
 type BillingHeaderProps = {
 	selectedVehicle: BillingVehicle | null;
@@ -57,14 +70,76 @@ export const BillingHeader = memo(function BillingHeader({
 	const [query, setQuery] = useState('');
 	const [isOpen, setIsOpen] = useState(false);
 	const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
+	const [managementTags, setManagementTags] = useState<VehicleManagementTag[]>([]);
+	const [isLoadingManagementTags, setIsLoadingManagementTags] = useState(false);
+	const [managementTagsError, setManagementTagsError] = useState<string | null>(null);
+	const [managementTagsRetry, setManagementTagsRetry] = useState(0);
 	const { toast } = useToast();
 	const { updatePhone, isSaving: isUpdatingPhone } = useUpdateBillingVehiclePhone();
+	const {
+		updateManagementTags,
+		isSaving: isUpdatingManagementTags,
+	} = useUpdateBillingVehicleManagementTags();
 	const { reconcileLookup, isReconciling } = useVehicleReconciliation();
 
 	const { vehicles, isLoading, error } = useTqmsVehicleSearch(
 		query,
 		isOpen,
 	);
+
+	useEffect(() => {
+		let isCurrent = true;
+		if (!selectedVehicle) {
+			setManagementTags([]);
+			setManagementTagsError(null);
+			setIsLoadingManagementTags(false);
+			return () => {
+				isCurrent = false;
+			};
+		}
+
+		setManagementTags([]);
+		setIsLoadingManagementTags(true);
+		setManagementTagsError(null);
+		void readVehicleManagementTags(selectedVehicle)
+			.then((tags) => {
+				if (isCurrent) setManagementTags(tags);
+			})
+			.catch((cause: unknown) => {
+				if (isCurrent) {
+					setManagementTagsError(
+						cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
+					);
+				}
+			})
+			.finally(() => {
+				if (isCurrent) setIsLoadingManagementTags(false);
+			});
+
+		return () => {
+			isCurrent = false;
+		};
+	}, [selectedVehicle, managementTagsRetry]);
+
+	const handleManagementTagChange = async (tag: VehicleManagementTag, checked: boolean) => {
+		if (!selectedVehicle) return;
+		const nextTags = VEHICLE_MANAGEMENT_TAGS.filter((value) => (
+			checked ? managementTags.includes(value) || value === tag : managementTags.includes(value) && value !== tag
+		));
+		setManagementTagsError(null);
+		try {
+			await updateManagementTags(selectedVehicle, nextTags);
+			setManagementTags(nextTags);
+		} catch (cause) {
+			const message = cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।';
+			setManagementTagsError(message);
+			toast({
+				title: 'व्यवस्थापन ट्याग सुरक्षित गर्न सकिएन',
+				description: message,
+				variant: 'destructive',
+			});
+		}
+	};
 
 	const handleSelect = async (vehicle: BillingVehicle) => {
 		setQuery(vehicle.vehicleNumber);
@@ -213,7 +288,59 @@ export const BillingHeader = memo(function BillingHeader({
 
 			{selectedVehicle && (
 				<Card className="overflow-hidden rounded-md border-border/80 bg-card shadow-none">
-					<div className="flex flex-wrap items-center justify-end gap-1 border-b border-border/70 px-1 py-0.5">
+					<div className="flex flex-wrap items-center justify-between gap-1 border-b border-border/70 px-1 py-0.5">
+						<Popover>
+							<PopoverTrigger asChild>
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									disabled={isLoadingManagementTags || isUpdatingManagementTags}
+									rightIcon={isLoadingManagementTags
+										? <LoaderCircle className="h-3 w-3 animate-spin" />
+										: <ChevronDown className="h-3 w-3" />}
+									aria-label="सवारी व्यवस्थापन ट्याग छान्नुहोस्"
+									className="h-6 px-1.5 text-[11px]"
+								>
+									व्यवस्थापन
+									{managementTags.length > 0
+										? ` · ${managementTags.map((tag) => MANAGEMENT_TAG_LABELS[tag]).join(', ')}`
+										: ''}
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent align="start" className="w-56 space-y-2 p-2">
+								<p className="text-xs font-medium text-foreground">व्यवस्थापन ट्याग</p>
+								{managementTagsError ? (
+									<div className="space-y-1">
+										<p role="alert" className="text-xs text-destructive">{managementTagsError}</p>
+										<Button
+											type="button"
+											variant="link"
+											size="xs"
+											className="h-auto p-0 text-xs"
+											onClick={() => setManagementTagsRetry((attempt) => attempt + 1)}
+										>
+											पुनः प्रयास गर्नुहोस्
+										</Button>
+									</div>
+								) : null}
+								{VEHICLE_MANAGEMENT_TAGS.map((tag) => (
+									<label key={tag} className="flex cursor-pointer items-center gap-2 text-sm">
+										<Checkbox
+											checked={managementTags.includes(tag)}
+											disabled={isLoadingManagementTags || isUpdatingManagementTags || Boolean(managementTagsError)}
+											onCheckedChange={(checked) => {
+												void handleManagementTagChange(tag, checked === true);
+											}}
+										/>
+										{MANAGEMENT_TAG_LABELS[tag]}
+									</label>
+								))}
+								{isLoadingManagementTags ? (
+									<p role="status" className="text-xs text-muted-foreground">व्यवस्थापन ट्याग लोड हुँदैछ...</p>
+								) : null}
+							</PopoverContent>
+						</Popover>
 						<div className="flex flex-wrap gap-1">
 							<Button
 								type="button"
