@@ -17,7 +17,7 @@ export function useVehicleBlacklist() {
     queryKey: vehicleBlacklistKeys.list(branchFilter.branchName),
     queryFn: ({ signal }) => fetchVehicleBlacklist(signal, branchFilter.branchName),
     enabled: !branchFilter.isLoading && !branchFilter.error,
-    staleTime: 0,
+    staleTime: 30 * 1000,
     gcTime: 30 * 60 * 1000,
   });
   const createMutation = useMutation({
@@ -39,6 +39,12 @@ export function useVehicleBlacklist() {
     isRefreshing: query.isFetching && !query.isLoading,
     error: branchFilter.error ?? (query.error instanceof Error ? query.error.message : null),
     reload: query.refetch,
+    ensureRecords: () => queryClient.fetchQuery({
+      queryKey: vehicleBlacklistKeys.list(branchFilter.branchName),
+      queryFn: ({ signal }) => fetchVehicleBlacklist(signal, branchFilter.branchName),
+      staleTime: 30 * 1000,
+      gcTime: 30 * 60 * 1000,
+    }),
     createRecord: createMutation.mutateAsync,
     createMemberRecord: createMemberMutation.mutateAsync,
     updateRecord: updateMutation.mutateAsync,

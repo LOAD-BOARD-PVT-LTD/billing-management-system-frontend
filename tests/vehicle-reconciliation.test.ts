@@ -434,6 +434,50 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.ok(diffKeys.includes('owners'));
 		});
 
+		test('uses the preloaded TQMS vehicle without searching TQMS again', async () => {
+			const resourcePaths: string[] = [];
+			apiClient.get = async <T>(path: string): Promise<T> => {
+				resourcePaths.push(path);
+				return [{
+					id: 'res-101',
+					resource_name: 'VehicleResource',
+					inner_content: {
+						VehicleId: '101',
+						VehicleNumber: 'BA 01 KHA 1234',
+						VehicleType: 'Bus',
+						Owners: [
+							{
+								Name: 'Hari Thapa',
+								Type: 'Operator',
+								Phone: '9800000000',
+								Address: 'Lalitpur',
+								SanghBranch: 'Lalitpur Branch',
+							},
+							{
+								Name: 'Ram Bahadur',
+								Type: 'Main Owner',
+								Phone: '9841234567',
+								Address: 'Kathmandu',
+								SanghBranch: 'Kathmandu Branch',
+							},
+						],
+					},
+				}] as T;
+			};
+			apiClient.post = async <T>(): Promise<T> => {
+				throw new Error('TQMS search should not run when a vehicle is preloaded.');
+			};
+
+			const preloadedVehicle = createMockBillingVehicle();
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
+				preloadedTqms: preloadedVehicle,
+				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
+			});
+
+			assert.ok(resourcePaths.includes('search/VehicleResource/VehicleId/101/all'));
+			assert.equal(result.tqmsVehicle, preloadedVehicle);
+		});
+
 		test('falls back to the TQMS vehicle ID when no resource matches the current vehicle number', async () => {
 			const resourcePaths: string[] = [];
 			apiClient.get = async <T>(path: string): Promise<T> => {

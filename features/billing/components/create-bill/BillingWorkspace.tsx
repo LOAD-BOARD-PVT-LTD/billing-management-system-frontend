@@ -71,7 +71,7 @@ export function BillingWorkspace() {
     records: blacklistedVehicles,
     isLoading: isLoadingBlacklist,
     error: blacklistError,
-    reload: reloadBlacklist,
+    ensureRecords: ensureBlacklist,
   } = useVehicleBlacklist();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
   const { details: tqmsVehicleDetails, reload: reloadTqmsVehicleDetails } = useTqmsVehicleDetails(
@@ -87,9 +87,16 @@ export function BillingWorkspace() {
   const [billingDetails, setBillingDetails] = useState<BillDetails | null>(null);
   const billingDetailsRef = useRef<BillDetails | null>(null);
   const [savedBill, setSavedBill] = useState<SavedBill | null>(null);
-  const { records: existingBills, error: existingBillsError, isLoading: isLoadingExistingBills, reload: reloadBills } = useReceipts();
+  const {
+    records: existingBills,
+    isLoading: isLoadingExistingBills,
+    error: existingBillsError,
+    ensureRecords: ensureBills,
+    reload: reloadBills,
+  } = useReceipts();
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateBillMatch[]>([]);
   const [pendingSubmit, setPendingSubmit] = useState<MembershipBillInput | null>(null);
+  const [pendingMappedCategoryId, setPendingMappedCategoryId] = useState('');
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const createBill = useCreateBill();
@@ -115,10 +122,17 @@ export function BillingWorkspace() {
       setDuplicateCheckError('TQMS सवारी ID उपलब्ध नभएकाले कालोसूची जाँच गर्न सकिएन।');
       return false;
     }
+    if (isLoadingBlacklist) {
+      setDuplicateCheckError('सवारीको कालोसूची अवस्था जाँच हुँदैछ।');
+      return false;
+    }
+    if (blacklistError) {
+      setDuplicateCheckError(`कालोसूची अवस्था जाँच गर्न सकिएन: ${blacklistError}`);
+      return false;
+    }
     try {
-      const result = await reloadBlacklist();
-      if (result.error) throw result.error;
-      const isBlacklisted = result.data?.some((record) => (
+      const currentBlacklist = await ensureBlacklist();
+      const isBlacklisted = currentBlacklist.some((record) => (
         record.vehicleId.trim().toLocaleLowerCase()
         === vehicle.tqmsVehicleId.trim().toLocaleLowerCase()
       ));
@@ -287,7 +301,12 @@ export function BillingWorkspace() {
     hasPeriodicBillingRule: boolean,
     periodicRuleIds: ReadonlySet<string>,
     ruleAmounts: Record<string, number>,
+    mappedCategoryId: string,
   ) => {
+    if (!mappedCategoryId.trim()) {
+      setDuplicateCheckError('बिलिङ गर्नुअघि सवारी प्रकारलाई Billing Vehicle Category मा म्याप गर्नुहोस्।');
+      return;
+    }
     const validationMessages = getBillValidationMessages({
       vehicle: selectedVehicle,
       details: billingDetails,
@@ -367,23 +386,13 @@ export function BillingWorkspace() {
     setIsCheckingDuplicates(true);
 
     try {
-      if (existingBillsError) {
-        setDuplicateCheckError(existingBillsError);
-        return;
-      }
-
-      let billRecords = existingBills;
-      if (billRecords.length === 0 && !isLoadingExistingBills) {
-        const refetchResult = await reloadBills();
-        billRecords = refetchResult.data ?? [];
-      }
-
-      if (isLoadingExistingBills) return;
+      const billRecords = await ensureBills();
 
       const duplicateMatches = findDuplicateBillItems(buildBillResourceContent(pendingInput), billRecords);
       if (duplicateMatches.length > 0) {
         setDuplicateMatches(duplicateMatches);
         setPendingSubmit(pendingInput);
+        setPendingMappedCategoryId(mappedCategoryId);
         return;
       }
 
@@ -399,6 +408,10 @@ export function BillingWorkspace() {
 
   const handleDuplicateConfirmation = async () => {
     if (!pendingSubmit) return;
+    if (!pendingMappedCategoryId || selectedVehicle?.id !== pendingSubmit.vehicle.id) {
+      setDuplicateCheckError('बिलिङ जारी राख्नुअघि चयन गरिएको सवारीको श्रेणी म्यापिङ पुष्टि गर्नुहोस्।');
+      return;
+    }
     setDuplicateCheckError(null);
     setIsCheckingDuplicates(true);
     try {
@@ -407,6 +420,7 @@ export function BillingWorkspace() {
       setSavedBill(bill);
       setDuplicateMatches([]);
       setPendingSubmit(null);
+      setPendingMappedCategoryId('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'बिल सेभ हुन सकेन।';
       setDuplicateCheckError(message);
@@ -486,6 +500,7 @@ export function BillingWorkspace() {
           setDiscount(0);
           setDuplicateMatches([]);
           setPendingSubmit(null);
+          setPendingMappedCategoryId('');
           setDuplicateCheckError(null);
         }}
       />
@@ -501,6 +516,7 @@ export function BillingWorkspace() {
         onCancel={() => {
           setDuplicateMatches([]);
           setPendingSubmit(null);
+          setPendingMappedCategoryId('');
           setDuplicateCheckError(null);
         }}
         onConfirm={() => {
@@ -513,11 +529,7 @@ export function BillingWorkspace() {
           onSelectVehicle={handleSelectVehicle}
           onClearSelection={handleClearVehicleSelection}
           onSmsPhoneChange={handleSmsPhoneChange}
-          loadReceipts={async () => {
-            const result = await reloadBills();
-            if (result.error) throw result.error;
-            return result.data ?? [];
-          }}
+          loadReceipts={ensureBills}
           onReconciliationRequired={setReconciliationData}
         />
 
@@ -677,6 +689,7 @@ export function BillingWorkspace() {
                           hasPeriodicBillingRule,
                           periodicRuleIds,
                           ruleAmounts,
+                          mappedCategoryId,
                         )}
                         isSaving={createBill.isSaving}
                         isCheckingDuplicate={isCheckingDuplicates || isLoadingExistingBills}

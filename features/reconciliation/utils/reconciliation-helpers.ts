@@ -289,20 +289,22 @@ export async function reconcileVehicleLookup(
 	const query = vehicleNumber.trim();
 	if (!query) throw new Error('सवारी नम्बर आवश्यक छ।');
 
-	// Step 1: Search from existing internal VehicleResource API endpoint first
-	let billingResource = await findVehicleResource('', query);
+	let tqmsVehicle: BillingVehicle | null = options?.preloadedTqms ?? null;
+	let billingResource: VehicleResourceDocument | null;
+	if (tqmsVehicle) {
+		billingResource = await findVehicleResource(tqmsVehicle.tqmsVehicleId, query);
+	} else {
+		// Search existing billing data first when no TQMS result is already available.
+		billingResource = await findVehicleResource('', query);
+		const tqmsResults = await searchTqmsVehicles(query, options?.signal);
+		const normalizedQ = normalizeReconciliationText(query);
+		tqmsVehicle = tqmsResults.find((v) => normalizeReconciliationText(v.vehicleNumber) === normalizedQ)
+			?? tqmsResults[0]
+			?? null;
+	}
 
-	// Step 2: And then search /api/v1/tqms/search with vehicle_number
-	let tqmsVehicle: BillingVehicle | null = null;
-	const tqmsResults = await searchTqmsVehicles(query, options?.signal);
-	const normalizedQ = normalizeReconciliationText(query);
-	tqmsVehicle =
-		tqmsResults.find((v) => normalizeReconciliationText(v.vehicleNumber) === normalizedQ) ??
-		tqmsResults[0] ??
-		options?.preloadedTqms ??
-		null;
-
-	if (!billingResource && tqmsVehicle?.tqmsVehicleId) {
+	// If there was no billing record for the entered number, try the resolved TQMS ID.
+	if (!billingResource && tqmsVehicle?.tqmsVehicleId && !options?.preloadedTqms) {
 		billingResource = await findVehicleResource(tqmsVehicle.tqmsVehicleId, query);
 	}
 
