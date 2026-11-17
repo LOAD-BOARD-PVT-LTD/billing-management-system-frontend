@@ -10,7 +10,11 @@ import {
 	resolveVehicleOwners,
 	vehicleResourceToBillingVehicle,
 } from '@/features/reconciliation';
-import { findVehicleResource, type VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import {
+	createVehicleResource,
+	findVehicleResource,
+	type VehicleResourceDocument,
+} from '@/features/billing/api/vehicle-resource.api';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { apiClient } from '@/lib/api/client';
@@ -511,7 +515,7 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(result.type, 'MATCHED');
 		});
 
-		test('returns FIRST_TIME when vehicle does not exist in VehicleResource', async () => {
+		test('returns RESOURCE_MISSING when vehicle has no VehicleResource', async () => {
 			apiClient.get = async () => {
 				throw new Error('Request failed (404): No resources found for search query');
 			};
@@ -531,9 +535,55 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 
 			const result = await reconcileVehicleLookup('LU 02 KHA 5678');
 
-			assert.equal(result.type, 'FIRST_TIME');
+			assert.equal(result.type, 'RESOURCE_MISSING');
 			assert.equal(result.tqmsVehicle.vehicleNumber, 'LU 02 KHA 5678');
-			assert.equal(result.billingResource, null);
+			assert.equal(result.hasBillingHistory, false);
+		});
+
+		test('recovers when a past bill exists but VehicleResource is missing', async () => {
+			apiClient.get = async () => {
+				throw new Error('Request failed (404): No resources found for search query');
+			};
+			apiClient.post = async <T>(): Promise<T> => ([{
+				VehicleId: '101',
+				VehicleNumber: 'BA 01 KHA 1234',
+				VehicleType: 'Bus',
+				Owners: [{ Name: 'Current TQMS Owner' }],
+			}] as T);
+
+			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
+				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
+			});
+
+			assert.equal(result.type, 'RESOURCE_MISSING');
+			assert.equal(result.hasBillingHistory, true);
+			assert.equal(result.tqmsVehicle.ownerName, 'Current TQMS Owner');
+		});
+
+		test('creates a VehicleResource from the selected TQMS vehicle snapshot', async () => {
+			let requestPath = '';
+			let requestBody: unknown;
+			apiClient.post = async <T>(path: string, body: unknown): Promise<T> => {
+				requestPath = path;
+				requestBody = body;
+				return {} as T;
+			};
+
+			const vehicle = createMockBillingVehicle();
+			await createVehicleResource(vehicle);
+
+			assert.equal(requestPath, 'create/VehicleResource');
+			assert.deepEqual(requestBody, {
+				resource_name: 'VehicleResource',
+				inner_content: {
+					...vehicle.resourceContent,
+					VehicleId: vehicle.tqmsVehicleId,
+					VehicleNumber: vehicle.vehicleNumber,
+					VehicleType: vehicle.vehicleType,
+					VehicleTypeId: vehicle.tqmsVehicleTypeId,
+				},
+				external_content: null,
+			});
 		});
 
 		test('bypasses reconciliation and selects current TQMS details when the resource has no bill history', async () => {

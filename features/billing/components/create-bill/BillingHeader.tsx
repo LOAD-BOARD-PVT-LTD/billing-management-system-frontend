@@ -49,6 +49,7 @@ type BillingHeaderProps = {
 	onSelectVehicle: (vehicle: BillingVehicle) => void;
 	onClearSelection: () => void;
 	onSmsPhoneChange: (phone: string) => void;
+	onVehicleResourceStatusChange: (vehicleId: string | null) => void;
 	loadReceipts: () => Promise<ReceiptRecord[]>;
 	onReconciliationRequired?: (data: {
 		billingVehicle: BillingVehicle;
@@ -64,6 +65,7 @@ export const BillingHeader = memo(function BillingHeader({
 	onSelectVehicle,
 	onClearSelection,
 	onSmsPhoneChange,
+	onVehicleResourceStatusChange,
 	loadReceipts,
 	onReconciliationRequired,
 }: BillingHeaderProps) {
@@ -154,11 +156,25 @@ export const BillingHeader = memo(function BillingHeader({
 			});
 
 			if (result.type === 'FIRST_TIME') {
+				onVehicleResourceStatusChange(null);
 				if (result.tqmsVehicle.id !== selectedVehicle?.id) onSelectVehicle(result.tqmsVehicle);
 				return;
 			}
 
+			if (result.type === 'RESOURCE_MISSING') {
+				onVehicleResourceStatusChange(result.tqmsVehicle.tqmsVehicleId);
+				if (result.tqmsVehicle.id !== selectedVehicle?.id) onSelectVehicle(result.tqmsVehicle);
+				toast({
+					title: 'सवारी प्रोफाइल पुनःस्थापना आवश्यक',
+					description: result.hasBillingHistory
+						? 'पुरानो बिल भेटियो तर VehicleResource प्रोफाइल छैन। हालको TQMS विवरण प्रयोग हुनेछ र बिल बचत गर्दा प्रोफाइल बनाइनेछ।'
+						: 'VehicleResource प्रोफाइल छैन। बिल बचत गर्दा हालको TQMS विवरणबाट प्रोफाइल बनाइनेछ।',
+				});
+				return;
+			}
+
 			if (result.type === 'MATCHED') {
+				onVehicleResourceStatusChange(null);
 				const vehicleToSelect = result.billingVehicle;
 				if (vehicleToSelect && vehicleToSelect.id !== selectedVehicle?.id) {
 					onSelectVehicle(vehicleToSelect);
@@ -167,6 +183,7 @@ export const BillingHeader = memo(function BillingHeader({
 			}
 
 			if (result.type === 'RECONCILIATION_REQUIRED') {
+				onVehicleResourceStatusChange(null);
 				onReconciliationRequired?.({
 					billingVehicle: result.billingVehicle,
 					tqmsVehicle: result.tqmsVehicle,

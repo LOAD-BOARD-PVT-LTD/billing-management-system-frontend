@@ -18,7 +18,7 @@ import { useCreateBill } from '@/features/billing/hooks/useCreateBill';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import { BillingHeader } from '@/features/billing/components/create-bill/BillingHeader';
 import { useToast } from '@/components/ui/use-toast';
-import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import { createVehicleResource, type VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
 import {
   VehicleReconciliationView,
   useVehicleReconciliation,
@@ -74,6 +74,7 @@ export function BillingWorkspace() {
     ensureRecords: ensureBlacklist,
   } = useVehicleBlacklist();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
+  const [missingVehicleResourceId, setMissingVehicleResourceId] = useState<string | null>(null);
   const { details: tqmsVehicleDetails, reload: reloadTqmsVehicleDetails } = useTqmsVehicleDetails(
     selectedVehicle?.vehicleNumber ?? '',
   );
@@ -262,7 +263,20 @@ export function BillingWorkspace() {
 
   const handleClearVehicleSelection = useCallback(() => {
     setSelectedVehicle(null);
+    setMissingVehicleResourceId(null);
   }, []);
+
+  const handleVehicleResourceStatusChange = useCallback((vehicleId: string | null) => {
+    setMissingVehicleResourceId(vehicleId);
+  }, []);
+
+  const restoreVehicleResourceIfMissing = async (vehicle: BillingVehicle) => {
+    if (missingVehicleResourceId !== vehicle.tqmsVehicleId) return;
+    await createVehicleResource(vehicle);
+    setMissingVehicleResourceId((current) => (
+      current === vehicle.tqmsVehicleId ? null : current
+    ));
+  };
 
   const handleSmsPhoneChange = useCallback((phone: string) => {
     setSelectedVehicle((current) => (current ? { ...current, smsPhone: phone } : current));
@@ -396,6 +410,7 @@ export function BillingWorkspace() {
         return;
       }
 
+      await restoreVehicleResourceIfMissing(pendingInput.vehicle);
       const bill = await createBill.create(pendingInput);
       setSavedBill(bill);
     } catch (error) {
@@ -416,6 +431,7 @@ export function BillingWorkspace() {
     setIsCheckingDuplicates(true);
     try {
       if (!await verifyVehicleCanBeBilled(pendingSubmit.vehicle)) return;
+      await restoreVehicleResourceIfMissing(pendingSubmit.vehicle);
       const bill = await createBill.create(pendingSubmit);
       setSavedBill(bill);
       setDuplicateMatches([]);
@@ -529,6 +545,7 @@ export function BillingWorkspace() {
           onSelectVehicle={handleSelectVehicle}
           onClearSelection={handleClearVehicleSelection}
           onSmsPhoneChange={handleSmsPhoneChange}
+          onVehicleResourceStatusChange={handleVehicleResourceStatusChange}
           loadReceipts={ensureBills}
           onReconciliationRequired={setReconciliationData}
         />

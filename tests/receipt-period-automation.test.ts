@@ -25,6 +25,18 @@ test('monthly periodic END_OF_MONTH validity expires on the end of the selected 
 	assert.equal(resolveExpiry(3, 'END_OF_MONTH'), '2083-03-32');
 });
 
+test('a manually selected expiry date overrides periodic auto-selection', () => {
+	assert.equal(resolveReceiptAutoPeriodToDateBs({
+		periodFromBs: '2083-01-19',
+		billingMonths: 3,
+		periodEndStrategy: 'MATCH_START_DAY',
+		hasRecurringRule: true,
+		advanceMatchStartDay: true,
+		periodToDateManuallyEdited: true,
+		currentPeriodToBs: '2083/02/16',
+	}), '2083-02-16');
+});
+
 test('bill labels show the paid month count only for periodic items', () => {
 	assert.equal(formatReceiptItemLabel({ title: 'सदस्यता नवीकरण शुल्क', billingMonths: 2 }), 'सदस्यता नवीकरण शुल्क (२ महिना)');
 	assert.equal(formatReceiptItemLabel({ title: 'दुर्घटना सहायता कोष' }), 'दुर्घटना सहायता कोष');

@@ -318,6 +318,14 @@ export async function reconcileVehicleLookup(
 		[query, tqmsVehicle.vehicleNumber, billingResource?.innerContent.VehicleNumber?.toString() ?? ''],
 	);
 
+	if (!billingResource) {
+		return {
+			type: 'RESOURCE_MISSING',
+			tqmsVehicle,
+			hasBillingHistory,
+		};
+	}
+
 	if (!hasBillingHistory) {
 		return {
 			type: 'FIRST_TIME',
@@ -326,10 +334,6 @@ export async function reconcileVehicleLookup(
 			billingResource: null,
 			diffs: [],
 		};
-	}
-
-	if (!billingResource) {
-		throw new Error('Эही सवारीको पुरानो बिल भेटियो, तर VehicleResource विवरण फेला परेन। बिलिङ प्रशासकलाई सम्पर्क गर्नुहोस्।');
 	}
 
 	// Step 3: Compare all details between Billing and TQMS, including owners array

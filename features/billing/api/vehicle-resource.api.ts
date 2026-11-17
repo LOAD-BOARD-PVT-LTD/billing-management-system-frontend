@@ -264,6 +264,23 @@ export async function findVehicleResource(
 	}
 }
 
+export async function createVehicleResource(vehicle: BillingVehicle): Promise<void> {
+	if (!vehicle.tqmsVehicleId.trim()) {
+		throw new Error('A TQMS VehicleId is required to create VehicleResource.');
+	}
+	await apiClient.post<unknown>(endpoints.resources.vehicle.create(), {
+		resource_name: 'VehicleResource',
+		inner_content: {
+			...vehicle.resourceContent,
+			VehicleId: vehicle.tqmsVehicleId,
+			VehicleNumber: vehicle.vehicleNumber,
+			VehicleType: vehicle.vehicleType,
+			...(vehicle.tqmsVehicleTypeId ? { VehicleTypeId: vehicle.tqmsVehicleTypeId } : {}),
+		},
+		external_content: null,
+	});
+}
+
 export async function updateVehicleResource(
 	resource: VehicleResourceDocument,
 	innerContent: Record<string, unknown>,

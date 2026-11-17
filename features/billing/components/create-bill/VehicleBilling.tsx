@@ -63,6 +63,7 @@ export const VehicleBilling = memo(function VehicleBilling({
 	const [billingDate, setBillingDate] = useState<Date | undefined>(() => parseDate(vehicle.billingDate) ?? new Date());
 	const [periodStart, setPeriodStart] = useState<Date | undefined>(() => parseDate(vehicle.periodStart) ?? new Date());
 	const [periodEnd, setPeriodEnd] = useState<Date | undefined>(() => parseDate(vehicle.periodEnd) ?? new Date());
+	const [periodEndManuallyEdited, setPeriodEndManuallyEdited] = useState(false);
 	const [selectedBranchId, setSelectedBranchId] = useState('');
 	const fiscalYearValue = selectedFiscalYearId;
 	const selectedFiscalYear = fiscalYears.find((fiscalYear) => fiscalYear.id === fiscalYearValue);
@@ -90,13 +91,18 @@ export const VehicleBilling = memo(function VehicleBilling({
 			periodEndStrategy,
 			hasRecurringRule: true,
 			advanceMatchStartDay: periodEndStrategy === 'MATCH_START_DAY',
-			periodToDateManuallyEdited: false,
-			currentPeriodToBs: '',
+			periodToDateManuallyEdited: periodEndManuallyEdited,
+			currentPeriodToBs: periodEnd ? formatBikramSambatDate(periodEnd) : '',
 			selectedFiscalYear: selectedFiscalYear?.code ?? selectedFiscalYear?.name,
 		});
 		const periodToDate = parseBikramSambatDate(periodToBs);
-		if (periodToDate) setPeriodEnd(bikramSambatToGregorian(periodToDate));
-	}, [billingMonths, periodEndStrategy, periodStart, selectedFiscalYear?.code, selectedFiscalYear?.name]);
+		if (periodToDate) {
+			const nextPeriodEnd = bikramSambatToGregorian(periodToDate);
+			setPeriodEnd((current) => (
+				current?.getTime() === nextPeriodEnd.getTime() ? current : nextPeriodEnd
+			));
+		}
+	}, [billingMonths, periodEnd, periodEndManuallyEdited, periodEndStrategy, periodStart, selectedFiscalYear?.code, selectedFiscalYear?.name]);
 
 	useEffect(() => {
 		onBillingDetailsChange({
@@ -212,6 +218,7 @@ export const VehicleBilling = memo(function VehicleBilling({
 						value={periodStart}
 						onChange={(date) => {
 							setPeriodStart(date);
+							setPeriodEndManuallyEdited(false);
 							if (date && periodEnd && date > periodEnd) setPeriodEnd(undefined);
 						}}
 						placeholder="सुरु मिति छान्नुहोस्"
@@ -222,7 +229,10 @@ export const VehicleBilling = memo(function VehicleBilling({
 					सम्म
 					<NepaliDatePicker
 						value={periodEnd}
-						onChange={setPeriodEnd}
+						onChange={(date) => {
+							setPeriodEnd(date);
+							setPeriodEndManuallyEdited(date !== undefined);
+						}}
 						fromDate={periodStart}
 						placeholder="अन्त्य मिति छान्नुहोस्"
 						className="h-7 rounded-md"

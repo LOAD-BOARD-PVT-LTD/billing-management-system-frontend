@@ -49,6 +49,11 @@ export type ResolvedVehicleOwners = {
 
 export type ReconciliationLookupResult =
 	| {
+			type: 'RESOURCE_MISSING';
+			tqmsVehicle: BillingVehicle;
+			hasBillingHistory: boolean;
+	  }
+	| {
 			type: 'FIRST_TIME';
 			tqmsVehicle: BillingVehicle;
 			billingVehicle: null;
