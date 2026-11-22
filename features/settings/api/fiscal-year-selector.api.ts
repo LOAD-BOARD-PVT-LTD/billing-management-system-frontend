@@ -1,5 +1,12 @@
-import { apiClient } from '@/lib/api/client';
-import { endpoints } from '@/lib/api/endpoints';
+import {
+	asSettingRecord,
+	fetchGroupedSettingsDocument,
+	findGroupedSettingRecord,
+	getSettingResourceId,
+	parseSettingJson,
+	updateGroupedSettingsSection,
+	type JsonRecord,
+} from '@/features/settings/api/grouped-settings.api';
 import {
 	formatNepaliFiscalYearLabel,
 	parseFiscalYear,
@@ -21,58 +28,6 @@ export const DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS: FiscalYearSelectorSettings =
 	yearsForward: 1,
 	archivedYears: [],
 };
-
-type ResourceRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): ResourceRecord | null {
-	return value && typeof value === 'object' && !Array.isArray(value) ? value as ResourceRecord : null;
-}
-
-function parseJson(value: unknown): unknown {
-	if (typeof value !== 'string') return value;
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return value;
-	}
-}
-
-function rows(value: unknown): ResourceRecord[] {
-	const parsed = parseJson(value);
-	if (Array.isArray(parsed)) {
-		return parsed.map(asRecord).filter((item): item is ResourceRecord => Boolean(item));
-	}
-	const record = asRecord(parsed);
-	if (!record) throw new Error('Could not read fiscal year selector settings.');
-	for (const key of ['data', 'items', 'results']) {
-		if (record[key] !== undefined) return rows(record[key]);
-	}
-	throw new Error('Could not read fiscal year selector settings.');
-}
-
-function isMissingSettingError(error: unknown): boolean {
-	return error instanceof Error && /^Request failed \(404\)/u.test(error.message);
-}
-
-function parseSettings(value: ResourceRecord): FiscalYearSelectorSettings | null {
-	const content = asRecord(parseJson(value.inner_content));
-	if (content?.key !== 'fiscal-year-selector') return null;
-	const yearsBack = Number(content.yearsBack);
-	const yearsForward = Number(content.yearsForward);
-	if (!Number.isInteger(yearsBack) || !Number.isInteger(yearsForward) || !Array.isArray(content.archivedYears)) {
-		throw new Error('Saved fiscal year selector settings are invalid.');
-	}
-	const archivedYears = content.archivedYears.filter((year): year is string => typeof year === 'string');
-	if (archivedYears.length !== content.archivedYears.length) {
-		throw new Error('Saved archived fiscal years are invalid.');
-	}
-	return validateSettings({ yearsBack, yearsForward, archivedYears });
-}
-
-function getResourceId(value: ResourceRecord): string | null {
-	const id = value.id ?? value.resourceId ?? value.resource_id;
-	return typeof id === 'string' || typeof id === 'number' ? String(id) : null;
-}
 
 function toWesternDigits(value: string): string {
 	return value.replace(/[०-९]/gu, (digit) => String('०१२३४५६७८९'.indexOf(digit)));
@@ -103,18 +58,32 @@ function validateSettings(settings: FiscalYearSelectorSettings): FiscalYearSelec
 	return { yearsBack: settings.yearsBack, yearsForward: settings.yearsForward, archivedYears };
 }
 
-export async function fetchFiscalYearSelectorSettings(): Promise<FiscalYearSelectorSettingsDocument> {
-	let payload: unknown;
-	try {
-		payload = await apiClient.get<unknown>(endpoints.resources.setting.list());
-	} catch (error) {
-		if (isMissingSettingError(error)) {
-			return { resourceId: null, settings: DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS };
-		}
-		throw error;
+function parseLegacySettings(value: JsonRecord): FiscalYearSelectorSettings | null {
+	const content = asSettingRecord(parseSettingJson(value.inner_content ?? value.innerContent));
+	if (content?.key !== 'fiscal-year-selector') return null;
+	const yearsBack = Number(content.yearsBack);
+	const yearsForward = Number(content.yearsForward);
+	if (!Number.isInteger(yearsBack) || !Number.isInteger(yearsForward) || !Array.isArray(content.archivedYears)) {
+		throw new Error('Saved fiscal year selector settings are invalid.');
 	}
-	const matches = rows(payload)
-		.map((value) => ({ resourceId: getResourceId(value), settings: parseSettings(value) }))
+	const archivedYears = content.archivedYears.filter((year): year is string => typeof year === 'string');
+	if (archivedYears.length !== content.archivedYears.length) {
+		throw new Error('Saved archived fiscal years are invalid.');
+	}
+	return validateSettings({ yearsBack, yearsForward, archivedYears });
+}
+
+export async function fetchFiscalYearSelectorSettings(): Promise<FiscalYearSelectorSettingsDocument> {
+	const grouped = await fetchGroupedSettingsDocument();
+	if (findGroupedSettingRecord(grouped.rawRecords)) {
+		return {
+			resourceId: grouped.resourceId,
+			settings: validateSettings(grouped.settings.fiscalYear.selector),
+		};
+	}
+
+	const matches = grouped.rawRecords
+		.map((value) => ({ resourceId: getSettingResourceId(value), settings: parseLegacySettings(value) }))
 		.filter((value): value is { resourceId: string | null; settings: FiscalYearSelectorSettings } => value.settings !== null);
 	if (matches.length > 1) throw new Error('Multiple fiscal year selector settings are configured.');
 	return matches[0] ?? { resourceId: null, settings: DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS };
@@ -125,25 +94,15 @@ export async function saveFiscalYearSelectorSettings(
 	current: FiscalYearSelectorSettingsDocument,
 ): Promise<FiscalYearSelectorSettingsDocument> {
 	const validatedSettings = validateSettings(settings);
-
-	const request = {
-		resource_name: 'SettingResource',
-		inner_content: {
-			key: 'fiscal-year-selector',
-			yearsBack: validatedSettings.yearsBack,
-			yearsForward: validatedSettings.yearsForward,
-			archivedYears: validatedSettings.archivedYears,
-		},
-		external_content: null,
-	};
-	if (current.resourceId) {
-		const id = /^\d+$/u.test(current.resourceId) ? Number(current.resourceId) : current.resourceId;
-		await apiClient.put<void>(endpoints.resources.setting.update(current.resourceId), { ...request, id });
-		return { resourceId: current.resourceId, settings: validatedSettings };
-	}
-
-	const created = asRecord(await apiClient.post<unknown>(endpoints.resources.setting.create(), request));
-	const resourceId = created ? getResourceId(created) : null;
-	if (!resourceId) throw new Error('The created fiscal year selector setting did not return a resource ID.');
-	return { resourceId, settings: validatedSettings };
+	const saved = await updateGroupedSettingsSection(
+		(grouped) => ({
+			...grouped,
+			fiscalYear: {
+				...grouped.fiscalYear,
+				selector: validatedSettings,
+			},
+		}),
+		{ resourceIdHint: current.resourceId },
+	);
+	return { resourceId: saved.resourceId, settings: validatedSettings };
 }

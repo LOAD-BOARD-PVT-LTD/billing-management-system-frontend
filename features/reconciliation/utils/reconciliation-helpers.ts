@@ -1,9 +1,7 @@
 import type { BillingVehicle } from '@/features/billing/model/types';
-import {
-	findVehicleResource,
-	type VehicleResourceDocument,
-} from '@/features/billing/api/vehicle-resource.api';
-import { searchTqmsVehicles } from '@/features/billing/api/tqms-vehicle-search.api';
+import type { VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import { searchTqmsVehicleMatches } from '@/features/vehicle/tqms/api/tqms-vehicle-search.api';
+import type { TqmsVehicleSearchMatch } from '@/features/billing/schemas/tqms-vehicle-search.schema';
 import type {
 	ReconciliationAuditEntry,
 	ReconciliationFieldDiff,
@@ -103,7 +101,7 @@ export function summarizeOwnersList(ownersInput: unknown): string {
 		const phone = String(o.Phone ?? o.phone ?? '').trim();
 		const branch = String(o.SanghBranch ?? o.sanghBranch ?? '').trim();
 		const parts = [
-			`धनी/सञ्चालक: ${name}`,
+			`धनी/संचालक: ${name}`,
 			phone ? `फोन: ${phone}` : null,
 			branch ? `शाखा: ${branch}` : null,
 		].filter(Boolean);
@@ -112,7 +110,7 @@ export function summarizeOwnersList(ownersInput: unknown): string {
 
 	return owners
 		.map((o, idx) => {
-			const role = idx === 0 ? 'सञ्चालक' : idx === 1 ? 'सवारी धनी' : `धनी ${idx + 1}`;
+			const role = idx === 0 ? 'संचालक' : idx === 1 ? 'सवारी धनी' : `धनी ${idx + 1}`;
 			const name = String(o.Name ?? o.name ?? '').trim() || '—';
 			const phone = String(o.Phone ?? o.phone ?? '').trim();
 			const branch = String(o.SanghBranch ?? o.sanghBranch ?? '').trim();
@@ -169,7 +167,7 @@ export function compareVehiclesForReconciliation(
 		},
 		{
 			key: 'operatorName',
-			label: 'सञ्चालक (Sanchalak)',
+			label: 'संचालक (Sanchalak)',
 			billingValue: (billing.operatorName || '').trim() || '—',
 			tqmsValue: (tqms.operatorName || '').trim() || '—',
 			isChanged:
@@ -214,7 +212,7 @@ export function compareVehiclesForReconciliation(
 		},
 		{
 			key: 'owners',
-			label: 'धनी तथा सञ्चालक विवरण (Owners Array)',
+			label: 'धनी तथा संचालक विवरण (Owners Array)',
 			billingValue: summarizeOwnersList(billingOwners),
 			tqmsValue: summarizeOwnersList(tqmsOwners),
 			isChanged: !areOwnersEqual,
@@ -239,7 +237,19 @@ export function vehicleResourceToBillingVehicle(
 	const vehicleType = String(
 		inner.VehicleType ?? inner.vehicleType ?? 'सवारी प्रकार उपलब्ध छैन',
 	).trim();
-	const savedSmsPhone = resource.externalContent.smsPhone;
+	const innerMetadata = (inner.metadata && typeof inner.metadata === 'object' && !Array.isArray(inner.metadata))
+		? inner.metadata as Record<string, unknown>
+		: undefined;
+	const resourceMetadata = (resource.resource.metadata && typeof resource.resource.metadata === 'object' && !Array.isArray(resource.resource.metadata))
+		? resource.resource.metadata as Record<string, unknown>
+		: undefined;
+	const externalMetadata = (resource.externalContent.metadata && typeof resource.externalContent.metadata === 'object' && !Array.isArray(resource.externalContent.metadata))
+		? resource.externalContent.metadata as Record<string, unknown>
+		: undefined;
+	const savedSmsPhone = innerMetadata?.smsPhone
+		?? resourceMetadata?.smsPhone
+		?? externalMetadata?.smsPhone
+		?? resource.externalContent.smsPhone;
 	const smsPhone = (typeof savedSmsPhone === 'string' && savedSmsPhone.trim())
 		? savedSmsPhone.trim()
 		: fallbackSmsPhone || resolved.phone;
@@ -274,14 +284,14 @@ export function vehicleResourceToBillingVehicle(
 }
 
 /**
- * Searches existing Billing VehicleResource first, then /api/v1/tqms/search,
- * and compares all details including the full Owners array.
+ * Compares the billing cache snapshot and current TQMS vehicle returned by
+ * the same search response.
  */
 export async function reconcileVehicleLookup(
 	vehicleNumber: string,
 	options?: {
 		signal?: AbortSignal;
-		preloadedTqms?: BillingVehicle;
+		preloadedMatch?: TqmsVehicleSearchMatch;
 		fallbackSmsPhone?: string;
 		receipts?: ReceiptRecord[];
 	},
@@ -289,58 +299,72 @@ export async function reconcileVehicleLookup(
 	const query = vehicleNumber.trim();
 	if (!query) throw new Error('सवारी नम्बर आवश्यक छ।');
 
-	let tqmsVehicle: BillingVehicle | null = options?.preloadedTqms ?? null;
-	let billingResource: VehicleResourceDocument | null;
-	if (tqmsVehicle) {
-		billingResource = await findVehicleResource(tqmsVehicle.tqmsVehicleId, query);
-	} else {
-		// Search existing billing data first when no TQMS result is already available.
-		billingResource = await findVehicleResource('', query);
-		const tqmsResults = await searchTqmsVehicles(query, options?.signal);
-		const normalizedQ = normalizeReconciliationText(query);
-		tqmsVehicle = tqmsResults.find((v) => normalizeReconciliationText(v.vehicleNumber) === normalizedQ)
-			?? tqmsResults[0]
-			?? null;
-	}
-
-	// If there was no billing record for the entered number, try the resolved TQMS ID.
-	if (!billingResource && tqmsVehicle?.tqmsVehicleId && !options?.preloadedTqms) {
-		billingResource = await findVehicleResource(tqmsVehicle.tqmsVehicleId, query);
-	}
-
+	const matches = options?.preloadedMatch
+		? [options.preloadedMatch]
+		: await searchTqmsVehicleMatches(query, options?.signal);
+	const normalizedQuery = normalizeReconciliationText(query);
+	const match = matches.find((candidate) => (
+		normalizeReconciliationText(candidate.tqmsVehicle.vehicleNumber) === normalizedQuery
+	)) ?? matches[0];
+	const tqmsVehicle = match?.tqmsVehicle ?? null;
 	if (!tqmsVehicle) {
 		throw new Error(`सवारी नम्बर "${query}" TQMS मा फेला परेन।`);
 	}
 
+	let billingResource: VehicleResourceDocument | null = null;
+	let billingVehicle: BillingVehicle | null = null;
+	if (match.cacheRecord && match.cacheVehicle) {
+		const cacheId = match.cacheId?.trim();
+		if (!cacheId) {
+			throw new Error(`Billing cache record for TQMS VehicleId ${tqmsVehicle.tqmsVehicleId} is missing cache_id.`);
+		}
+		const innerContent = { ...match.cacheRecord };
+		const externalContentValue = match.cacheRecord.external_content ?? match.cacheRecord.externalContent;
+		const externalContent = externalContentValue && typeof externalContentValue === 'object'
+			&& !Array.isArray(externalContentValue)
+			? externalContentValue as Record<string, unknown>
+			: {};
+		const resource = {
+			...match.cacheRecord,
+			id: /^\d+$/u.test(cacheId) ? Number(cacheId) : cacheId,
+			resource_name: 'VehicleResource',
+			inner_content: innerContent,
+			external_content: externalContent,
+		};
+		billingResource = {
+			id: cacheId,
+			resource,
+			innerContent,
+			externalContent,
+		};
+		const cachedBillingVehicle = vehicleResourceToBillingVehicle(
+			billingResource,
+			options?.fallbackSmsPhone,
+		);
+		billingVehicle = {
+			...cachedBillingVehicle,
+			...match.cacheVehicle,
+			id: cacheId,
+			smsPhone: cachedBillingVehicle.smsPhone
+				|| match.cacheVehicle.smsPhone
+				|| options?.fallbackSmsPhone
+				|| match.cacheVehicle.phone,
+		};
+	}
+
 	const hasBillingHistory = hasVehicleBillingHistory(
 		options?.receipts ?? [],
-		[tqmsVehicle.tqmsVehicleId, billingResource?.innerContent.VehicleId?.toString() ?? ''],
-		[query, tqmsVehicle.vehicleNumber, billingResource?.innerContent.VehicleNumber?.toString() ?? ''],
+		[tqmsVehicle.tqmsVehicleId, billingVehicle?.tqmsVehicleId ?? ''],
+		[query, tqmsVehicle.vehicleNumber, billingVehicle?.vehicleNumber ?? ''],
 	);
 
-	if (!billingResource) {
+	if (!billingResource || !billingVehicle) {
 		return {
 			type: 'RESOURCE_MISSING',
 			tqmsVehicle,
 			hasBillingHistory,
 		};
 	}
-
-	if (!hasBillingHistory) {
-		return {
-			type: 'FIRST_TIME',
-			tqmsVehicle,
-			billingVehicle: null,
-			billingResource: null,
-			diffs: [],
-		};
-	}
-
-	// Step 3: Compare all details between Billing and TQMS, including owners array
-	const billingVehicle = vehicleResourceToBillingVehicle(
-		billingResource,
-		tqmsVehicle.smsPhone || options?.fallbackSmsPhone,
-	);
 
 	const diffs = compareVehiclesForReconciliation(billingVehicle, tqmsVehicle);
 	const changedDiffs = diffs.filter((d) => d.isChanged);

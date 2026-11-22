@@ -48,7 +48,7 @@ export function FeeHeadDialog({ open, onOpenChange, initialValue, fiscalYears, f
               <SelectTrigger id="fee-head-fiscal-year"><SelectValue placeholder="आर्थिक वर्ष छान्नुहोस्" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__unassigned__">आर्थिक वर्ष छान्नुहोस्</SelectItem>
-                {fiscalYears.map((year) => <SelectItem key={year.id} value={year.id}>{year.name}{year.status === 'INACTIVE' ? ' · निष्क्रिय' : ''}</SelectItem>)}
+                {fiscalYears.map((year) => <SelectItem key={year.id} value={year.id}>{year.name}</SelectItem>)}
               </SelectContent>
             </Select>
             {fiscalYearLocked ? <p className="text-xs text-muted-foreground">बिलिङ नियमले प्रयोग गरेकाले यस शुल्क शीर्षकको आर्थिक वर्ष परिवर्तन गर्न मिल्दैन।</p> : null}

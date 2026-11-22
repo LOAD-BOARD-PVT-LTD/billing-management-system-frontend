@@ -27,6 +27,5 @@ export { BillingRuleForm } from '@/features/billing-rules/components/BillingRule
 export { BillingRuleDetailsDialog } from '@/features/billing-rules/components/BillingRuleDetailsDialog';
 export { FeeHeadManager } from '@/features/billing-rules/components/configuration/FeeHeadManager';
 export { LinkedFeeRulesManager } from '@/features/billing-rules/components/configuration/LinkedFeeRulesManager';
-export { FiscalYearManager } from '@/features/billing-rules/components/configuration/FiscalYearManager';
 
 export { BillingRulesPage as BillingRulesFeature } from '@/features/billing-rules/components/BillingRulesPage';

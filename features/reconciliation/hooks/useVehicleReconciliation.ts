@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { BillingVehicle } from '@/features/billing/model/types';
+import type { TqmsVehicleSearchMatch } from '@/features/billing/schemas/tqms-vehicle-search.schema';
 import {
 	updateVehicleResource,
 	type VehicleResourceDocument,
@@ -20,7 +21,7 @@ import {
 
 export type ReconcileLookupOptions = {
 	signal?: AbortSignal;
-	preloadedTqms?: BillingVehicle;
+	preloadedMatch?: TqmsVehicleSearchMatch;
 	fallbackSmsPhone?: string;
 	receipts?: ReceiptRecord[];
 };

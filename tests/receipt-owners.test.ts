@@ -46,7 +46,7 @@ describe('receipt vehicle owners', () => {
 			getReceiptOwnerDisplayLines('Nabil Bank Limited', 'Nikesh Kumar Karki', '9854035770'),
 			[
 				{
-					label: 'सञ्चालक:',
+					label: 'संचालक:',
 					name: 'Nikesh Kumar Karki',
 					suffix: '',
 				},
@@ -75,7 +75,7 @@ describe('receipt vehicle owners', () => {
 					name: 'Member Name',
 					suffix: ' (9800000000) बाट संघको विधान बमोजिम',
 				},
-				{ label: 'सञ्चालकको नाम:', name: 'Operator Name', suffix: '' },
+				{ label: 'संचालकको नाम:', name: 'Operator Name', suffix: '' },
 			],
 		);
 		assert.deepEqual(
@@ -88,7 +88,7 @@ describe('receipt vehicle owners', () => {
 		assert.deepEqual(
 			getMemberOwnerDisplayLines('Vehicle Owner', 'Vehicle Operator'),
 			[
-				{ label: 'सञ्चालक:', name: 'Vehicle Operator', suffix: '' },
+				{ label: 'संचालक:', name: 'Vehicle Operator', suffix: '' },
 				{ label: 'धनीको नाम:', name: 'Vehicle Owner', suffix: '' },
 			],
 		);

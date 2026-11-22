@@ -1,49 +1,23 @@
-export type NotificationChannel = 'SMS' | 'In-app' | 'Email';
+export type SmsProviderId = '' | 'samayasms' | 'http';
 
-export type NotificationStatus = 'Delivered' | 'Pending' | 'Failed' | 'Scheduled';
-
-export type NotificationCategory = 'Billing' | 'Member' | 'Vehicle' | 'System';
-
-export interface NotificationRecord {
-  id: string;
-  title: string;
-  message: string;
-  category: NotificationCategory;
-  channel: NotificationChannel;
-  status: NotificationStatus;
-  recipient: string;
-  createdAt: string;
-}
-
-export interface NotificationTemplate {
-  id: string;
-  name: string;
-  category: NotificationCategory;
-  content: string;
-  channel: NotificationChannel;
-  active: boolean;
-}
-
-export interface NotificationHistoryItem {
-  id: string;
-  recipient: string;
-  phone: string;
-  message: string;
-  channel: NotificationChannel;
-  status: NotificationStatus;
-  sentAt: string;
-  provider: string;
-}
-
-export interface NotificationAutomationRule {
-  id: string;
-  name: string;
-  description: string;
+export interface SmsProviderConfig {
   enabled: boolean;
-  template: string;
+  provider: SmsProviderId;
+  apiKey: string;
+  apiSecret: string;
+  senderId: string;
+  baseUrl: string;
+  defaultCountryCode: string;
+  webhookUrl: string;
 }
 
-export interface NotificationManagementSettings {
-  templates: NotificationTemplate[];
-  automationRules: NotificationAutomationRule[];
+export interface SmsTemplate {
+  id: string;
+  name: string;
+  active: boolean;
+  content: string;
+}
+
+export interface SmsTemplatesSettings extends SmsProviderConfig {
+  templates: SmsTemplate[];
 }

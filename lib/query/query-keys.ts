@@ -15,6 +15,11 @@ export const receiptsKeys = {
   lists: () => [...receiptsKeys.all, 'list'] as const,
 };
 
+export const dashboardKeys = {
+  all: ['dashboard'] as const,
+  statistics: (fiscalYear?: string) => [...dashboardKeys.all, 'statistics', fiscalYear ?? 'all-years'] as const,
+};
+
 export const settingsKeys = {
   all: ['settings'] as const,
   receiptCancelWindow: () => [...settingsKeys.all, 'receipt-cancel-window'] as const,
@@ -66,6 +71,7 @@ export const queryKeys = {
   billing: billingKeys,
   billingRules: billingRulesKeys,
   receipts: receiptsKeys,
+  dashboard: dashboardKeys,
   settings: settingsKeys,
   vehicleTypes: vehicleTypeKeys,
   tqmsVehicleTypes: tqmsVehicleTypeKeys,

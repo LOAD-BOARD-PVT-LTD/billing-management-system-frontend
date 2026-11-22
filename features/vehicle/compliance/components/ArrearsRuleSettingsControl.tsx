@@ -29,7 +29,9 @@ export function ArrearsRuleSettingsControl({ section }: ArrearsRuleSettingsContr
   const isLoading = settingQuery.isLoading || ruleConfig.isLoading || fiscalYearQuery.isLoading;
   const error = settingQuery.error || ruleConfig.error || fiscalYearQuery.error;
   const current = settings?.[section];
-  const activeFiscalYears = fiscalYearQuery.fiscalYears.filter((year) => year.status === 'ACTIVE');
+  const availableFiscalYears = ruleConfig.fiscalYears.length > 0
+    ? ruleConfig.fiscalYears
+    : fiscalYearQuery.fiscalYears;
   const fiscalYearId = section === 'monthlyPaid' && current && 'fiscalYearId' in current
     ? current.fiscalYearId
     : '';
@@ -130,7 +132,7 @@ export function ArrearsRuleSettingsControl({ section }: ArrearsRuleSettingsContr
                   <SelectValue placeholder="आर्थिक वर्ष छान्नुहोस्" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeFiscalYears.map((year) => <SelectItem key={year.id} value={year.id}>{year.name}</SelectItem>)}
+                  {availableFiscalYears.map((year) => <SelectItem key={year.id} value={year.id}>{year.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

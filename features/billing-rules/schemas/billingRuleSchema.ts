@@ -38,7 +38,7 @@ export const billingRuleSchema = z.object({
       code: 'custom',
       message: rule.frequency === 'ONE_TIME'
         ? 'एकपटक शुल्कका लागि सोही दिन वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।'
-        : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन वा महिनाको अन्त्य चयन गर्नुहोस्।',
+        : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन, महिनाको अन्त्य वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।',
       path: ['validity'],
     });
   }
@@ -74,7 +74,7 @@ export function validateBillingRuleRecord(rule: BillingRule): { isValid: boolean
   if (!validityOptionsByFrequency[rule.frequency].some((option) => option.value === rule.validity)) {
     errors.validity = rule.frequency === 'ONE_TIME'
       ? 'एकपटक शुल्कका लागि सोही दिन वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।'
-      : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन वा महिनाको अन्त्य चयन गर्नुहोस्।';
+      : 'आवधिक शुल्कका लागि अर्को महिनाको सोही दिन, महिनाको अन्त्य वा आर्थिक वर्षको अन्त्य चयन गर्नुहोस्।';
   }
   const normalizedValidity = getValidityForFrequency(rule.frequency, rule.validity);
   if (rule.period !== getPeriodForFrequency(rule.frequency, normalizedValidity)) {

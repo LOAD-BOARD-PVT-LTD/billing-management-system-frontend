@@ -89,7 +89,7 @@ function OwnerDetails({
 	const rows = [
 		[identifierLabel, identifierValue],
 		...(vehicle.operatorName && vehicle.operatorName !== vehicle.ownerName
-			? [['सञ्चालकको नाम', vehicle.operatorName]]
+			? [['संचालकको नाम', vehicle.operatorName]]
 			: []),
 		['सदस्यको नाम', vehicle.ownerName],
 		...(isTqms ? [['धनी ID', getOwnerId(vehicle)]] : []),
@@ -215,7 +215,7 @@ export function ReconciliationMemberHistory({
 											{owners.hasMultipleOwners
 												? (
 													<div className="space-y-0.5">
-														<p>सञ्चालक: {owners.sanchalakName}</p>
+														<p>संचालक: {owners.sanchalakName}</p>
 														<p>धनीको नाम: {owners.dhaniName}</p>
 													</div>
 												)

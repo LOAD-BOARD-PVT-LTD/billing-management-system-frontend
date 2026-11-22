@@ -60,12 +60,13 @@ describe('1. Billing Rule Configuration', () => {
         );
         assert.deepEqual(
           validityOptionsByFrequency.PERIODIC.map((option) => option.value),
-          ['SAME_DAY', 'END_OF_MONTH'],
+          ['SAME_DAY', 'END_OF_MONTH', 'END_OF_FISCAL_YEAR'],
         );
         assert.equal(getPeriodForFrequency('ONE_TIME', 'SAME_DAY'), null);
         assert.equal(getPeriodForFrequency('ONE_TIME', 'END_OF_FISCAL_YEAR'), 'FISCAL_YEAR');
         assert.equal(getPeriodForFrequency('PERIODIC', 'SAME_DAY'), 'MONTH');
         assert.equal(getPeriodForFrequency('PERIODIC', 'END_OF_MONTH'), 'MONTH');
+        assert.equal(getPeriodForFrequency('PERIODIC', 'END_OF_FISCAL_YEAR'), 'FISCAL_YEAR');
         assert.equal(getPeriodLabel(null), 'लागू हुँदैन');
       });
 
@@ -105,6 +106,11 @@ describe('1. Billing Rule Configuration', () => {
           ...baseRule,
           validity: 'END_OF_FISCAL_YEAR',
         }).success, false);
+        assert.equal(billingRuleSchema.safeParse({
+          ...baseRule,
+          period: 'FISCAL_YEAR',
+          validity: 'END_OF_FISCAL_YEAR',
+        }).success, true);
         assert.equal(billingRuleSchema.safeParse({
           ...baseRule,
           frequency: 'ONE_TIME',
@@ -343,7 +349,7 @@ describe('1. Billing Rule Configuration', () => {
       assert.equal(doc.config.rules[0].amount, 0);
     });
 
-    test('normalizes periodic rules to monthly period and frequency-compatible validity', () => {
+    test('preserves yearly periodic rule period and validity', () => {
       const doc = mapBillingRuleResource({
         id: 207,
         resource_name: 'BillingRuleResource',
@@ -361,8 +367,8 @@ describe('1. Billing Rule Configuration', () => {
         },
       });
 
-      assert.equal(doc.config.rules[0].period, 'MONTH');
-      assert.equal(doc.config.rules[0].validity, 'SAME_DAY');
+      assert.equal(doc.config.rules[0].period, 'FISCAL_YEAR');
+      assert.equal(doc.config.rules[0].validity, 'END_OF_FISCAL_YEAR');
     });
 
     test('rejects VEHICLE_TYPE rule if vehicleCategoryId is missing', () => {
@@ -722,6 +728,180 @@ describe('1. Billing Rule Configuration', () => {
       assert.equal(deletedIds.length, 1);
       assert.ok(deletedIds[0].includes('rule-delete'));
       assert.ok(!deletedIds[0].includes('rule-keep'));
+    });
+  });
+
+  describe('BillingRuleResource parsing and legacy fiscalYearId resolution in billingRulesApi.list', () => {
+    test('parses string inner_content, string fiscalYear, FEE_HEAD with fiscalYear, and ONE_TIME rule with omitted period', () => {
+      const ruleDoc = mapBillingRuleResource({
+        id: 701,
+        resource_name: 'BillingRuleResource',
+        inner_content: JSON.stringify({
+          resourceType: 'BILLING_RULE',
+          scope: 'COMMON',
+          frequency: 'ONE_TIME',
+          validity: 'SAME_DAY',
+          amount: 250,
+          status: 'ACTIVE',
+          feeHead: { id: 21, name: 'सदस्यता शुल्क', fiscalYear: '२०८२/८३' },
+          fiscalYear: '2082/83',
+        }),
+      });
+      assert.equal(ruleDoc.config.rules.length, 1);
+      assert.equal(ruleDoc.config.rules[0].fiscalYearId, '2082/83');
+      assert.equal(ruleDoc.config.rules[0].period, null);
+      assert.equal(ruleDoc.config.feeHeads[0].fiscalYearId, '2082/83');
+
+      const feeHeadDoc = mapBillingRuleResource({
+        id: 702,
+        resource_name: 'BillingRuleResource',
+        inner_content: {
+          resourceType: 'FEE_HEAD',
+          name: 'वार्षिक शुल्क',
+          fiscalYear: '2082/83',
+          status: 'ACTIVE',
+        },
+      });
+      assert.equal(feeHeadDoc.config.feeHeads[0].fiscalYearId, '2082/83');
+    });
+
+    test('resolves legacy UUID fiscalYearIds via SettingResource cross-references and effectiveDate, and preserves unmapped IDs', async () => {
+      const billingResources = [
+        {
+          id: 3,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'FEE_HEAD',
+            name: 'स्रोत शुल्क',
+            fiscalYearId: '15f21721-50e8-41af-9596-9d8cdb8d6a16',
+            status: 'ACTIVE',
+          },
+        },
+        {
+          id: 21,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'FEE_HEAD',
+            name: 'लिंक शुल्क',
+            fiscalYearId: 'uuid-from-linked-only',
+            status: 'ACTIVE',
+          },
+        },
+        {
+          id: 5,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'BILLING_RULE',
+            scope: 'VEHICLE_TYPE',
+            vehicleCategoryId: 4,
+            frequency: 'PERIODIC',
+            period: 'MONTH',
+            validity: 'END_OF_MONTH',
+            amount: 500,
+            status: 'ACTIVE',
+            feeHead: { id: 3, name: 'स्रोत शुल्क' },
+            fiscalYearId: '15f21721-50e8-41af-9596-9d8cdb8d6a16',
+          },
+        },
+        {
+          id: 6,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'BILLING_RULE',
+            scope: 'COMMON',
+            frequency: 'ONE_TIME',
+            validity: 'SAME_DAY',
+            amount: 300,
+            status: 'ACTIVE',
+            effectiveDate: '2025-07-17',
+            feeHead: { id: 3, name: 'स्रोत शुल्क' },
+            fiscalYearId: 'uuid-ad-date-2082',
+          },
+        },
+        {
+          id: 7,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'BILLING_RULE',
+            scope: 'COMMON',
+            frequency: 'ONE_TIME',
+            validity: 'SAME_DAY',
+            amount: 400,
+            status: 'ACTIVE',
+            effectiveDate: '२०८२-०४-०५',
+            feeHead: { id: 3, name: 'स्रोत शुल्क' },
+            fiscalYearId: 'uuid-bs-date-2082',
+          },
+        },
+        {
+          id: 8,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'BILLING_RULE',
+            scope: 'COMMON',
+            frequency: 'ONE_TIME',
+            validity: 'SAME_DAY',
+            amount: 999,
+            status: 'ACTIVE',
+            feeHead: { id: 3, name: 'स्रोत शुल्क' },
+            fiscalYearId: 'legacy-unmapped-uuid',
+          },
+        },
+      ];
+
+      const settingResources = [
+        {
+          id: 1,
+          resource_name: 'SettingResource',
+          inner_content: {
+            schemaVersion: 1,
+            integrations: { tqms: { SanghBranch: 'Loadboard sthaniya' } },
+            fiscalYear: { selector: { yearsBack: 4, yearsForward: 1, archivedYears: [] } },
+            billing: {
+              arrears: {
+                monthlyPaid: { enabled: true, fiscalYear: '2082/83', billingRuleId: '5' },
+                paidExpired: { enabled: true, billingRuleId: '5' },
+              },
+              linkedFeeRules: {
+                enabled: true,
+                rules: [
+                  {
+                    id: 'link-1',
+                    active: true,
+                    fiscalYear: '2082/83',
+                    sourceFeeHeadId: '3',
+                    linkedFeeHeadId: '21',
+                    oncePerFiscalYear: true,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ];
+
+      apiClient.get = async <T>(path: string): Promise<T> => {
+        if (path.includes('BillingRuleResource')) return billingResources as T;
+        if (path.includes('SettingResource')) return settingResources as T;
+        throw new Error(`Unexpected GET ${path}`);
+      };
+
+      const doc = await billingRulesApi.list();
+      const rule5 = doc.config.rules.find((r) => r.id === '5');
+      const rule6 = doc.config.rules.find((r) => r.id === '6');
+      const rule7 = doc.config.rules.find((r) => r.id === '7');
+      const rule8 = doc.config.rules.find((r) => r.id === '8');
+      const feeHead3 = doc.config.feeHeads.find((fh) => fh.id === '3');
+      const feeHead21 = doc.config.feeHeads.find((fh) => fh.id === '21');
+
+      assert.equal(rule5?.fiscalYearId, '2082/83');
+      assert.equal(rule6?.fiscalYearId, '2082/83');
+      assert.equal(rule7?.fiscalYearId, '2082/83');
+      assert.equal(rule8?.fiscalYearId, 'legacy-unmapped-uuid');
+      assert.equal(feeHead3?.fiscalYearId, '2082/83');
+      assert.equal(feeHead21?.fiscalYearId, '2082/83');
+      assert.ok(doc.config.fiscalYears.some((y) => y.id === '2082/83'));
+      assert.ok(doc.config.fiscalYears.some((y) => y.id === 'legacy-unmapped-uuid'));
     });
   });
 });

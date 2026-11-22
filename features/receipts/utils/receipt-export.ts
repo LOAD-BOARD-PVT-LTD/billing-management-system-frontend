@@ -23,7 +23,7 @@ function exportOwnerName(receipt: ReceiptRecord): string {
     receipt.billingType === 'MEMBERSHIP' ? vehicle.operatorName : '',
   );
   if (!owners.hasMultipleOwners) return owners.dhaniName || '—';
-  return `सञ्चालक: ${owners.sanchalakName}\nधनीको नाम: ${owners.dhaniName}`;
+  return `संचालक: ${owners.sanchalakName}\nधनीको नाम: ${owners.dhaniName}`;
 }
 
 export function receiptExportValue(receipt: ReceiptRecord, column: ReceiptColumnId): string {

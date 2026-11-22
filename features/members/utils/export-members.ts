@@ -3,7 +3,7 @@ import { STATUS_LABELS } from '@/features/members/components/MemberStatusBadge';
 
 export function exportMembers(records: MemberListRecord[]): void {
   const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const headers = ['सदस्य नं.', 'सञ्चालक', 'सवारी धनी', 'सवारी ID', 'सवारी नं.', 'TQMS सवारी प्रकार', 'बिलिङ सवारी प्रकार', 'शाखा', 'स्थिति', 'आर्थिक वर्ष', 'सम्पर्क नं.'];
+  const headers = ['सदस्य नं.', 'संचालक', 'सवारी धनी', 'सवारी ID', 'सवारी नं.', 'TQMS सवारी प्रकार', 'बिलिङ सवारी प्रकार', 'शाखा', 'स्थिति', 'आर्थिक वर्ष', 'सम्पर्क नं.'];
   const rows = records.map((record) => [
     record.memberNumber,
     record.sanchalakName,

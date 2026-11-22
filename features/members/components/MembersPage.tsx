@@ -76,7 +76,9 @@ export function MembersPage() {
     () => [...fiscalYears].sort((left, right) => right.startDate.localeCompare(left.startDate)),
     [fiscalYears],
   );
-  const defaultFiscalYear = sortedFiscalYears.find((year) => year.status === 'ACTIVE') ?? sortedFiscalYears[0];
+  const defaultFiscalYear = sortedFiscalYears.find((year) => year.isDefault)
+    ?? sortedFiscalYears.find((year) => year.status === 'ACTIVE')
+    ?? sortedFiscalYears[0];
   const [fiscalYearOverride, setFiscalYearOverride] = useState('');
   const fiscalYearId = fiscalYearOverride || defaultFiscalYear?.id || '';
   const selectedFiscalYear = sortedFiscalYears.find((year) => year.id === fiscalYearId);

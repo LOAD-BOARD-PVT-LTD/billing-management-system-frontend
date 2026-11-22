@@ -133,7 +133,12 @@ export function FeeHeadWiseReportPage() {
     const matchingReceiptIds = new Set(filterIncomeReportRows(rawRows, filters).map((row) => row.receiptId));
     return receiptsQuery.records
       .filter((receipt) => matchingReceiptIds.has(receipt.id))
-      .filter((receipt) => !selectedFiscalYear || receipt.bill.content.fiscalYearId === selectedFiscalYear.id)
+      .filter((receipt) => (
+        !selectedFiscalYear
+        || receipt.bill.content.fiscalYearId === selectedFiscalYear.id
+        || receipt.bill.content.fiscalYearName === selectedFiscalYear.name
+        || receipt.fiscalYear === selectedFiscalYear.name
+      ))
       .sort((first, second) => second.billingDate.localeCompare(first.billingDate)
         || second.receiptNumber.localeCompare(first.receiptNumber, 'ne'));
   }, [filters, rawRows, receiptsQuery.records, selectedFiscalYear, validDateRange]);
@@ -162,7 +167,7 @@ export function FeeHeadWiseReportPage() {
     const columns = [
       { label: 'रसिद नं.', value: (row: FeeHeadReportRow) => row.receipt.receiptNumber },
       { label: 'सवारी नं.', value: (row: FeeHeadReportRow) => row.receipt.vehicleNumber },
-      { label: 'धनी / सञ्चालक विवरण', value: (row: FeeHeadReportRow) => `${row.receipt.customerName} ${getOperatorName(row.receipt)} ${row.receipt.bill.content.vehicle.phone}`.trim() },
+      { label: 'धनी / संचालक विवरण', value: (row: FeeHeadReportRow) => `${row.receipt.customerName} ${getOperatorName(row.receipt)} ${row.receipt.bill.content.vehicle.phone}`.trim() },
       { label: 'सवारी प्रकार', value: (row: FeeHeadReportRow) => row.receipt.bill.content.vehicle.vehicleType },
       ...visibleFeeHeads.map((feeHead) => ({
         label: `${getFeeHeadNumber(billingRules.config.feeHeads.indexOf(feeHead))}. ${feeHead.name}`,
@@ -248,7 +253,7 @@ export function FeeHeadWiseReportPage() {
                 <TableHead className="min-w-14 text-center">सि.नं.</TableHead>
                 <TableHead className="min-w-28">रसिद नं.</TableHead>
                 <TableHead className="min-w-32">सवारी नं.</TableHead>
-                <TableHead className="min-w-44">धनी / सञ्चालक विवरण</TableHead>
+                <TableHead className="min-w-44">धनी / संचालक विवरण</TableHead>
                 <TableHead className="min-w-28">सवारी प्रकार</TableHead>
                 {visibleFeeHeads.map((feeHead) => (
                   <TableHead key={feeHead.id} className="min-w-28 text-right">
@@ -292,7 +297,7 @@ export function FeeHeadWiseReportPage() {
                           <TableCell>
                             <span className="block font-medium">{row.receipt.customerName || '—'}</span>
                             {getOperatorName(row.receipt) ? (
-                              <span className="block text-xs text-muted-foreground">सञ्चालक: {getOperatorName(row.receipt)}</span>
+                              <span className="block text-xs text-muted-foreground">संचालक: {getOperatorName(row.receipt)}</span>
                             ) : null}
                             <span className="block text-xs text-muted-foreground">
                               {toNepaliDigits([row.receipt.bill.content.vehicle.phone, row.receipt.bill.content.vehicle.address].filter(Boolean).join(' · ') || '—')}

@@ -31,19 +31,19 @@ function OwnerSummary({ label, vehicle }: { label: string; vehicle: BillingVehic
 			const isDhani = name.toLocaleLowerCase() === vehicle.ownerName.toLocaleLowerCase();
 			const isOperator = name.toLocaleLowerCase() === vehicle.operatorName?.toLocaleLowerCase();
 			return {
-				role: isOperator && !isDhani ? 'सञ्चालकको नाम' : 'धनीको नाम',
+				role: isOperator && !isDhani ? 'संचालकको नाम' : 'धनीको नाम',
 				name,
 				id: ownerIdentifier(owner),
 			};
 		})
 		: [
 			...(vehicle.operatorName && vehicle.operatorName !== vehicle.ownerName
-				? [{ role: 'सञ्चालकको नाम', name: vehicle.operatorName, id: 'उपलब्ध छैन' }]
+				? [{ role: 'संचालकको नाम', name: vehicle.operatorName, id: 'उपलब्ध छैन' }]
 				: []),
 			{
 				role: vehicle.operatorName && vehicle.operatorName !== vehicle.ownerName
 					? 'धनीको नाम'
-					: 'धनी/सञ्चालकको नाम',
+					: 'धनी/संचालकको नाम',
 				name: vehicle.ownerName || '—',
 				id: 'उपलब्ध छैन',
 			},

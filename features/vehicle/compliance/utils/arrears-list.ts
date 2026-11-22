@@ -175,7 +175,11 @@ export function getArrearsListRows(options: ArrearsListOptions): ArrearsListRow[
   if (view === 'monthlyPaid') {
     if (!options.monthlyFiscalYearId || !options.monthlyRuleId) return [];
     return latestByVehicle(membershipReceipts.filter((receipt) => (
-      receipt.bill.content.fiscalYearId === options.monthlyFiscalYearId
+      (
+        receipt.bill.content.fiscalYearId === options.monthlyFiscalYearId
+        || receipt.bill.content.fiscalYearName === options.monthlyFiscalYearId
+        || receipt.fiscalYear === options.monthlyFiscalYearId
+      )
       && receipt.bill.content.items.some((item) => item.ruleId === options.monthlyRuleId)
     ))).map(toRow);
   }

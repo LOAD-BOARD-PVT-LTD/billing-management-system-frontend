@@ -382,7 +382,7 @@ export function BillingRuleForm({
                     setMeetingReference(event.target.value);
                     clearFieldError('meetingReference');
                   }}
-                  placeholder="उदाहरण: २०८२/०३/२१ को सञ्चालक समिति बैठक"
+                  placeholder="उदाहरण: २०८२/०३/२१ को संचालक समिति बैठक"
                   aria-invalid={Boolean(fieldErrors.meetingReference)}
                   aria-describedby={fieldErrors.meetingReference ? 'common-rule-meetingReference-error' : undefined}
                 />

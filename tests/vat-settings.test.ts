@@ -47,19 +47,35 @@ test('VAT settings parse and deduplicate saved Billing Entity identifiers', asyn
   });
 });
 
-test('VAT settings update the generic SettingResource without losing entity applicability', async () => {
+test('VAT settings update the grouped SettingResource without losing entity applicability or sibling sections', async () => {
   let savedBody: Record<string, unknown> | undefined;
+  apiClient.get = async <T>(): Promise<T> => ([{
+    id: 55,
+    resource_name: 'SettingResource',
+    inner_content: {
+      schemaVersion: 1,
+      integrations: {
+        tqms: { SanghBranch: 'Loadboard sthaniya' },
+      },
+      billing: {
+        vat: { enabled: false, rate: 13, billingEntityIds: [] },
+      },
+    },
+  }] as T);
   apiClient.put = async <T>(_path: string, body?: unknown): Promise<T> => {
     savedBody = body as Record<string, unknown>;
     return undefined as T;
   };
   const settings = { enabled: true, rate: 13, billingEntityIds: ['entity-1'] };
-  const saved = await saveVatSettings(settings, { resourceId: 'vat-1', settings: DEFAULT_VAT_SETTINGS });
+  const saved = await saveVatSettings(settings, { resourceId: '55', settings: DEFAULT_VAT_SETTINGS });
 
-  assert.equal(saved.resourceId, 'vat-1');
+  assert.equal(saved.resourceId, '55');
   assert.deepEqual(saved.settings, settings);
   assert.equal(savedBody?.resource_name, 'SettingResource');
-  assert.deepEqual(savedBody?.inner_content, { key: 'organization-vat', ...settings });
+  assert.equal(savedBody?.id, 55);
+  const inner = savedBody?.inner_content as Record<string, unknown>;
+  assert.equal(((inner.integrations as Record<string, unknown>).tqms as Record<string, unknown>).SanghBranch, 'Loadboard sthaniya');
+  assert.deepEqual((inner.billing as Record<string, unknown>).vat, settings);
 });
 
 test('VAT settings reject out-of-range rates and duplicate entity identifiers are removed on create', async () => {
@@ -69,6 +85,7 @@ test('VAT settings reject out-of-range rates and duplicate entity identifiers ar
   );
 
   let savedBody: Record<string, unknown> | undefined;
+  apiClient.get = async <T>(): Promise<T> => ([] as T);
   apiClient.post = async <T>(_path: string, body?: unknown): Promise<T> => {
     savedBody = body as Record<string, unknown>;
     return { id: 'vat-new' } as T;
@@ -78,7 +95,7 @@ test('VAT settings reject out-of-range rates and duplicate entity identifiers ar
     { resourceId: null, settings: DEFAULT_VAT_SETTINGS },
   );
   assert.deepEqual(
-    (savedBody?.inner_content as { billingEntityIds: string[] }).billingEntityIds,
+    (((savedBody?.inner_content as Record<string, unknown>).billing as Record<string, unknown>).vat as { billingEntityIds: string[] }).billingEntityIds,
     ['entity-1'],
   );
 });

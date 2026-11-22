@@ -82,7 +82,7 @@ export function BillingRulesDataTable({
     const configuredVehicleFeeHeadIds = new Set(vehicleTypeFeeHeadIds);
     const visibleFeeHeads = feeHeads.filter((feeHead) =>
       configuredVehicleFeeHeadIds.has(feeHead.id)
-      && (fiscalYearFilter === 'all' || feeHead.fiscalYearId === fiscalYearFilter),
+      && (fiscalYearFilter === 'all' || feeHead.fiscalYearId === null || feeHead.fiscalYearId === fiscalYearFilter),
     );
     const fiscalYearMap = new Map(fiscalYears.map((year) => [year.id, year.name]));
     const groups = groupVehicleTypeRules(rules).map((groupRules) => ({

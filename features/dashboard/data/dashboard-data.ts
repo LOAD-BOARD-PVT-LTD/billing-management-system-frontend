@@ -1,7 +1,7 @@
 export type DashboardMetric = {
   title: string;
   value: number;
-  change: number;
+  change?: number;
   icon:
     | 'members'
     | 'activeMembers'
@@ -56,17 +56,6 @@ export type DashboardActivity = {
 };
 
 export const dashboardData = {
-  metrics: [
-    { title: 'कुल सदस्य', value: 12482, change: 8.2, icon: 'members' },
-    { title: 'सक्रिय सदस्यहरू', value: 9364, change: 12, icon: 'activeMembers' },
-    { title: 'नयाँ सदस्यता', value: 1245, change: 18, icon: 'newSubscriptions' },
-    { title: 'निष्क्रिय सदस्यहरू', value: 1873, change: -5, icon: 'inactiveMembers' },
-    { title: 'कालोसूची सदस्य', value: 42, change: -2, icon: 'blacklistedMembers' },
-    { title: 'विस्थापित सदस्यहरू', value: 19, change: 1.5, icon: 'displacedMembers' },
-    { title: 'दर्ता भएका सवारी', value: 10892, change: 6.4, icon: 'vehicles' },
-    { title: 'यस आर्थिक वर्षको आम्दानी', value: 157382630, change: 14.1, icon: 'income' },
-    { title: 'बाँकी भुक्तानी', value: 386, change: -3.8, icon: 'pending' },
-  ] satisfies DashboardMetric[],
   incomeTrend: [
     { label: 'साउन', amount: 4500000 },
     { label: 'भदौ', amount: 6200000 },

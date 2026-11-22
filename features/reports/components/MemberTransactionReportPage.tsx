@@ -145,7 +145,9 @@ export function MemberTransactionReportPage() {
   const [page, setPage] = useState(1);
   const header = useReportHeaderDetails('सदस्यता तथा कारोबार रिपोर्ट');
 
-  const activeFiscalYearId = fiscalYears.find((year) => year.status === 'ACTIVE')?.id ?? '';
+  const activeFiscalYearId = fiscalYears.find((year) => year.isDefault)?.id
+    ?? fiscalYears.find((year) => year.status === 'ACTIVE')?.id
+    ?? '';
   const memberDetails = useMemo(
     () => calculateMembers(records, fiscalYears, activeFiscalYearId, memberResources, blacklistedVehicles).records,
     [records, fiscalYears, activeFiscalYearId, memberResources, blacklistedVehicles],
@@ -186,7 +188,7 @@ export function MemberTransactionReportPage() {
     ['सवारी नं.', toEnglishDigits(selectedVehicle?.vehicleNumber || selectedCandidate.vehicleNumber)],
     ['सदस्य नं.', selectedCandidate.memberNumber],
     ['धनीको नाम', selectedVehicle?.sawariDhaniName || selectedCandidate.ownerName],
-    ['सञ्चालकको नाम', selectedVehicle?.sanchalakName || ''],
+    ['संचालकको नाम', selectedVehicle?.sanchalakName || ''],
     ['सम्पर्क नं.', toEnglishDigits(selectedVehicle?.phone || selectedCandidate.phone)],
     ['ठेगाना', selectedVehicle?.address || selectedCandidate.address],
     ['सवारी वर्ग', vehicleCategory],

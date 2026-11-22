@@ -45,8 +45,8 @@ export function GeneralBillingWorkspace() {
 
   const activeBranches = branches.filter((branch) => branch.status === 'ACTIVE');
   const activeEntities = billingEntities.filter((entity) => entity.status === 'ACTIVE');
-  const activeFiscalYears = billingRules.config.fiscalYears.filter((year) => year.status === 'ACTIVE');
-  const defaultFiscalYear = activeFiscalYears.find((year) => year.isDefault) ?? activeFiscalYears[0];
+  const openBillingFiscalYears = billingRules.config.fiscalYears.filter((year) => year.status === 'ACTIVE');
+  const defaultFiscalYear = openBillingFiscalYears.find((year) => year.isDefault) ?? openBillingFiscalYears[0];
   const currentUser = users.find((item) => item.email.toLowerCase() === authUser?.email.toLowerCase());
 
   const [customer, setCustomer] = useState<BillCustomer>({
@@ -58,7 +58,10 @@ export function GeneralBillingWorkspace() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [selectedFiscalYearId, setSelectedFiscalYearId] = useState('');
   const [selectedEntityId, setSelectedEntityId] = useState('');
+  const selectedFiscalYear = openBillingFiscalYears.find((year) => year.id === selectedFiscalYearId)
+    ?? defaultFiscalYear;
   const [billingDate, setBillingDate] = useState<Date>(new Date());
   const [charges, setCharges] = useState<ChargeDraft[]>([
     { id: 'general-charge-1', description: '', amount: '' },
@@ -157,7 +160,7 @@ export function GeneralBillingWorkspace() {
       setFormError(vatSettings.isLoading ? 'VAT सेटिङ लोड हुँदैछ।' : `VAT सेटिङ लोड गर्न सकिएन: ${vatSettings.error}`);
       return;
     }
-    if (!defaultFiscalYear) {
+    if (!selectedFiscalYear) {
       setFormError(billingRules.error ?? 'सक्रिय आर्थिक वर्ष उपलब्ध छैन।');
       return;
     }
@@ -177,8 +180,8 @@ export function GeneralBillingWorkspace() {
       branchPhone: branch.phone,
       branchContactPerson: branch.contactPerson,
       allowManualReceiptAmountOverride: false,
-      fiscalYearId: defaultFiscalYear.id,
-      fiscalYearName: defaultFiscalYear.name,
+      fiscalYearId: selectedFiscalYear.id,
+      fiscalYearName: selectedFiscalYear.name,
       billingDate: billingDateValue,
       periodStart: '',
       periodEnd: '',
@@ -285,7 +288,7 @@ export function GeneralBillingWorkspace() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1 text-sm font-medium">
             शाखा <span className="text-destructive">*</span>
             <Select value={selectedBranchId} onValueChange={(value) => { setSelectedBranchId(value); setSelectedEntityId(''); setFormError(null); }} disabled={isLoadingBranches || Boolean(branchError)}>
@@ -295,6 +298,23 @@ export function GeneralBillingWorkspace() {
               </SelectContent>
             </Select>
             {branchError ? <span role="alert" className="block text-xs text-destructive">{branchError}</span> : null}
+          </label>
+          <label className="space-y-1 text-sm font-medium">
+            वित्तीय वर्ष <span className="text-destructive">*</span>
+            <Select
+              value={selectedFiscalYear?.id ?? ''}
+              onValueChange={(value) => { setSelectedFiscalYearId(value); setFormError(null); }}
+              disabled={billingRules.isLoading || openBillingFiscalYears.length <= 1}
+            >
+              <SelectTrigger aria-label="वित्तीय वर्ष छान्नुहोस्">
+                <SelectValue placeholder={billingRules.isLoading ? 'वित्तीय वर्ष लोड हुँदैछ...' : 'वित्तीय वर्ष छान्नुहोस्'} />
+              </SelectTrigger>
+              <SelectContent>
+                {openBillingFiscalYears.map((year) => (
+                  <SelectItem key={year.id} value={year.id}>{year.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className="space-y-1 text-sm font-medium">
             भुक्तानी मिति <span className="text-destructive">*</span>

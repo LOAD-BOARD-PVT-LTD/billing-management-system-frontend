@@ -23,6 +23,13 @@ const tqmsVehicleSchema = z.object({
 
 type JsonRecord = Record<string, unknown>;
 
+export type TqmsVehicleSearchMatch = {
+	tqmsVehicle: BillingVehicle;
+	cacheVehicle: BillingVehicle | null;
+	cacheRecord: JsonRecord | null;
+	cacheId: string | null;
+};
+
 function asRecord(value: unknown): JsonRecord | null {
 	return value && typeof value === 'object' && !Array.isArray(value)
 		? value as JsonRecord
@@ -44,10 +51,46 @@ function extractVehicleRows(payload: unknown): unknown[] {
 	throw new Error('TQMS vehicle search returned an unsupported response.');
 }
 
+function extractSearchCollections(payload: unknown): {
+	cacheRows: unknown[];
+	tqmsRows: unknown[];
+} | null {
+	let current = payload;
+	for (let depth = 0; depth < 6; depth += 1) {
+		const record = asRecord(current);
+		if (!record) return null;
+		const cacheRows = record.cache_results ?? record.cacheResults;
+		const tqmsRows = record.tqms_results ?? record.tqmsResults;
+		if (Array.isArray(cacheRows) || Array.isArray(tqmsRows)) {
+			return {
+				cacheRows: Array.isArray(cacheRows) ? cacheRows : [],
+				tqmsRows: Array.isArray(tqmsRows) ? tqmsRows : [],
+			};
+		}
+		const next = record.Data ?? record.data ?? record.result ?? record.Result;
+		if (next === undefined) return null;
+		current = next;
+	}
+	return null;
+}
+
 function text(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number'
 		? String(value).trim()
 		: '';
+}
+
+function normalizedIdentity(value: unknown): string {
+	return text(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function getVehicleResourceContent(value: JsonRecord): JsonRecord {
+	const content = { ...value };
+	delete content.cache_id;
+	delete content.source;
+	delete content.is_in_billing;
+	delete content.is_in_tqms;
+	return content;
 }
 
 function toBillingVehicle(value: unknown): BillingVehicle | null {
@@ -92,25 +135,80 @@ function toBillingVehicle(value: unknown): BillingVehicle | null {
 		previousPeriod: '',
 		remainingPeriod: '',
 		resourceContent: {
-			...rawVehicle,
+			...getVehicleResourceContent(rawVehicle),
 			Owners: resolvedOwners.owners,
 		},
 	};
 }
 
-export function parseTqmsVehicleSearchResponse(payload: unknown, vehicleNumber: string): BillingVehicle[] {
+function parseVehicleRows(rows: unknown[], vehicleNumber: string): BillingVehicle[] {
 	const query = vehicleNumber.trim().toLocaleLowerCase();
-	if (!query) return [];
-
-	const rows = extractVehicleRows(payload);
-	const vehicles = rows
+	return rows
 		.map(toBillingVehicle)
 		.filter((vehicle): vehicle is BillingVehicle => vehicle !== null)
 		.filter((vehicle) => vehicle.vehicleNumber.toLocaleLowerCase().includes(query));
+}
 
-	if (rows.length > 0 && vehicles.length === 0) {
+export function parseTqmsVehicleSearchMatches(
+	payload: unknown,
+	vehicleNumber: string,
+): TqmsVehicleSearchMatch[] {
+	const query = vehicleNumber.trim().toLocaleLowerCase();
+	if (!query) return [];
+
+	const collections = extractSearchCollections(payload);
+	if (!collections) {
+		const rows = extractVehicleRows(payload);
+		const tqmsVehicles = parseVehicleRows(rows, vehicleNumber);
+		if (rows.length > 0 && tqmsVehicles.length === 0) {
+			throw new Error('TQMS vehicle search returned results in an unsupported format.');
+		}
+		return tqmsVehicles.map((tqmsVehicle) => ({
+			tqmsVehicle,
+			cacheVehicle: null,
+			cacheRecord: null,
+			cacheId: null,
+		}));
+	}
+
+	const tqmsVehicles = parseVehicleRows(collections.tqmsRows, vehicleNumber);
+	if (collections.tqmsRows.length > 0 && tqmsVehicles.length === 0) {
 		throw new Error('TQMS vehicle search returned results in an unsupported format.');
 	}
 
-	return vehicles;
+	const caches = collections.cacheRows.flatMap((row) => {
+		const record = asRecord(row);
+		const vehicle = toBillingVehicle(row);
+		return record && vehicle
+			? [{
+				record: getVehicleResourceContent(record),
+				vehicle,
+				cacheId: text(record.cache_id ?? record.id) || null,
+			}]
+			: [];
+	});
+	if (caches.length !== collections.cacheRows.length) {
+		throw new Error('TQMS vehicle search returned an unsupported cache record.');
+	}
+
+	return tqmsVehicles.map((tqmsVehicle) => {
+		const tqmsId = normalizedIdentity(tqmsVehicle.tqmsVehicleId);
+		const tqmsNumber = normalizedIdentity(tqmsVehicle.vehicleNumber);
+		const cache = caches.find(({ vehicle }) => (
+			tqmsId && normalizedIdentity(vehicle.tqmsVehicleId) === tqmsId
+		)) ?? caches.find(({ vehicle }) => (
+			normalizedIdentity(vehicle.vehicleNumber) === tqmsNumber
+		)) ?? null;
+		return {
+			tqmsVehicle,
+			cacheVehicle: cache?.vehicle ?? null,
+			cacheRecord: cache?.record ?? null,
+			cacheId: cache?.cacheId ?? null,
+		};
+	});
+}
+
+export function parseTqmsVehicleSearchResponse(payload: unknown, vehicleNumber: string): BillingVehicle[] {
+	return parseTqmsVehicleSearchMatches(payload, vehicleNumber)
+		.map((match) => match.tqmsVehicle);
 }

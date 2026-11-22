@@ -95,7 +95,7 @@ export function MahasangReportPage() {
     <section className="space-y-4 pb-8">
       <ReportPageShell
         title="महासंघ रिपोर्ट"
-        description="सवारी बिलका कारोबार, धनी/सञ्चालक विवरण र आम्दानी हेर्नुहोस्। उपलब्ध स्तम्भ छानेर तालिका र CSV निर्यात अनुकूलन गर्नुहोस्।"
+        description="सवारी बिलका कारोबार, धनी/संचालक विवरण र आम्दानी हेर्नुहोस्। उपलब्ध स्तम्भ छानेर तालिका र CSV निर्यात अनुकूलन गर्नुहोस्।"
         details={header.details}
         detailsError={header.error}
         includeHeaderDetails={includeHeader}

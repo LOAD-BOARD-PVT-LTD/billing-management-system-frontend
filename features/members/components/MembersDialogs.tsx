@@ -93,7 +93,7 @@ export function MembersDialogs({
                 <DetailItem label="बिलिङ सवारी प्रकार" value={detail.vehicleType} />
                 {detail.ownerCount > 1 ? (
                   <>
-                    <DetailItem label="सञ्चालक:" value={detail.sanchalakName} />
+                    <DetailItem label="संचालक:" value={detail.sanchalakName} />
                     <DetailItem label="धनीको नाम:" value={detail.sawariDhaniName} />
                   </>
                 ) : (

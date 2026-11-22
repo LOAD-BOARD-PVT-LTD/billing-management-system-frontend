@@ -13,6 +13,7 @@ import {
 import {
 	createVehicleResource,
 	findVehicleResource,
+	updateVehicleResource,
 	type VehicleResourceDocument,
 } from '@/features/billing/api/vehicle-resource.api';
 import type { BillingVehicle } from '@/features/billing/model/types';
@@ -343,39 +344,36 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			apiClient.post = originalPost;
 		});
 
-		test('searches VehicleResource first, then /api/v1/tqms/search, and returns MATCHED when identical', async () => {
+		test('uses cache and TQMS results from one search response when identical', async () => {
 			const callSequence: string[] = [];
 
 			apiClient.get = async <T>(path: string): Promise<T> => {
 				callSequence.push(`GET:${path}`);
-				return JSON.parse(
-					JSON.stringify([
-						{
-							id: 'res-101',
-							resource_name: 'VehicleResource',
-							inner_content: {
-								VehicleId: '101',
-								VehicleNumber: 'BA 01 KHA 1234',
-								VehicleType: 'Bus',
-								Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
-							},
-						},
-					]),
-				);
+				throw new Error(`Unexpected VehicleResource read: ${path}`);
 			};
 
 			apiClient.post = async <T>(path: string, body: unknown): Promise<T> => {
 				callSequence.push(`POST:${path}`);
 				assert.equal((body as Record<string, unknown>).vehicle_number, 'BA 01 KHA 1234');
 				return JSON.parse(
-					JSON.stringify([
-						{
+					JSON.stringify({
+						Code: 200,
+						Data: {
+							cache_results: [{
+								cache_id: 6490,
+								VehicleId: 101,
+								VehicleNumber: 'BA 01 KHA 1234',
+								VehicleType: 'Bus',
+								Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
+							}],
+							tqms_results: [{
 							VehicleId: '101',
 							VehicleNumber: 'BA 01 KHA 1234',
 							VehicleType: 'Bus',
 							Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
+							}],
 						},
-					]),
+					}),
 				);
 			};
 
@@ -383,35 +381,28 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
 			});
 
-			// Verified call sequence: VehicleResource search is performed first, followed by TQMS search
-			assert.ok(decodeURIComponent(callSequence[0]).startsWith('GET:search/VehicleResource/VehicleNumber/BA 01 KHA 1234/all'));
-			assert.equal(callSequence[1], 'POST:tqms/search');
+			assert.deepEqual(callSequence, ['POST:tqms/search']);
 			assert.equal(result.type, 'MATCHED');
-			assert.equal(result.billingVehicle.vehicleNumber, 'BA 01 KHA 1234');
+			assert.equal(result.billingVehicle.id, '6490');
 		});
 
-		test('returns RECONCILIATION_REQUIRED when VehicleResource and TQMS details differ', async () => {
+		test('returns RECONCILIATION_REQUIRED when cached details and TQMS details differ', async () => {
 			apiClient.get = async <T>(): Promise<T> => {
-				return JSON.parse(
-					JSON.stringify([
-						{
-							id: 'res-101',
-							resource_name: 'VehicleResource',
-							inner_content: {
-								VehicleId: '101',
-								VehicleNumber: 'BA 01 KHA 1234',
-								VehicleType: 'Bus',
-								Owners: [{ Name: 'Old Billing Owner', Phone: '9841000000' }],
-							},
-						},
-					]),
-				);
+				throw new Error('Reconciliation should not read VehicleResource.');
 			};
 
 			apiClient.post = async <T>(): Promise<T> => {
 				return JSON.parse(
-					JSON.stringify([
-						{
+					JSON.stringify({
+						Data: {
+							cache_results: [{
+								cache_id: 'cache-101',
+								VehicleId: '101',
+								VehicleNumber: 'BA 01 KHA 1234',
+								VehicleType: 'Bus',
+								Owners: [{ Name: 'Old Billing Owner', Phone: '9841000000' }],
+							}],
+							tqms_results: [{
 							VehicleId: '101',
 							VehicleNumber: 'BA 01 KHA 1234',
 							VehicleType: 'Bus',
@@ -419,8 +410,9 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 								{ Name: 'New Sanchalak', Phone: '9801000000' },
 								{ Name: 'New Sawari Dhani', Phone: '9841999999' },
 							],
+							}],
 						},
-					]),
+					}),
 				);
 			};
 
@@ -438,81 +430,69 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.ok(diffKeys.includes('owners'));
 		});
 
-		test('uses the preloaded TQMS vehicle without searching TQMS again', async () => {
-			const resourcePaths: string[] = [];
+		test('uses the selected cache/TQMS pair without searching again', async () => {
+			let searchCalled = false;
 			apiClient.get = async <T>(path: string): Promise<T> => {
-				resourcePaths.push(path);
-				return [{
-					id: 'res-101',
-					resource_name: 'VehicleResource',
-					inner_content: {
-						VehicleId: '101',
-						VehicleNumber: 'BA 01 KHA 1234',
-						VehicleType: 'Bus',
-						Owners: [
-							{
-								Name: 'Hari Thapa',
-								Type: 'Operator',
-								Phone: '9800000000',
-								Address: 'Lalitpur',
-								SanghBranch: 'Lalitpur Branch',
-							},
-							{
-								Name: 'Ram Bahadur',
-								Type: 'Main Owner',
-								Phone: '9841234567',
-								Address: 'Kathmandu',
-								SanghBranch: 'Kathmandu Branch',
-							},
-						],
-					},
-				}] as T;
+				throw new Error(`Unexpected VehicleResource read: ${path}`);
 			};
 			apiClient.post = async <T>(): Promise<T> => {
+				searchCalled = true;
 				throw new Error('TQMS search should not run when a vehicle is preloaded.');
 			};
 
 			const preloadedVehicle = createMockBillingVehicle();
 			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
-				preloadedTqms: preloadedVehicle,
+				preloadedMatch: {
+					tqmsVehicle: preloadedVehicle,
+					cacheVehicle: createMockBillingVehicle(),
+					cacheId: 'cache-101',
+					cacheRecord: {
+						cache_id: 'cache-101',
+						VehicleId: '101',
+						VehicleNumber: 'BA 01 KHA 1234',
+						VehicleType: 'Bus',
+						Owners: [
+							{ Name: 'Hari Thapa', Type: 'Operator', Phone: '9800000000' },
+							{ Name: 'Ram Bahadur', Type: 'Main Owner', Phone: '9841234567' },
+						],
+					},
+				},
 				receipts: [createMockReceipt('101', 'BA 01 KHA 1234')],
 			});
 
-			assert.ok(resourcePaths.includes('search/VehicleResource/VehicleId/101/all'));
+			assert.equal(searchCalled, false);
 			assert.equal(result.tqmsVehicle, preloadedVehicle);
+			assert.equal(result.type, 'MATCHED');
 		});
 
-		test('falls back to the TQMS vehicle ID when no resource matches the current vehicle number', async () => {
-			const resourcePaths: string[] = [];
+		test('pairs a previous cache vehicle with the current TQMS vehicle by ID when its number changed', async () => {
 			apiClient.get = async <T>(path: string): Promise<T> => {
-				resourcePaths.push(path);
-				if (path === 'search/VehicleResource/VehicleId/101/all') {
-					return [{
-						id: 'res-101',
-						resource_name: 'VehicleResource',
-						inner_content: {
-							VehicleId: '101',
-							VehicleNumber: 'BA 01 KHA 1234',
-							VehicleType: 'Bus',
-							Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
-						},
-					}] as T;
-				}
-				throw new Error('Request failed (404): No resources found for search query');
+				throw new Error(`Unexpected VehicleResource read: ${path}`);
 			};
-			apiClient.post = async <T>(): Promise<T> => ([{
-				VehicleId: '101',
-				VehicleNumber: 'BA 01 KHA 1234',
-				VehicleType: 'Bus',
-				Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567' }],
-			}] as T);
+			apiClient.post = async <T>(): Promise<T> => ({
+				Data: {
+					cache_results: [{
+						cache_id: 'cache-101',
+						VehicleId: '101',
+						VehicleNumber: 'Ga Pra-12-12-GHA-1221',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Old Owner' }],
+					}],
+					tqms_results: [{
+						VehicleId: '101',
+						VehicleNumber: 'Ga Pra-12-12-GHA-1223',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'New Owner' }],
+					}],
+				},
+			} as T);
 
-			const result = await reconcileVehicleLookup('BA 01 KHA 1234', {
-				receipts: [createMockReceipt('101', 'Ba 1 Ja 9876')],
-			});
+			const result = await reconcileVehicleLookup('Ga Pra-12-12-GHA-1223');
 
-			assert.ok(resourcePaths.includes('search/VehicleResource/VehicleId/101/all'));
-			assert.equal(result.type, 'MATCHED');
+			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
+			assert.equal(result.billingVehicle.vehicleNumber, 'Ga Pra-12-12-GHA-1221');
+			assert.equal(result.tqmsVehicle.vehicleNumber, 'Ga Pra-12-12-GHA-1223');
+			assert.ok(result.diffs.some((diff) => diff.key === 'vehicleNumber' && diff.isChanged));
 		});
 
 		test('returns RESOURCE_MISSING when vehicle has no VehicleResource', async () => {
@@ -586,29 +566,36 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			});
 		});
 
-		test('bypasses reconciliation and selects current TQMS details when the resource has no bill history', async () => {
+		test('reconciles cache changes even when there is no bill history', async () => {
 			apiClient.get = async <T>(): Promise<T> => ([{
-				id: 'res-101',
-				resource_name: 'VehicleResource',
-				inner_content: {
-					VehicleId: '101',
-					VehicleNumber: 'BA 01 KHA 1234',
-					VehicleType: 'Old Bus',
-					Owners: [{ Name: 'Old Owner' }],
-				},
-			}] as T);
-			apiClient.post = async <T>(): Promise<T> => ([{
+				cache_id: 'cache-101',
 				VehicleId: '101',
 				VehicleNumber: 'BA 01 KHA 1234',
-				VehicleType: 'Bus',
-				Owners: [{ Name: 'Current TQMS Owner' }],
+				VehicleType: 'Old Bus',
+				Owners: [{ Name: 'Old Owner' }],
 			}] as T);
+			apiClient.post = async <T>(): Promise<T> => ({
+				Data: {
+					cache_results: [{
+						cache_id: 'cache-101',
+						VehicleId: '101',
+						VehicleNumber: 'BA 01 KHA 1234',
+						VehicleType: 'Old Bus',
+						Owners: [{ Name: 'Old Owner' }],
+					}],
+					tqms_results: [{
+						VehicleId: '101',
+						VehicleNumber: 'BA 01 KHA 1234',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Current TQMS Owner' }],
+					}],
+				},
+			} as T);
 
 			const result = await reconcileVehicleLookup('BA 01 KHA 1234', { receipts: [] });
-			assert.equal(result.type, 'FIRST_TIME');
-			assert.equal(result.tqmsVehicle.vehicleType, 'Bus');
+			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
+			assert.equal(result.billingVehicle.vehicleType, 'Old Bus');
 			assert.equal(result.tqmsVehicle.ownerName, 'Current TQMS Owner');
-			assert.equal(result.billingResource, null);
 		});
 	});
 
@@ -747,9 +734,56 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 
 	describe('findVehicleResource API helper', () => {
 		const originalGet = apiClient.get;
+		const originalPut = apiClient.put;
 
 		afterEach(() => {
 			apiClient.get = originalGet;
+			apiClient.put = originalPut;
+		});
+
+		test('updateVehicleResource sends numeric resource id as an integer for backend i32 deserialization', async () => {
+			let capturedPath = '';
+			let capturedBody: Record<string, unknown> | undefined;
+			apiClient.put = async <T>(path: string, body?: unknown): Promise<T> => {
+				capturedPath = path;
+				capturedBody = body as Record<string, unknown>;
+				return undefined as T;
+			};
+
+			const resource = createMockResource('6490');
+			await updateVehicleResource(resource, resource.innerContent, resource.externalContent);
+
+			assert.equal(capturedPath, 'update/VehicleResource/6490');
+			assert.equal(capturedBody?.id, 6490);
+			assert.equal(typeof capturedBody?.id, 'number');
+		});
+
+		test('reconcileVehicleLookup sets numeric billingResource.resource.id as an integer from cache_id', async () => {
+			apiClient.post = async <T>(): Promise<T> => ({
+				Data: {
+					cache_results: [{
+						cache_id: '6490',
+						VehicleId: '101',
+						VehicleNumber: 'Ga Pra-12-12-GHA-1221',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Owner' }],
+					}],
+					tqms_results: [{
+						VehicleId: '101',
+						VehicleNumber: 'Ga Pra-12-12-GHA-1223',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Owner' }],
+					}],
+				},
+			} as T);
+
+			const result = await reconcileVehicleLookup('Ga Pra-12-12-GHA-1223', { receipts: [] });
+			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
+			if (result.type === 'RECONCILIATION_REQUIRED') {
+				assert.equal(result.billingResource.id, '6490');
+				assert.equal(result.billingResource.resource.id, 6490);
+				assert.equal(typeof result.billingResource.resource.id, 'number');
+			}
 		});
 
 		test('returns null when vehicle does not exist (404)', async () => {

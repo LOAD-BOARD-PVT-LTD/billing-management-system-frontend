@@ -54,13 +54,6 @@ export type ReconciliationLookupResult =
 			hasBillingHistory: boolean;
 	  }
 	| {
-			type: 'FIRST_TIME';
-			tqmsVehicle: BillingVehicle;
-			billingVehicle: null;
-			billingResource: null;
-			diffs: ReconciliationFieldDiff[];
-	  }
-	| {
 			type: 'MATCHED';
 			billingVehicle: BillingVehicle;
 			tqmsVehicle: BillingVehicle | null;

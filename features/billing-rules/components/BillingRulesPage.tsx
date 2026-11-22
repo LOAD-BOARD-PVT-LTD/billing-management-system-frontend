@@ -20,11 +20,9 @@ import { BillingRulesTable } from '@/features/billing-rules/components/BillingRu
 import { FeeHeadManager } from '@/features/billing-rules/components/configuration/FeeHeadManager';
 import { useBillingRuleConfig } from '@/features/billing-rules/hooks/useBillingRuleConfig';
 import type { BillingRule, FeeHead, Frequency, RuleStatus, Scope } from '@/features/billing-rules/model/types';
-import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
-import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
 import { findDuplicateRule } from '@/features/billing-rules/schemas/billingRuleSchema';
 import { filterBillingRules, groupVehicleTypeRules, sortBillingRules, type BillingRuleSortColumn } from '@/features/billing-rules/utils/rule-grouping';
-import { formatFiscalYearForDisplay, formatNepaliFiscalYearLabel, generateNepaliFiscalYearOptions, parseFiscalYear } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
+import { formatFiscalYearForDisplay } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 import { useTranslations } from '@/utils/translations';
 import { useVehicleTypes } from '@/features/vehicle/type/hooks/useVehicleTypes';
 import { useRouter } from 'next/navigation';
@@ -48,7 +46,6 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
     addFeeHead,
     updateFeeHead,
   } = useBillingRuleConfig();
-  const { settings: fiscalYearSelectorSettings } = useFiscalYearSelectorSettings();
   const { t } = useTranslations();
   const {
     records: billingEntities,
@@ -81,26 +78,16 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
     : null;
   const isRuleEditorOpen = Boolean(editRuleId) || ruleEditorOpen;
 
-  const selectorSettings = fiscalYearSelectorSettings ?? DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS;
-  const availableFiscalYears = useMemo(() => {
-    const visibleFiscalYearLabels = new Set(generateNepaliFiscalYearOptions({
-      yearsBack: selectorSettings.yearsBack,
-      yearsForward: selectorSettings.yearsForward,
-      archivedYears: selectorSettings.archivedYears,
-    }));
-    return config.fiscalYears.filter((year) => {
-      const fiscalYear = year.code ?? year.name;
-      const parsedYear = parseFiscalYear(fiscalYear);
-      if (parsedYear === null) return true;
-      const label = formatNepaliFiscalYearLabel(parsedYear);
-      return year.status === 'ACTIVE' || visibleFiscalYearLabels.has(label);
-    });
-  }, [config.fiscalYears, selectorSettings.archivedYears, selectorSettings.yearsBack, selectorSettings.yearsForward]);
-  const defaultFiscalYear = availableFiscalYears.find((year) => year.status === 'ACTIVE' && year.isDefault)
-    ?? availableFiscalYears.find((year) => year.status === 'ACTIVE');
+  const availableFiscalYears = config.fiscalYears;
+  const defaultFiscalYear = availableFiscalYears.find((year) => year.isDefault)
+    ?? availableFiscalYears[0];
+  const smartDefaultFiscalYearFilter = defaultFiscalYear
+    && (config.rules.some((rule) => rule.fiscalYearId === defaultFiscalYear.id) || config.rules.length === 0)
+    ? defaultFiscalYear.id
+    : 'all';
   const fiscalYearFilter = fiscalYearChoice === 'all' || availableFiscalYears.some((year) => year.id === fiscalYearChoice)
-    ? fiscalYearChoice ?? 'all'
-    : defaultFiscalYear?.id ?? 'all';
+    ? fiscalYearChoice ?? smartDefaultFiscalYearFilter
+    : smartDefaultFiscalYearFilter;
   const vehicleCategoryIds = vehicleCategories.map((category) => category.id);
   const activeVehicleCategoryFilter = vehicleCategoryIds.includes(vehicleCategoryFilter) ? vehicleCategoryFilter : 'all';
   const hasSearch = search.trim().length > 0;
@@ -453,7 +440,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
                 <SelectItem value="all">{t('filters.allFiscalYears')}</SelectItem>
                 {availableFiscalYears.map((year) => (
                   <SelectItem key={year.id} value={year.id}>
-                    {formatFiscalYearForDisplay(year.code ?? year.name)}{year.status === 'INACTIVE' ? ' · इतिहास' : ''}
+                    {formatFiscalYearForDisplay(year.code ?? year.name)}{year.isDefault ? ' · चालु' : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -526,6 +513,13 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
             />
           )}
         </section>
+      ) : error ? (
+        <ErrorState
+          title="बिलिङ नियम लोड हुन सकेन"
+          description={error}
+          retryLabel="फेरि प्रयास गर्नुहोस्"
+          onRetry={() => void reload()}
+        />
       ) : (
       <section className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5" aria-label="Billing Rules">
         <div className="grid gap-3 md:grid-cols-4">

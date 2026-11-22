@@ -1,19 +1,22 @@
-export { NotificationDashboard } from './components/NotificationDashboard';
+export { SmsProviderSettingsControl } from './components/SmsProviderSettingsControl';
+export { SmsTemplatesControl } from './components/SmsTemplatesControl';
 export {
-  DEFAULT_NOTIFICATION_SETTINGS,
+  DEFAULT_SAMAYASMS_BASE_URL,
+  DEFAULT_SMS_PROVIDER_CONFIG,
+  DEFAULT_SMS_SETTINGS,
+  DEFAULT_SMS_TEMPLATES,
   fetchNotificationSettings,
   saveNotificationSettings,
-  validateNotificationSettings,
+  saveSmsProviderConfig,
+  saveSmsTemplates,
+  validateSmsProviderConfig,
+  validateSmsTemplatesSettings,
 } from './api/notification-settings.api';
 export { useNotificationSettings } from './hooks/useNotificationSettings';
 export type {
-  NotificationAutomationRule,
-  NotificationCategory,
-  NotificationChannel,
-  NotificationHistoryItem,
-  NotificationManagementSettings,
-  NotificationRecord,
-  NotificationStatus,
-  NotificationTemplate,
+  SmsProviderConfig,
+  SmsProviderId,
+  SmsTemplate,
+  SmsTemplatesSettings,
 } from './types';
 export type { NotificationSettingsDocument } from './api/notification-settings.api';

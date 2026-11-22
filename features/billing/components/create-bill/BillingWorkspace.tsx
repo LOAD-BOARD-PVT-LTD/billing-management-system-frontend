@@ -8,7 +8,10 @@ import { getDefaultBillingEntityId } from '@/features/administration/billing-ent
 import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { buildBillResourceContent } from '@/features/billing/api/bill-resource.api';
-import { buildFeeHeadBillingItems } from '@/features/billing/utils/build-fee-head-billing-items';
+import {
+	buildFeeHeadBillingItems,
+	calculateBillingRuleAmount,
+} from '@/features/billing/utils/build-fee-head-billing-items';
 import {
   getCoveredLinkedFeeHeadIds,
   resolveLinkedBillingRuleIds,
@@ -43,19 +46,12 @@ import { useLinkedFeeRules } from '@/features/settings/hooks/useLinkedFeeRules';
 import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehicleBlacklist';
 import { PrintableBillReceipt } from '@/features/receipts/components/PrintableBillReceipt';
 import { resolveBillBranding } from '@/shared/document-generation/utils/resolve-bill-branding';
-import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
 import { useVatSettings } from '@/features/settings/hooks/useVatSettings';
 import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
 import {
   resolveReceiptPeriodEndStrategy,
   type ReceiptPeriodEndStrategy,
 } from '@/lib/receipts/period';
-import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
-import {
-  formatNepaliFiscalYearLabel,
-  generateNepaliFiscalYearOptions,
-  parseFiscalYear,
-} from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 
 import { getBillValidationMessages } from '@/features/billing/utils/bill-validation';
 
@@ -64,7 +60,6 @@ export function BillingWorkspace() {
   const { records: users } = useUsers();
   const billingRules = useBillingRules();
   const linkedFeeRuleSettings = useLinkedFeeRules();
-  const { settings: fiscalYearSelectorSettings } = useFiscalYearSelectorSettings();
   const vatSettings = useVatSettings();
   const { records: billingEntities } = useBillingEntities();
   const {
@@ -153,24 +148,10 @@ export function BillingWorkspace() {
     () => (savedBill ? resolveBillBranding(savedBill, billingEntities) : {}),
     [savedBill, billingEntities],
   );
-  const selectorSettings = fiscalYearSelectorSettings ?? DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS;
-  const availableFiscalYears = useMemo(() => {
-    const normalFiscalYearOptions = new Set(generateNepaliFiscalYearOptions({
-      yearsBack: selectorSettings.yearsBack,
-      yearsForward: selectorSettings.yearsForward,
-    }));
-    const archivedFiscalYearOptions = new Set(selectorSettings.archivedYears.flatMap((year) => {
-      const parsedYear = parseFiscalYear(year);
-      return parsedYear === null ? [] : [formatNepaliFiscalYearLabel(parsedYear)];
-    }));
-    return billingRules.config.fiscalYears.filter((year) => {
-      if (year.status !== 'ACTIVE') return false;
-      const parsedYear = parseFiscalYear(year.code ?? '') ?? parseFiscalYear(year.name);
-      if (parsedYear === null) return false;
-      const label = formatNepaliFiscalYearLabel(parsedYear);
-      return year.isDefault || (normalFiscalYearOptions.has(label) && !archivedFiscalYearOptions.has(label));
-    });
-  }, [billingRules.config.fiscalYears, selectorSettings]);
+  const availableFiscalYears = useMemo(
+    () => billingRules.config.fiscalYears.filter((year) => year.status === 'ACTIVE'),
+    [billingRules.config.fiscalYears],
+  );
   const defaultFiscalYear = availableFiscalYears.find((year) => year.isDefault) ?? availableFiscalYears[0];
   const fiscalYearId = availableFiscalYears.some((year) => year.id === selectedFiscalYearId)
     ? selectedFiscalYearId
@@ -313,7 +294,7 @@ export function BillingWorkspace() {
     paymentMethod: string,
     note: string,
     hasPeriodicBillingRule: boolean,
-    periodicRuleIds: ReadonlySet<string>,
+    monthlyPeriodicRuleIds: ReadonlySet<string>,
     ruleAmounts: Record<string, number>,
     mappedCategoryId: string,
   ) => {
@@ -364,7 +345,7 @@ export function BillingWorkspace() {
     setIsCheckingDuplicates(false);
 
     const billedItems = items.map((item) => (
-      item.ruleId && periodicRuleIds.has(item.ruleId)
+      item.ruleId && monthlyPeriodicRuleIds.has(item.ruleId)
         ? { ...item, billingMonths }
         : item
     ));
@@ -576,6 +557,7 @@ export function BillingWorkspace() {
                 rules,
                 billingEntities,
                 itemOverrides,
+                billingMonths,
               );
               const coveredFeeHeadIds = getCoveredLinkedFeeHeadIds(
                 existingBills,
@@ -602,10 +584,11 @@ export function BillingWorkspace() {
                 !billingDetails?.allowManualReceiptAmountOverride || selectedLinkedItemIds.has(rule.id)
               ));
               const periodicRules = selectedRules.filter((rule) => rule.frequency === 'PERIODIC');
-              const hasPeriodicBillingRule = periodicRules.length > 0;
-              const periodicRuleId = periodicRules[0]?.id ?? null;
-              const periodicRuleIds = new Set(periodicRules.map((rule) => rule.id));
-              const periodEndStrategy: ReceiptPeriodEndStrategy | null = hasPeriodicBillingRule
+              const monthlyPeriodicRules = periodicRules.filter((rule) => rule.period === 'MONTH');
+              const hasPeriodicBillingRule = monthlyPeriodicRules.length > 0;
+              const periodicRuleId = monthlyPeriodicRules[0]?.id ?? null;
+              const monthlyPeriodicRuleIds = new Set(monthlyPeriodicRules.map((rule) => rule.id));
+              const periodEndStrategy: ReceiptPeriodEndStrategy | null = periodicRules.length > 0
                 ? resolveReceiptPeriodEndStrategy(periodicRules.map((rule) => (
                   rule.validity === 'END_OF_MONTH'
                     ? 'END_OF_MONTH'
@@ -614,7 +597,10 @@ export function BillingWorkspace() {
                       : 'MATCH_START_DAY'
                 )))
                 : null;
-              const ruleAmounts = Object.fromEntries(rules.map((rule) => [rule.id, rule.amount]));
+              const ruleAmounts = Object.fromEntries(rules.map((rule) => [
+                rule.id,
+                calculateBillingRuleAmount(rule, billingMonths),
+              ]));
               const subtotal = includedItems.reduce((sum, item) => sum + Math.max(0, item.amount), 0);
               const vat = calculateConfiguredVat({
                 items: includedItems,
@@ -704,7 +690,7 @@ export function BillingWorkspace() {
                           paymentMethod,
                           note,
                           hasPeriodicBillingRule,
-                          periodicRuleIds,
+                          monthlyPeriodicRuleIds,
                           ruleAmounts,
                           mappedCategoryId,
                         )}

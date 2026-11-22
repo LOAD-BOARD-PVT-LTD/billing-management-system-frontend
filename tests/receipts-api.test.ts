@@ -1,6 +1,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  fetchReceipts,
   parseBillResource,
   recordReceiptPrint,
   cancelReceipt,
@@ -470,6 +471,112 @@ describe('4. Bill API, Receipts, and Numbering', () => {
       const lastAudit = putInner?.auditHistory.at(-1);
       assert.equal(lastAudit?.action, 'CORRECTED');
       assert.equal(lastAudit?.reason, 'Clerical correction');
+    });
+  });
+
+  describe('String fiscalYear & Legacy UUID resolution', () => {
+    test('parseBillResource parses BillResource with string fiscalYear and omitted fiscalYearId', () => {
+      const record = parseBillResource({
+        id: 18,
+        resource_name: 'BillResource',
+        createdAt: '2026-01-15T10:00:00Z',
+        inner_content: {
+          billingType: 'MEMBERSHIP',
+          vehicle: {
+            id: '201',
+            vehicleNumber: 'Ba 1 Ja 1818',
+            vehicleType: 'Taxi',
+            ownerName: 'Sita Sharma',
+            phone: '9841000018',
+            address: 'Kathmandu',
+          },
+          branch: { id: '1', name: 'Main Branch', BranchCode: 'MAIN' },
+          fiscalYear: '2082/83',
+          billingDate: '2082-10-01',
+          items: [{ feeHeadId: '3', title: 'वार्षिक शुल्क', billingEntityId: '1', billingEntity: 'Main', ruleId: '5', amount: 500 }],
+          subtotal: 500,
+          discount: 0,
+          total: 500,
+          paymentMethod: 'नगद',
+        },
+      });
+
+      assert.equal(record.id, '18');
+      assert.equal(record.fiscalYear, '2082/83');
+      assert.equal(record.bill.content.fiscalYearId, '2082/83');
+      assert.equal(record.bill.content.fiscalYearName, '2082/83');
+
+      const nepaliDigitsRecord = parseBillResource({
+        id: 19,
+        resource_name: 'BillResource',
+        createdAt: '2026-01-15T10:00:00Z',
+        inner_content: {
+          vehicle: { vehicleNumber: 'Ba 1 Ja 1919' },
+          branch: { id: '1', name: 'Main Branch', BranchCode: 'MAIN' },
+          fiscalYear: '२०८२/८३',
+          billingDate: '2082-10-01',
+          items: [{ title: 'Fee', amount: 100 }],
+        },
+      });
+      assert.equal(nepaliDigitsRecord.fiscalYear, '2082/83');
+      assert.equal(nepaliDigitsRecord.bill.content.fiscalYearId, '2082/83');
+      assert.equal(nepaliDigitsRecord.bill.content.fiscalYearName, '2082/83');
+    });
+
+    test('fetchReceipts resolves string fiscalYear and legacy UUID fiscalYearId via SettingResource or billingDate', async () => {
+      const bills = [
+        {
+          id: 18,
+          resource_name: 'BillResource',
+          createdAt: '2026-01-15T10:00:00Z',
+          inner_content: {
+            vehicle: { id: '201', vehicleNumber: 'Ba 1 Ja 1818', ownerName: 'Owner 18' },
+            branch: { id: '1', name: 'Main', BranchCode: 'MAIN' },
+            fiscalYear: '2082/83',
+            billingDate: '2082-10-01',
+            items: [{ title: 'Fee', amount: 100 }],
+          },
+        },
+        {
+          id: 19,
+          resource_name: 'BillResource',
+          createdAt: '2026-02-10T10:00:00Z',
+          inner_content: {
+            vehicle: { id: '202', vehicleNumber: 'Ba 1 Ja 1919', ownerName: 'Owner 19' },
+            branch: { id: '1', name: 'Main', BranchCode: 'MAIN' },
+            fiscalYearId: '15f21721-50e8-41af-9596-9d8cdb8d6a16',
+            billingDate: '2026-02-10',
+            items: [{ title: 'Fee', amount: 200 }],
+          },
+        },
+      ];
+
+      apiClient.get = async <T>(path: string): Promise<T> => {
+        if (path.includes('BillResource')) return bills as T;
+        if (path.includes('SettingResource')) {
+          return [{
+            id: 1,
+            resource_name: 'SettingResource',
+            inner_content: {
+              schemaVersion: 1,
+              integrations: { tqms: { SanghBranch: 'Loadboard sthaniya' } },
+              fiscalYear: { selector: { yearsBack: 4, yearsForward: 1, archivedYears: [] } },
+            },
+          }] as T;
+        }
+        throw new Error(`Unexpected GET ${path}`);
+      };
+
+      const receipts = await fetchReceipts();
+      assert.equal(receipts.length, 2);
+      assert.equal(receipts[0].fiscalYear, '2082/83');
+      assert.equal(receipts[0].bill.content.fiscalYearId, '2082/83');
+      assert.equal(receipts[0].bill.content.fiscalYearName, '2082/83');
+
+      // UUID falls back to billingDate (2026-02-10 -> Magh 2082 -> 2082/83)
+      assert.equal(receipts[1].fiscalYear, '2082/83');
+      assert.equal(receipts[1].bill.content.fiscalYearId, '2082/83');
+      assert.equal(receipts[1].bill.content.fiscalYearName, '2082/83');
     });
   });
 });

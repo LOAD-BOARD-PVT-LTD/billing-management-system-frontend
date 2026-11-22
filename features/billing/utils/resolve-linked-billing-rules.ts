@@ -7,6 +7,7 @@ type LinkedFeeReceipt = {
 		content: {
 			vehicle: { id: string };
 			fiscalYearId: string;
+			fiscalYearName?: string;
 			items: readonly { feeHeadId: string }[];
 		};
 	};
@@ -21,7 +22,10 @@ export function getCoveredLinkedFeeHeadIds(
 		.filter((receipt) => (
 			receipt.status === 'PAID'
 			&& receipt.bill.content.vehicle.id === vehicleId
-			&& receipt.bill.content.fiscalYearId === fiscalYearId
+			&& (
+				receipt.bill.content.fiscalYearId === fiscalYearId
+				|| receipt.bill.content.fiscalYearName === fiscalYearId
+			)
 		))
 		.flatMap((receipt) => receipt.bill.content.items.map((item) => item.feeHeadId)));
 }

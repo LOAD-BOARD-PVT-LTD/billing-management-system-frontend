@@ -28,6 +28,29 @@ export function resourceEndpoints(resourceName: string): ResourceEndpoints {
   };
 }
 
+function fiscalYearEndpoint(path: string, fiscalYear?: string): string {
+  return fiscalYear
+    ? `${path}/${encodeURIComponent(fiscalYear)}`
+    : path;
+}
+
+function memberStatisticEndpoints(prefix: string) {
+  return {
+    all: (fiscalYear?: string) => fiscalYearEndpoint(prefix, fiscalYear),
+    totalUsers: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/total_users`, fiscalYear),
+    total: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/total`, fiscalYear),
+    totalActiveUsers: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/total_active_users`, fiscalYear),
+    active: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/active`, fiscalYear),
+    newUsers: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/new_users`, fiscalYear),
+    new: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/new`, fiscalYear),
+    displacedUsers: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/displaced_users`, fiscalYear),
+    displaced: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/displaced`, fiscalYear),
+    inactiveYear: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/inactive_year`, fiscalYear),
+    totalInactiveUsers: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/total_inactive_users`, fiscalYear),
+    inactive: (fiscalYear?: string) => fiscalYearEndpoint(`${prefix}/inactive`, fiscalYear),
+  };
+}
+
 export const endpoints = {
   resources: {
     billingEntity: resourceEndpoints('BillingEntityResource'),
@@ -51,6 +74,11 @@ export const endpoints = {
     vehicleTypes: 'read_all/VehicleTypes',
     syncVehicleTypes: 'tqms/sync',
   },
+  dashboard: {
+    statistics: (fiscalYear?: string) => fiscalYearEndpoint('dashboard/statistics', fiscalYear),
+    members: memberStatisticEndpoints('dashboard/members'),
+  },
+  members: memberStatisticEndpoints('members'),
   internal: {
     globalSearch: (query: string) => `/api/search?q=${encodeURIComponent(query)}`,
   },

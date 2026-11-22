@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { getTqmsVehicleDetails } from '../api/tqms-vehicle-details.api';
+import { getTqmsVehicleDetails } from '../../vehicle/tqms/api/tqms-vehicle-details.api';
 import { billingKeys } from '@/lib/query/query-keys';
 
 export function useTqmsVehicleDetails(vehicleNumber: string) {

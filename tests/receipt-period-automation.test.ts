@@ -25,6 +25,19 @@ test('monthly periodic END_OF_MONTH validity expires on the end of the selected 
 	assert.equal(resolveExpiry(3, 'END_OF_MONTH'), '2083-03-32');
 });
 
+test('yearly periodic validity expires at the selected fiscal year end', () => {
+	assert.equal(resolveReceiptAutoPeriodToDateBs({
+		periodFromBs: '2081-04-01',
+		billingMonths: 1,
+		periodEndStrategy: 'FISCAL_YEAR_END',
+		hasRecurringRule: true,
+		advanceMatchStartDay: false,
+		periodToDateManuallyEdited: false,
+		currentPeriodToBs: '',
+		selectedFiscalYear: '2081/82',
+	}), '2082-03-32');
+});
+
 test('a manually selected expiry date overrides periodic auto-selection', () => {
 	assert.equal(resolveReceiptAutoPeriodToDateBs({
 		periodFromBs: '2083-01-19',

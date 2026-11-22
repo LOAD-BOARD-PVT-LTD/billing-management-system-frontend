@@ -4,6 +4,25 @@ import { EMPTY_BILLING_RULE_CONFIG } from '@/features/billing-rules/model/defaul
 import type { BillingRule, BillingRuleConfig, FeeHead, FiscalYear, Validity } from '@/features/billing-rules/model/types';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { getPeriodForFrequency, getValidityForFrequency } from '@/features/billing-rules/utils/rule-period-policy';
+import { formatNepaliFiscalYearLabel } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
+
+export function canonicalizeFiscalYearLabel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/[०-९]/gu, (digit) => String('०१२३४५६७८९'.indexOf(digit)));
+  const match = /^(\d{4})\s*[/\-]\s*(\d{2,4})$/u.exec(normalized);
+  if (!match) return null;
+  const startYear = Number.parseInt(match[1], 10);
+  const trailingRaw = match[2];
+  const expectedTwoDigit = (startYear + 1) % 100;
+  if (trailingRaw.length === 2) {
+    if (Number.parseInt(trailingRaw, 10) !== expectedTwoDigit) return null;
+  } else if (trailingRaw.length === 4) {
+    if (Number.parseInt(trailingRaw, 10) !== startYear + 1) return null;
+  } else {
+    return null;
+  }
+  return formatNepaliFiscalYearLabel(startYear);
+}
 
 export interface BillingRuleResourceDocument {
   resourceId: string | null;
@@ -64,30 +83,47 @@ function resourceId(value: unknown): string | null {
 }
 
 function normalizeFeeHead(value: unknown, fallbackId?: unknown, fallbackFiscalYearId?: unknown): FeeHead | null {
-  const record = asRecord(value);
+  const record = asRecord(parseSerializedJson(value));
   const id = idString(record?.id ?? fallbackId);
   if (!id) return null;
+  const rawFiscalYearId = idString(
+    record?.fiscalYearId
+    ?? record?.fiscal_year_id
+    ?? record?.fiscalYear
+    ?? fallbackFiscalYearId,
+  );
+  const fiscalYearId = rawFiscalYearId
+    ? canonicalizeFiscalYearLabel(rawFiscalYearId) ?? rawFiscalYearId
+    : null;
   return {
     id,
     code: typeof record?.code === 'string' ? record.code : id,
     displayOrder: Number.isInteger(record?.displayOrder ?? record?.display_order)
       ? Number(record?.displayOrder ?? record?.display_order)
       : undefined,
-    fiscalYearId: idString(record?.fiscalYearId ?? record?.fiscal_year_id ?? fallbackFiscalYearId),
+    fiscalYearId,
     name: typeof record?.name === 'string' ? record.name : id,
     status: record?.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
   };
 }
 
 function normalizeFiscalYear(value: unknown, fallbackId?: unknown): FiscalYear | null {
-  const record = asRecord(value);
-  const id = idString(record?.id ?? fallbackId);
-  if (!id) return null;
+  const parsedValue = parseSerializedJson(value);
+  const record = asRecord(parsedValue);
+  const rawId = idString(record?.id ?? (record ? undefined : parsedValue) ?? fallbackId);
+  if (!rawId) return null;
+  const canonicalLabel = canonicalizeFiscalYearLabel(
+    typeof record?.code === 'string'
+      ? record.code
+      : typeof record?.name === 'string'
+        ? record.name
+        : (!record ? rawId : undefined),
+  );
   return {
-    id,
-    code: typeof record?.code === 'string' ? record.code : undefined,
+    id: !record && canonicalLabel ? canonicalLabel : rawId,
+    code: typeof record?.code === 'string' ? record.code : (canonicalLabel ?? undefined),
     isDefault: record?.isDefault === true || record?.is_default === true,
-    name: typeof record?.name === 'string' ? record.name : id,
+    name: typeof record?.name === 'string' ? record.name : (canonicalLabel ?? rawId),
     startDate: typeof record?.startDate === 'string' ? record.startDate : '',
     endDate: typeof record?.endDate === 'string' ? record.endDate : '',
     status: record?.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
@@ -98,9 +134,13 @@ function normalizeRule(candidate: unknown, rootId?: unknown): BillingRule | null
   const record = asRecord(candidate);
   if (!record) return null;
 
-  const fiscalYearId = idString(record.fiscalYearId ?? record.fiscal_year_id ?? record.fiscalYear);
-  const feeHead = normalizeFeeHead(record.feeHead, record.feeHeadId, fiscalYearId);
-  const fiscalYear = normalizeFiscalYear(record.fiscalYear, record.fiscalYearId);
+  const rawFiscalYearFallback = record.fiscalYearId ?? record.fiscal_year_id;
+  const fiscalYear = normalizeFiscalYear(record.fiscalYear, rawFiscalYearFallback);
+  const feeHead = normalizeFeeHead(
+    record.feeHead ?? record.fee_head,
+    record.feeHeadId ?? record.fee_head_id,
+    fiscalYear?.id,
+  );
   const id = idString(rootId ?? record.id ?? record.resourceId);
   if (!id || !feeHead || !fiscalYear) return null;
 
@@ -110,7 +150,7 @@ function normalizeRule(candidate: unknown, rootId?: unknown): BillingRule | null
   const scope = record.scope;
   const periodValue = record.period === 'MONTH' || record.period === 'FISCAL_YEAR'
     ? record.period
-    : record.period === null && record.frequency === 'ONE_TIME'
+    : (record.period === null || record.period === undefined) && record.frequency === 'ONE_TIME'
       ? null
       : undefined;
   if (periodValue === undefined) return null;
@@ -121,8 +161,15 @@ function normalizeRule(candidate: unknown, rootId?: unknown): BillingRule | null
   const validity: Validity = getValidityForFrequency(record.frequency, validityValue as Validity);
   const period = getPeriodForFrequency(record.frequency, validity);
   const amount = Number(record.amount);
-  const vehicleCategoryId = scope === 'COMMON' ? null : idString(record.vehicleCategoryId ?? record.vehicleTypeId);
-  const billingEntityValue = parseSerializedJson(record.billingEntity);
+  const vehicleCategoryId = scope === 'COMMON'
+    ? null
+    : idString(
+      record.vehicleCategoryId
+      ?? record.vehicle_category_id
+      ?? record.vehicleTypeId
+      ?? record.vehicle_type_id,
+    );
+  const billingEntityValue = parseSerializedJson(record.billingEntity ?? record.billing_entity);
   const entityId = idString(
     record.billingEntityId
     ?? record.billing_entity_id
@@ -161,7 +208,7 @@ function uniqueById<T extends { id: string }>(items: T[]): T[] {
 function toConfig(value: unknown, rootId?: unknown): BillingRuleConfig {
   const root = asRecord(value);
   if (!root) return EMPTY_BILLING_RULE_CONFIG;
-  const inner = asRecord(root.inner_content) ?? root;
+  const inner = asRecord(parseSerializedJson(root.inner_content ?? root.innerContent)) ?? root;
 
   if (inner.resourceType === 'FISCAL_YEAR') {
     const fiscalYear = normalizeFiscalYear(inner, rootId ?? root.id);
@@ -209,8 +256,12 @@ function toConfig(value: unknown, rootId?: unknown): BillingRuleConfig {
 
   const rule = normalizeRule(inner, rootId ?? root.id);
   if (!rule) return EMPTY_BILLING_RULE_CONFIG;
-  const feeHead = normalizeFeeHead(inner.feeHead, inner.feeHeadId, idString(inner.fiscalYearId ?? inner.fiscalYear));
-  const fiscalYear = normalizeFiscalYear(inner.fiscalYear, inner.fiscalYearId);
+  const fiscalYear = normalizeFiscalYear(inner.fiscalYear, inner.fiscalYearId ?? inner.fiscal_year_id);
+  const feeHead = normalizeFeeHead(
+    inner.feeHead ?? inner.fee_head,
+    inner.feeHeadId ?? inner.fee_head_id,
+    fiscalYear?.id,
+  );
   if (!feeHead || !fiscalYear) return EMPTY_BILLING_RULE_CONFIG;
   return {
     version: 1,
@@ -225,7 +276,12 @@ function getResourceList(payload: unknown): unknown[] {
   if (Array.isArray(payload)) return payload;
   const root = asRecord(payload);
   if (!root) return [];
-  if (root.resource_name === 'BillingRuleResource' && root.inner_content !== undefined) return [payload];
+  if (
+    (root.resource_name === 'BillingRuleResource' || root.resourceName === 'BillingRuleResource')
+    && (root.inner_content !== undefined || root.innerContent !== undefined)
+  ) {
+    return [payload];
+  }
 
   for (const key of ['data', 'Data', 'item', 'Item', 'items', 'Items', 'result', 'Result', 'results', 'Results', 'resource', 'Resource', 'resources', 'Resources', 'record', 'Record', 'records', 'Records']) {
     const value = root[key];
@@ -235,7 +291,8 @@ function getResourceList(payload: unknown): unknown[] {
   const values = Object.values(root);
   if (values.length > 0 && values.every((value) => {
     const record = asRecord(value);
-    return record?.resource_name === 'BillingRuleResource' && record.inner_content !== undefined;
+    return (record?.resource_name === 'BillingRuleResource' || record?.resourceName === 'BillingRuleResource')
+      && (record.inner_content !== undefined || record.innerContent !== undefined);
   })) {
     return values;
   }
@@ -294,7 +351,7 @@ export async function listBillingRuleResources(): Promise<BillingRuleResourceDoc
   }
   const documents = getResourceList(payload).map(mapBillingRuleResource);
   if (documents.some((document) => !(
-    document.config.rules.length === 1
+    document.config.rules.length >= 1
     || (document.config.rules.length === 0 && document.config.feeHeads.length === 1 && document.config.fiscalYears.length === 0)
     || (document.config.rules.length === 0 && document.config.feeHeads.length === 0 && document.config.fiscalYears.length === 1)
   ))) {
@@ -337,18 +394,6 @@ function toFeeHeadResourceContent(feeHead: FeeHead): ResourceRecord {
   };
 }
 
-function toFiscalYearResourceContent(fiscalYear: FiscalYear): ResourceRecord {
-  return {
-    resourceType: 'FISCAL_YEAR',
-    code: fiscalYear.code,
-    name: fiscalYear.name,
-    startDate: fiscalYear.startDate,
-    endDate: fiscalYear.endDate,
-    status: fiscalYear.status,
-    isDefault: fiscalYear.isDefault === true,
-  };
-}
-
 function fallbackFeeHeadDocument(feeHead: FeeHead, id: string): BillingRuleResourceDocument {
   return {
     resourceId: id,
@@ -359,44 +404,6 @@ function fallbackFeeHeadDocument(feeHead: FeeHead, id: string): BillingRuleResou
       rules: [],
     },
   };
-}
-
-function fallbackFiscalYearDocument(fiscalYear: FiscalYear, id: string): BillingRuleResourceDocument {
-  return {
-    resourceId: id,
-    config: {
-      version: 1,
-      feeHeads: [],
-      fiscalYears: [{ ...fiscalYear, id }],
-      rules: [],
-    },
-  };
-}
-
-export async function createBillingRuleFiscalYear(fiscalYear: FiscalYear): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.post<unknown>(endpoints.resources.billingRule.create(), {
-    resource_name: 'BillingRuleResource',
-    inner_content: toFiscalYearResourceContent(fiscalYear),
-    external_content: null,
-  });
-  const document = mapBillingRuleResource(payload);
-  if (!document.resourceId) throw new Error('The created Fiscal Year did not return a resource ID.');
-  return document.config.fiscalYears.length ? document : fallbackFiscalYearDocument(fiscalYear, document.resourceId);
-}
-
-export async function updateBillingRuleFiscalYear(id: string, fiscalYear: FiscalYear): Promise<BillingRuleResourceDocument> {
-  const payload = await apiClient.put<unknown>(endpoints.resources.billingRule.update(id), {
-    id: resourceIdValue(id),
-    resource_name: 'BillingRuleResource',
-    inner_content: toFiscalYearResourceContent(fiscalYear),
-    external_content: null,
-  });
-  const returnedId = resourceId(payload);
-  if (!returnedId) return fallbackFiscalYearDocument(fiscalYear, id);
-  const document = mapBillingRuleResource(payload);
-  return document.config.fiscalYears.length
-    ? document
-    : fallbackFiscalYearDocument(fiscalYear, returnedId);
 }
 
 export async function createBillingRuleFeeHead(feeHead: FeeHead): Promise<BillingRuleResourceDocument> {

@@ -36,6 +36,7 @@ import {
 } from '@/features/reconciliation';
 import { VehiclePhoneUpdateDialog } from './VehiclePhoneUpdateDialog';
 import type { BillingVehicle } from '@/features/billing/model/types';
+import type { TqmsVehicleSearchMatch } from '@/features/billing/schemas/tqms-vehicle-search.schema';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 
@@ -84,7 +85,7 @@ export const BillingHeader = memo(function BillingHeader({
 	} = useUpdateBillingVehicleManagementTags();
 	const { reconcileLookup, isReconciling } = useVehicleReconciliation();
 
-	const { vehicles, isLoading, error } = useTqmsVehicleSearch(
+	const { matches, isLoading, error } = useTqmsVehicleSearch(
 		query,
 		isOpen,
 	);
@@ -143,23 +144,17 @@ export const BillingHeader = memo(function BillingHeader({
 		}
 	};
 
-	const handleSelect = async (vehicle: BillingVehicle) => {
+	const handleSelect = async (vehicle: BillingVehicle, searchMatch?: TqmsVehicleSearchMatch) => {
 		setQuery(vehicle.vehicleNumber);
 		setIsOpen(false);
 
 		try {
 			const billingHistory = await loadReceipts();
 			const result = await reconcileLookup(vehicle.vehicleNumber, {
-				preloadedTqms: vehicle,
+				...(searchMatch ? { preloadedMatch: searchMatch } : {}),
 				fallbackSmsPhone: vehicle.smsPhone,
 				receipts: billingHistory,
 			});
-
-			if (result.type === 'FIRST_TIME') {
-				onVehicleResourceStatusChange(null);
-				if (result.tqmsVehicle.id !== selectedVehicle?.id) onSelectVehicle(result.tqmsVehicle);
-				return;
-			}
 
 			if (result.type === 'RESOURCE_MISSING') {
 				onVehicleResourceStatusChange(result.tqmsVehicle.tqmsVehicleId);
@@ -240,27 +235,28 @@ export const BillingHeader = memo(function BillingHeader({
 					id="billing-vehicle-search"
 					value={query}
 					open={isOpen}
-					items={vehicles}
+					items={matches}
 					isLoading={isLoading || isReconciling}
 					errorMessage={error}
 					filterItems={false}
 					selectedKey={selectedVehicle?.id}
 					placeholder={isReconciling ? 'विवरण प्रमाणीकरण गर्दैछ...' : 'सवारी नम्बर खोज्नुहोस्...'}
 					emptyMessage="मिल्ने सवारी भेटिएन। नम्बर जाँच्नुहोस् वा अर्को नम्बर खोज्नुहोस्।"
-					getKey={(vehicle) => vehicle.id}
-					getSearchText={(vehicle) => vehicle.vehicleNumber}
+					getKey={(match) => match.tqmsVehicle.id}
+					getSearchText={(match) => match.tqmsVehicle.vehicleNumber}
 					onValueChange={(value) => {
 						setQuery(value);
 						if (selectedVehicle) onClearSelection();
 					}}
 					onOpenChange={setIsOpen}
-					onSelect={(vehicle) => void handleSelect(vehicle)}
-					renderItem={(vehicle, isSelected) => (
+					onSelect={(match) => void handleSelect(match.tqmsVehicle, match)}
+					renderItem={(match, isSelected) => (
 						<>
 							<span className="min-w-0">
-								<span className="block truncate font-medium">{vehicle.vehicleNumber}</span>
+								<span className="block truncate font-medium">{match.tqmsVehicle.vehicleNumber}</span>
 								<span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-									{vehicle.vehicleType} · {vehicle.ownerName}
+									{match.tqmsVehicle.vehicleType} · {match.tqmsVehicle.ownerName}
+									{match.cacheVehicle ? ' · बिलिङमा अभिलेख छ' : ''}
 								</span>
 							</span>
 							{isSelected && (

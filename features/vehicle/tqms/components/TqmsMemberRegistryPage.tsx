@@ -41,7 +41,7 @@ function downloadCsv(rows: TqmsRegistryVehicle[]) {
   const columns: Array<[string, (row: TqmsRegistryVehicle) => string]> = [
     ['सवारी नम्बर', (row) => row.vehicleNumber],
     ['सवारी प्रकार', (row) => row.vehicleType],
-    ['सञ्चालक', (row) => row.operatorName ?? row.vehicleOwnerName],
+    ['संचालक', (row) => row.operatorName ?? row.vehicleOwnerName],
     ['सवारी धनी', (row) => row.vehicleOwnerName],
     ['फोन नम्बर', (row) => row.phone],
     ['संघ शाखा', (row) => row.branch],
@@ -186,11 +186,11 @@ export function TqmsMemberRegistryPage() {
     },
     {
       id: 'owner',
-      header: 'सवारी धनी / सञ्चालक',
+      header: 'सवारी धनी / संचालक',
       cell: (vehicle) => (
         <div className="max-w-64 space-y-0.5">
           <p className="break-words">{vehicle.vehicleOwnerName}</p>
-          {vehicle.operatorName && vehicle.operatorName !== vehicle.vehicleOwnerName ? <p className="break-words text-xs text-muted-foreground">सञ्चालक: {vehicle.operatorName}</p> : null}
+          {vehicle.operatorName && vehicle.operatorName !== vehicle.vehicleOwnerName ? <p className="break-words text-xs text-muted-foreground">संचालक: {vehicle.operatorName}</p> : null}
           {vehicle.address ? <p className="line-clamp-2 break-words text-[11px] text-muted-foreground">{vehicle.address}</p> : null}
         </div>
       ),

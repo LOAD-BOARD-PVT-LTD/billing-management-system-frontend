@@ -340,7 +340,7 @@ export function VehicleCategoryReportPage() {
       { label: 'सवारी प्रकार', value: (row) => row.vehicleType },
       { label: 'रुट परमिट', value: (row) => row.route },
       { label: 'रुट परमिट म्याद समाप्ति मिति', value: (row) => row.routePermitExpiry },
-      { label: 'धनीको नाम', value: (row) => `${row.operatorName ? `सञ्चालक: ${row.operatorName} ` : ''}धनीको नाम: ${row.ownerName}` },
+      { label: 'धनीको नाम', value: (row) => `${row.operatorName ? `संचालक: ${row.operatorName} ` : ''}धनीको नाम: ${row.ownerName}` },
       { label: 'कैफियत', value: (row) => row.note },
       { label: 'रसिद नं.', value: (row) => row.receiptNumber },
       { label: 'सदस्यताबाट', value: (row) => row.membershipIncome },
@@ -476,7 +476,7 @@ export function VehicleCategoryReportPage() {
                     <TableCell>{row.route}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.routePermitExpiry === '—' ? '—' : formatReportDate(row.routePermitExpiry)}</TableCell>
                     <TableCell className="whitespace-normal">
-                      {row.operatorName ? <span className="block text-xs text-muted-foreground">सञ्चालक: {row.operatorName}</span> : null}
+                      {row.operatorName ? <span className="block text-xs text-muted-foreground">संचालक: {row.operatorName}</span> : null}
                       <span className="block text-xs">धनीको नाम: {row.ownerName}</span>
                     </TableCell>
                     <TableCell className="max-w-48 truncate" title={row.receipt.bill.content.note}>{row.receipt.bill.content.note || '—'}</TableCell>

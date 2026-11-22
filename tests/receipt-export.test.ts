@@ -25,7 +25,7 @@ function makeReceipt(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
         vehicle: {
           vehicleNumber: 'DH-01-GHA',
           ownerName: 'सवारी धनी',
-          operatorName: 'सञ्चालक',
+          operatorName: 'संचालक',
           phone: '',
           smsPhone: '',
         },
@@ -43,7 +43,7 @@ test('receipt export formats owner names as separate lines and leaves single own
 
   assert.equal(
     receiptExportValue(makeReceipt(), 'customer'),
-    'सञ्चालक: सञ्चालक\nधनीको नाम: सवारी धनी',
+    'संचालक: संचालक\nधनीको नाम: सवारी धनी',
   );
   assert.equal(
     receiptExportValue(singleOwnerReceipt, 'customer'),
@@ -72,6 +72,6 @@ test('receipt export CSV keeps owner line breaks inside a cell and follows selec
   const csv = buildReceiptExportCsv([makeReceipt()], columns);
 
   assert.equal(csv.split('\r\n')[0], '"रसिद नं.","सदस्य नाम","स्थिति","कुल रकम"');
-  assert.match(csv, /"सञ्चालक: सञ्चालक\nधनीको नाम: सवारी धनी"/u);
+  assert.match(csv, /"संचालक: संचालक\nधनीको नाम: सवारी धनी"/u);
   assert.match(csv, /"CANCELLED","०\.००"$/u);
 });

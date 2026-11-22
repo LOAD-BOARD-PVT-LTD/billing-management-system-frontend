@@ -384,7 +384,7 @@ export function VehicleTypeRuleMatrix({
               required
               value={meetingReference}
               onChange={(event) => setMeetingReference(event.target.value)}
-              placeholder="उदाहरण: २०८२/०३/२१ को सञ्चालक समिति बैठक"
+              placeholder="उदाहरण: २०८२/०३/२१ को संचालक समिति बैठक"
             />
           </div>
           <div className="space-y-1.5">

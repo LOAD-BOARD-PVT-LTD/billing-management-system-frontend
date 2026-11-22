@@ -33,6 +33,18 @@ function parseDate(value: string): Date | undefined {
 		: undefined;
 }
 
+function parseGregorianDate(value: string): Date | undefined {
+		const match = /^(\d{4})-(\d{2})-(\d{2})/u.exec(value.trim());
+		if (!match) return undefined;
+		const year = Number(match[1]);
+		const month = Number(match[2]);
+		const day = Number(match[3]);
+		const date = new Date(year, month - 1, day);
+		return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+			? date
+			: undefined;
+}
+
 type VehicleBillingProps = {
 	vehicle: BillingVehicle;
 	fiscalYears: FiscalYear[];
@@ -84,7 +96,16 @@ export const VehicleBilling = memo(function VehicleBilling({
 		: '');
 
 	useEffect(() => {
-		if (!periodStart || !periodEndStrategy) return;
+		if (!periodStart || !periodEndStrategy || periodEndManuallyEdited) return;
+		if (periodEndStrategy === 'FISCAL_YEAR_END' && selectedFiscalYear?.endDate) {
+			const fiscalYearEnd = parseGregorianDate(selectedFiscalYear.endDate);
+			if (fiscalYearEnd) {
+				setPeriodEnd((current) => (
+					current?.getTime() === fiscalYearEnd.getTime() ? current : fiscalYearEnd
+				));
+				return;
+			}
+		}
 		const periodToBs = resolveReceiptAutoPeriodToDateBs({
 			periodFromBs: formatBikramSambatDate(periodStart),
 			billingMonths,
@@ -102,7 +123,7 @@ export const VehicleBilling = memo(function VehicleBilling({
 				current?.getTime() === nextPeriodEnd.getTime() ? current : nextPeriodEnd
 			));
 		}
-	}, [billingMonths, periodEnd, periodEndManuallyEdited, periodEndStrategy, periodStart, selectedFiscalYear?.code, selectedFiscalYear?.name]);
+	}, [billingMonths, periodEnd, periodEndManuallyEdited, periodEndStrategy, periodStart, selectedFiscalYear?.code, selectedFiscalYear?.endDate, selectedFiscalYear?.name]);
 
 	useEffect(() => {
 		onBillingDetailsChange({

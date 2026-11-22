@@ -171,7 +171,7 @@ function ExpiryCell({ period }: { period: VehicleDocumentPeriod }) {
 }
 
 function downloadArrearsCsv(rows: ArrearsListRow[], view: ArrearsView) {
-  const headers = ['सवारी नम्बर', 'सवारी प्रकार', 'धनीको नाम', 'सञ्चालक', 'फोन नम्बर', 'रसिद नम्बर', 'भुक्तानी मिति', 'म्याद'];
+  const headers = ['सवारी नम्बर', 'सवारी प्रकार', 'धनीको नाम', 'संचालक', 'फोन नम्बर', 'रसिद नम्बर', 'भुक्तानी मिति', 'म्याद'];
   const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
   const data = rows.map((row) => [
     row.vehicleNumber,

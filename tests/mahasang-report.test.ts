@@ -39,7 +39,7 @@ function makeReceipt(overrides: Partial<ReceiptRecord> = {}): ReceiptRecord {
           vehicleNumber: 'BA 1 CHA 1111',
           vehicleType: 'बस',
           ownerName: 'सवारी धनी',
-          operatorName: 'सञ्चालक',
+          operatorName: 'संचालक',
           phone: '9800000001',
           smsPhone: '9800000002',
           address: '',
@@ -71,12 +71,12 @@ test('Mahasang report includes owner/operator details and falls back to the avai
   const [row] = buildMahasangRows([makeReceipt({ customerPhone: '' })]);
 
   assert.equal(row.ownerName, 'सवारी धनी');
-  assert.equal(row.operatorName, 'सञ्चालक');
+  assert.equal(row.operatorName, 'संचालक');
   assert.equal(row.ownerPhone, '9800000002');
   assert.deepEqual(
     getMemberOwnerDisplayLines(row.ownerName, row.operatorName),
     [
-      { label: 'सञ्चालक:', name: 'सञ्चालक', suffix: '' },
+      { label: 'संचालक:', name: 'संचालक', suffix: '' },
       { label: 'धनीको नाम:', name: 'सवारी धनी', suffix: '' },
     ],
   );

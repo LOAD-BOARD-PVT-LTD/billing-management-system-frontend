@@ -8,11 +8,14 @@ export const validityOptionsByFrequency: Record<Frequency, Array<{ value: Validi
   PERIODIC: [
     { value: 'SAME_DAY', label: 'अर्को महिनाको सोही दिन' },
     { value: 'END_OF_MONTH', label: 'महिनाको अन्त्य' },
+    { value: 'END_OF_FISCAL_YEAR', label: 'आर्थिक वर्षको अन्त्य' },
   ],
 };
 
 export function getPeriodForFrequency(frequency: Frequency, validity: Validity): Period | null {
-  if (frequency === 'PERIODIC') return 'MONTH';
+  if (frequency === 'PERIODIC') {
+    return validity === 'END_OF_FISCAL_YEAR' ? 'FISCAL_YEAR' : 'MONTH';
+  }
   return validity === 'END_OF_FISCAL_YEAR' ? 'FISCAL_YEAR' : null;
 }
 

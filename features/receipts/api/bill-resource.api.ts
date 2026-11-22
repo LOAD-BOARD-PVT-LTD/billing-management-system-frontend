@@ -3,9 +3,37 @@ import { endpoints } from '@/lib/api/endpoints';
 import { receiptsKeys } from '@/lib/query/query-keys';
 import { formatBranchReceiptNumber } from '@/lib/receipts/receipt-number-display';
 import type { BillResourceContent, SavedBill } from '@/features/billing/model/bill.types';
+import { canonicalizeFiscalYearLabel } from '@/features/billing-rules/api/billingRuleResource';
 import { fetchFiscalYearManagement } from '@/features/settings/api/fiscal-year-management.api';
 import { calculateConfiguredVat } from '@/lib/receipts/vat-apply-rule';
+import {
+  formatNepaliFiscalYearLabel,
+  getNepaliFiscalYear,
+} from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 import type { ReceiptRecord, ReceiptStatus } from '../model/receipt';
+
+function deriveFiscalYearFromDateString(dateStr: string): string | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim().replace(/[०-९]/gu, (digit) => String('०१२३४५६७८९'.indexOf(digit)));
+  const match = /^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})/u.exec(trimmed);
+  if (!match) return null;
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day) || month < 1 || month > 12 || day < 1 || day > 32) {
+    return null;
+  }
+  if (year >= 2050) {
+    return formatNepaliFiscalYearLabel(month >= 4 ? year : year - 1);
+  }
+  if (year >= 1990) {
+    const adDate = new Date(Date.UTC(year, month - 1, day, 6, 0, 0));
+    if (!Number.isNaN(adDate.getTime())) {
+      return getNepaliFiscalYear(adDate);
+    }
+  }
+  return null;
+}
 
 type JsonRecord = Record<string, unknown>;
 
@@ -91,8 +119,27 @@ export function parseBillResource(value: unknown): ReceiptRecord {
   const customer = asRecord(content.customer);
   const branch = asRecord(content.branch);
   const createdBy = asRecord(content.createdBy ?? content.created_by);
-  const fiscalYear = asRecord(content.fiscalYear);
-  const fiscalYearId = text(content.fiscalYearId ?? fiscalYear?.id);
+  const fiscalYearRecord = asRecord(content.fiscalYear ?? content.fiscal_year);
+  const fiscalYearString = !fiscalYearRecord
+    ? text(content.fiscalYear ?? content.fiscal_year)
+    : '';
+  const rawFiscalYearId = text(
+    content.fiscalYearId
+    ?? content.fiscal_year_id
+    ?? fiscalYearRecord?.id
+    ?? fiscalYearString
+    ?? content.fiscalYearName
+    ?? content.fiscal_year_name,
+  );
+  const fiscalYearId = canonicalizeFiscalYearLabel(rawFiscalYearId) ?? rawFiscalYearId;
+  const rawFiscalYearName = text(
+    fiscalYearRecord?.name
+    ?? fiscalYearRecord?.code
+    ?? fiscalYearString
+    ?? content.fiscalYearName
+    ?? content.fiscal_year_name,
+  );
+  const fiscalYearName = canonicalizeFiscalYearLabel(rawFiscalYearName) ?? (rawFiscalYearName || fiscalYearId);
   const billingDate = [
     content.billingDate,
     content.billing_date,
@@ -168,7 +215,7 @@ export function parseBillResource(value: unknown): ReceiptRecord {
       contactPerson: text(branch.contactPerson),
     },
     fiscalYearId,
-    fiscalYearName: text(fiscalYear?.name) || fiscalYearId,
+    fiscalYearName,
     billingDate,
     paidAt: text(content.paidAt) || undefined,
     periodStart: text(content.periodStart),
@@ -425,15 +472,44 @@ export async function fetchReceipts(signal?: AbortSignal): Promise<ReceiptRecord
     Promise.resolve(extractRows(payload).map(parseBillResource)),
     fetchFiscalYearManagement(),
   ]);
-  const fiscalYearNames = new Map(fiscalYearSettings.fiscalYears.map((year) => [year.id, year.name]));
+  const legacyFiscalYearIdMap = new Map<string, string>();
+  for (const record of fiscalYearSettings.rawSettingRecords) {
+    const inner = asRecord(record.inner_content ?? record.innerContent);
+    if (inner?.key !== 'fiscal-year-management' || !Array.isArray(inner.fiscalYears)) continue;
+    for (const item of inner.fiscalYears) {
+      const fy = asRecord(item);
+      const itemId = fy ? text(fy.id) : '';
+      const label = fy ? canonicalizeFiscalYearLabel(text(fy.code) || text(fy.name)) : null;
+      if (itemId && label) legacyFiscalYearIdMap.set(itemId, label);
+    }
+  }
+  const fiscalYearNames = new Map<string, string>([
+    ...legacyFiscalYearIdMap.entries(),
+    ...fiscalYearSettings.fiscalYears.map((year): [string, string] => [year.id, year.name]),
+  ]);
   return receipts.map((receipt) => {
-    const fiscalYearName = fiscalYearNames.get(receipt.bill.content.fiscalYearId) ?? receipt.bill.content.fiscalYearName;
+    const currentId = receipt.bill.content.fiscalYearId;
+    const mappedName = fiscalYearNames.get(currentId);
+    const canonicalFromName = canonicalizeFiscalYearLabel(receipt.bill.content.fiscalYearName);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(currentId);
+    const resolvedFiscalYear = mappedName
+      ?? canonicalFromName
+      ?? (isUuid ? deriveFiscalYearFromDateString(receipt.billingDate) : null)
+      ?? receipt.bill.content.fiscalYearName;
+    const nextFiscalYearId = canonicalizeFiscalYearLabel(currentId)
+      ?? (legacyFiscalYearIdMap.has(currentId) || isUuid
+        ? canonicalizeFiscalYearLabel(resolvedFiscalYear) ?? currentId
+        : currentId);
     return {
       ...receipt,
-      fiscalYear: fiscalYearName,
+      fiscalYear: resolvedFiscalYear,
       bill: {
         ...receipt.bill,
-        content: { ...receipt.bill.content, fiscalYearName },
+        content: {
+          ...receipt.bill.content,
+          fiscalYearId: nextFiscalYearId,
+          fiscalYearName: resolvedFiscalYear,
+        },
       },
     };
   });

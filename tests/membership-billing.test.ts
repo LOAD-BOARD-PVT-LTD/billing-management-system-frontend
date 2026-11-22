@@ -1,11 +1,19 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { searchTqmsVehicles } from '@/features/billing/api/tqms-vehicle-search.api';
-import { parseTqmsVehicleSearchResponse } from '@/features/billing/schemas/tqms-vehicle-search.schema';
+import { searchTqmsVehicles } from '@/features/vehicle/tqms/api/tqms-vehicle-search.api';
+import {
+  parseTqmsVehicleSearchMatches,
+  parseTqmsVehicleSearchResponse,
+} from '@/features/billing/schemas/tqms-vehicle-search.schema';
 import { matchesTqmsSanghBranch } from '@/features/settings/api/tqms-sangh-branch-filter.api';
 import { findDuplicateBillItems } from '@/features/billing/utils/duplicate-bill-check';
 import { buildBillResourceContent } from '@/features/billing/api/bill-resource.api';
 import { getBillValidationMessages } from '@/features/billing/utils/bill-validation';
+import {
+	buildFeeHeadBillingItems,
+	calculateBillingRuleAmount,
+} from '@/features/billing/utils/build-fee-head-billing-items';
+import type { BillingRule, FeeHead } from '@/features/billing-rules/model/types';
 import { apiClient } from '@/lib/api/client';
 import type { BillingLine, BillingVehicle } from '@/features/billing/model/types';
 import type { BillDetails, MembershipBillInput } from '@/features/billing/model/bill.types';
@@ -14,6 +22,39 @@ describe('2. Membership Billing Flow & Rules', () => {
   const originalPost = apiClient.post;
   afterEach(() => {
     apiClient.post = originalPost;
+  });
+
+  test('multiplies monthly periodic rule amounts by selected months but leaves yearly rates unchanged', () => {
+    const monthlyRule: BillingRule = {
+      id: 'monthly-rule',
+      feeHeadId: 'fee-1',
+      fiscalYearId: 'year-1',
+      billingEntityId: null,
+      scope: 'COMMON',
+      vehicleCategoryId: null,
+      frequency: 'PERIODIC',
+      period: 'MONTH',
+      validity: 'SAME_DAY',
+      amount: 150,
+      status: 'ACTIVE',
+    };
+    const yearlyRule: BillingRule = {
+      ...monthlyRule,
+      id: 'yearly-rule',
+      period: 'FISCAL_YEAR',
+      validity: 'END_OF_FISCAL_YEAR',
+    };
+    const feeHead: FeeHead = {
+      id: 'fee-1',
+      fiscalYearId: 'year-1',
+      name: 'Road fee',
+      status: 'ACTIVE',
+    };
+
+    assert.equal(calculateBillingRuleAmount(monthlyRule, 3), 450);
+    assert.equal(calculateBillingRuleAmount(yearlyRule, 3), 150);
+    assert.equal(buildFeeHeadBillingItems([feeHead], [monthlyRule], [], {}, 3)[0]?.amount, 450);
+    assert.equal(buildFeeHeadBillingItems([feeHead], [yearlyRule], [], {}, 3)[0]?.amount, 150);
   });
 
   describe('TQMS Vehicle Search', () => {
@@ -37,6 +78,43 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(vehicles[0].vehicleNumber, 'Ba 1 Ja 1234');
       assert.equal(vehicles[0].ownerName, 'Ram Bahadur');
       assert.equal(vehicles[0].branch, 'Kathmandu');
+    });
+
+    test('pairs cached billing data with current TQMS data by vehicle ID', () => {
+      const match = parseTqmsVehicleSearchMatches({
+        Code: 200,
+        Message: 'Success',
+        Data: {
+          Paging: { Page: 1, PageSize: 20, TotalItems: 1, TotalPages: 1 },
+          cache_results: [{
+            cache_id: 6490,
+            VehicleId: 36064,
+            VehicleNumber: 'Ga Pra-12-12-GHA-1221',
+            VehicleType: 'Bus',
+            Owners: [{ Name: 'Previous owner' }],
+            metadata: { tags: ['blacklisted'] },
+            source: 'cache',
+            is_in_billing: true,
+            is_in_tqms: true,
+          }],
+          tqms_results: [{
+            VehicleId: 36064,
+            VehicleNumber: 'Ga Pra-12-12-GHA-1223',
+            VehicleType: 'Bus',
+            Owners: [{ Name: 'Current owner' }],
+            source: 'tqms',
+            is_in_billing: true,
+            is_in_tqms: true,
+          }],
+        },
+      }, 'Ga Pra-12-12-GHA-1223')[0];
+
+      assert.ok(match);
+      assert.equal(match.tqmsVehicle.vehicleNumber, 'Ga Pra-12-12-GHA-1223');
+      assert.equal(match.cacheVehicle?.vehicleNumber, 'Ga Pra-12-12-GHA-1221');
+      assert.equal(match.cacheId, '6490');
+      assert.deepEqual(match.cacheRecord?.metadata, { tags: ['blacklisted'] });
+      assert.equal('source' in match.tqmsVehicle.resourceContent, false);
     });
 
     test('uses the owner marked isDhani for name and contact details, regardless of TQMS owner order', () => {

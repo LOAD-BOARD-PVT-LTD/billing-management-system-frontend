@@ -281,6 +281,10 @@ export async function createVehicleResource(vehicle: BillingVehicle): Promise<vo
 	});
 }
 
+function resourceIdValue(value: string): string | number {
+	return /^\d+$/u.test(value) ? Number(value) : value;
+}
+
 export async function updateVehicleResource(
 	resource: VehicleResourceDocument,
 	innerContent: Record<string, unknown>,
@@ -292,7 +296,7 @@ export async function updateVehicleResource(
 		endpoints.resources.vehicle.update(id),
 		{
 			...resource.resource,
-			id: resource.resource.id,
+			id: resourceIdValue(id),
 			resource_name: 'VehicleResource',
 			inner_content: innerContent,
 			external_content: externalContent,
@@ -305,13 +309,17 @@ export async function updateVehicleSmsPhone(
 	input: VehiclePhoneUpdateInput,
 ): Promise<void> {
 	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
+	const metadata = getVehicleMetadata(resource);
 	await updateVehicleResource(
 		resource,
-		resource.innerContent,
 		{
-			...resource.externalContent,
-			smsPhone: input.phone.trim(),
+			...resource.innerContent,
+			metadata: {
+				...metadata,
+				smsPhone: input.phone.trim(),
+			},
 		},
+		resource.externalContent,
 	);
 }
 

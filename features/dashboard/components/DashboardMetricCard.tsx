@@ -40,7 +40,7 @@ const metricTones = {
 
 export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
   const Icon = metricIcons[metric.icon];
-  const isPositive = metric.change >= 0;
+  const isPositive = (metric.change ?? 0) >= 0;
   const ChangeIcon = isPositive ? ArrowUpRight : ArrowDownRight;
   const formattedValue = metric.icon === 'income'
     ? `रु ${formatCurrency(metric.value)}`
@@ -57,11 +57,13 @@ export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
           <Icon aria-hidden="true" className="size-5" />
         </span>
       </div>
-      <div className={`mt-3 flex items-center gap-1 text-xs font-medium ${isPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
-        <ChangeIcon aria-hidden="true" className="size-3.5" />
-        <span>{Math.abs(metric.change)}%</span>
-        <span className="font-normal text-muted-foreground">अघिल्लो महिनाको तुलनामा</span>
-      </div>
+      {metric.change !== undefined ? (
+        <div className={`mt-3 flex items-center gap-1 text-xs font-medium ${isPositive ? 'text-emerald-700' : 'text-rose-700'}`}>
+          <ChangeIcon aria-hidden="true" className="size-3.5" />
+          <span>{Math.abs(metric.change)}%</span>
+          <span className="font-normal text-muted-foreground">अघिल्लो महिनाको तुलनामा</span>
+        </div>
+      ) : null}
     </article>
   );
 }

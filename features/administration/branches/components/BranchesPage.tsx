@@ -179,7 +179,7 @@ export function BranchesPage() {
           progress={records.length ? (inactiveCount / records.length) * 100 : 0}
         />
         <KpiCard
-          title="प्रयोगकर्ता / सञ्चालक"
+          title="प्रयोगकर्ता / संचालक"
           value="—"
           detail="प्रयोगकर्ता विवरण उपलब्ध भएपछि यहाँ देखिनेछ"
           icon={Users}

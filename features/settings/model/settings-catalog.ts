@@ -18,7 +18,7 @@ export const SETTINGS_CATEGORIES = [
   { id: 'billing-receipts', label: 'बिलिङ तथा रसिद', description: 'रसिद र आर्थिक वर्षसँग सम्बन्धित पहुँच।', icon: ReceiptText },
   { id: 'billing-rules', label: 'बिलिङ नियमहरू', description: 'शुल्क, अवधि र बिलिङ नियम व्यवस्थापन।', icon: FileCog },
   { id: 'integrations', label: 'एकीकृत सेवाहरू', description: 'बाह्य सेवा र डाटा जडानहरू।', icon: Link2 },
-  { id: 'sms-notifications', label: 'SMS तथा सूचना', description: 'SMS प्रदायक, सन्देश र डेलिभरी।', icon: MessageSquareText },
+  { id: 'sms-notifications', label: 'SMS तथा सूचना', description: 'SMS प्रदायक सेटिङ्स र टेम्प्लेट सन्देश व्यवस्थापन।', icon: MessageSquareText },
   { id: 'organization', label: 'संस्था व्यवस्थापन', description: 'संस्था र शाखासँग सम्बन्धित व्यवस्थापन।', icon: Building2 },
   { id: 'system-security', label: 'प्रणाली तथा सुरक्षा', description: 'प्रयोगकर्ता पहुँच र प्रणाली प्रशासन।', icon: ShieldCheck },
 ] as const;
@@ -44,13 +44,14 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     searchTerms: ['receipt cancellation', 'cancel receipt'],
   },
   {
-    id: 'receipt-fiscal-year-control', category: 'billing-receipts', title: 'आर्थिक वर्ष व्यवस्थापन',
-    description: 'आर्थिक वर्ष थप्नुहोस्, सक्रिय वर्ष छान्नुहोस् र बिलिङ तथा रिपोर्टमा देखिने प्राथमिकता व्यवस्थापन गर्नुहोस्।', icon: CalendarDays,
+    id: 'receipt-fiscal-year-control', category: 'billing-receipts', title: 'रसिद आर्थिक वर्ष बन्द/खोल्ने',
+    description: 'अघिल्लो आर्थिक वर्ष खोल्ने/बन्द गर्ने र अर्को आर्थिक वर्ष चालु/बन्द गर्ने। हालको आर्थिक वर्ष स्वतः चालु रहन्छ।', icon: CalendarDays,
+    searchTerms: ['fiscal year', 'receipt fiscal year', 'आर्थिक वर्ष', 'अघिल्लो आर्थिक वर्ष', 'अर्को आर्थिक वर्ष'],
   },
   {
     id: 'insurance-eligibility', category: 'billing-rules', title: 'बीमा योग्यताको नियम',
-    description: 'बीमा योग्यताका लागि लागू हुने नियम।', icon: CarFront,
-    unavailableReason: 'बीमा योग्यताको छुट्टै configuration वा API हाल उपलब्ध छैन।',
+    description: 'यहाँ छानिएका active billing rules पूरा भए मात्र CTS मा vehicle eligible मानिन्छ।', icon: CarFront,
+    searchTerms: ['insurance eligibility', 'cts', 'बीमा योग्यता', 'eligibility rules'],
   },
   {
     id: 'related-fee-rules', category: 'billing-rules', title: 'सम्बन्धित शुल्क नियम',
@@ -78,31 +79,9 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     unavailableReason: 'CTS वा बीमा एकीकरण व्यवस्थापनका लागि सेटिङ सेवा हाल जडान छैन।',
   },
   {
-    id: 'notification-center', category: 'sms-notifications', title: 'सूचना केन्द्र तथा SMS ड्यासबोर्ड',
-    description: 'प्रत्येक सूचना, SMS स्थिति र हालको ड्यासबोर्ड समीक्षा।', icon: MessageSquareText,
-    href: '/dashboard/notifications', actionLabel: 'सूचना केन्द्र खोल्नुहोस्',
-    searchTerms: ['notification center', 'sms dashboard', 'message overview'],
-  },
-  {
-    id: 'sms-provider', category: 'sms-notifications', title: 'SMS प्रदायक सेटिङ्स',
-    description: 'प्रदायक credentials र sender configuration।', icon: MessageSquareText,
-    href: '/dashboard/notifications?tab=automation', actionLabel: 'सेटिङ हेर्नुहोस्',
-    searchTerms: ['sms api key', 'api key', 'sms provider'],
-  },
-  {
-    id: 'payment-sms', category: 'sms-notifications', title: 'भुक्तानीपछि स्वचालित SMS',
-    description: 'सफल भुक्तानीपछि सवारी धनीलाई पठाइने सूचना।', icon: ReceiptText,
-    href: '/dashboard/notifications?tab=automation', actionLabel: 'स्वचालित SMS हेर्नुहोस्',
-  },
-  {
-    id: 'sms-templates', category: 'sms-notifications', title: 'SMS टेम्प्लेट तथा परीक्षण SMS',
-    description: 'सन्देशका टेम्प्लेट सम्पादन र परीक्षण सन्देश पठाउने सुविधा।', icon: MessageSquareText,
-    href: '/dashboard/notifications?tab=templates', actionLabel: 'टेम्प्लेट हेर्नुहोस्',
-  },
-  {
-    id: 'sms-delivery-history', category: 'sms-notifications', title: 'SMS पठाउने अवस्था तथा अभियान इतिहास',
-    description: 'डेलिभरी विवरण र अभियान इतिहास।', icon: FileClock,
-    href: '/dashboard/notifications?tab=history', actionLabel: 'इतिहास हेर्नुहोस्',
+    id: 'sms-templates', category: 'sms-notifications', title: 'SMS सेटिङ्स तथा टेम्प्लेट',
+    description: 'SMS प्रदायक कन्फिगर गर्नुहोस् तथा भुक्तानी र रिमाइन्डर टेम्प्लेट व्यवस्थापन गर्नुहोस्।', icon: MessageSquareText,
+    searchTerms: ['sms', 'sms provider', 'api key', 'sender id', 'samayasms', 'webhook', 'sms template', 'sms templates', 'notifications', 'सूचना', 'टेम्प्लेट'],
   },
   {
     id: 'tqms-branch-filter', category: 'organization', title: 'TQMS संघ शाखा फिल्टर',

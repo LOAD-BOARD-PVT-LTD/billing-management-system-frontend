@@ -13,7 +13,7 @@ describe('VehicleResource owner phone update', () => {
 		apiClient.put = originalPut;
 	});
 
-	it('stores the active SMS phone in external_content and leaves all TQMS owner phones unchanged', async () => {
+	it('stores the active SMS phone in inner_content.metadata and leaves all TQMS owner phones unchanged', async () => {
 		let readPath = '';
 		let updatedPath = '';
 		let updatedBody: Record<string, unknown> | undefined;
@@ -79,7 +79,10 @@ describe('VehicleResource owner phone update', () => {
 		);
 		assert.equal(updatedBody?.resource_name, 'VehicleResource');
 		assert.deepEqual(updatedBody?.external_content && (updatedBody.external_content as Record<string, unknown>).existing, 'kept');
-		assert.equal((updatedBody?.external_content as Record<string, unknown>).smsPhone, '9811111111');
+		assert.equal(
+			((updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>).smsPhone,
+			'9811111111',
+		);
 	});
 
 	it('updates the active SMS phone even if VehicleResource has no owner data', async () => {
@@ -102,6 +105,9 @@ describe('VehicleResource owner phone update', () => {
 
 		await updateVehicleSmsPhone(vehicle, { phone: '9811111111' });
 		assert.equal(writeCount, 1);
-		assert.equal((updatedBody?.external_content as Record<string, unknown>).smsPhone, '9811111111');
+		assert.equal(
+			((updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>).smsPhone,
+			'9811111111',
+		);
 	});
 });

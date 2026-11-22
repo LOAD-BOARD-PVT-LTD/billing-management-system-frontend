@@ -7,7 +7,7 @@ import {
 	saveFiscalYearSelectorSettings,
 	type FiscalYearSelectorSettings,
 } from '@/features/settings/api/fiscal-year-selector.api';
-import { settingsKeys } from '@/lib/query/query-keys';
+import { billingRulesKeys, settingsKeys } from '@/lib/query/query-keys';
 
 export function useFiscalYearSelectorSettings() {
 	const queryClient = useQueryClient();
@@ -22,6 +22,8 @@ export function useFiscalYearSelectorSettings() {
 		},
 		onSuccess: (document) => {
 			queryClient.setQueryData(settingsKeys.fiscalYearSelector(), document);
+			void queryClient.invalidateQueries({ queryKey: settingsKeys.fiscalYearManagement() });
+			void queryClient.invalidateQueries({ queryKey: billingRulesKeys.config() });
 		},
 	});
 

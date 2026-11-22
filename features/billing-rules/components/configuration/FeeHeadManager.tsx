@@ -139,7 +139,7 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
       <FeeHeadDialog
         open={open}
         onOpenChange={setOpen}
-        initialValue={editing ?? { ...emptyValue, fiscalYearId: fiscalYears.find((year) => year.status === 'ACTIVE')?.id ?? null }}
+        initialValue={editing ?? { ...emptyValue, fiscalYearId: fiscalYears.find((year) => year.isDefault)?.id ?? fiscalYears[0]?.id ?? null }}
         fiscalYears={fiscalYears}
         fiscalYearLocked={Boolean(editing && rules.some((rule) => rule.feeHeadId === editing.id))}
         onSubmit={async (value) => {
