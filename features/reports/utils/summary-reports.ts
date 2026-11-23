@@ -1,4 +1,5 @@
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import type { FeeHeadSummaryRow, MahasangReportRow, VehicleCategorySummaryRow } from '@/features/reports/types/summary-reports';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 import { normalizeReportKey } from '@/features/reports/utils/report-format';
@@ -68,14 +69,47 @@ export function buildVehicleCategorySummary(
     .sort((first, second) => first.category.localeCompare(second.category, 'ne'));
 }
 
-export function buildMahasangRows(receipts: ReceiptRecord[]): MahasangReportRow[] {
+export function buildMahasangRows(
+  receipts: ReceiptRecord[],
+  vehicles: Pick<MemberVehicleDetails, 'vehicleId' | 'vehicleNumber' | 'previousVehicleIds' | 'previousVehicleNumbers'>[] = [],
+): MahasangReportRow[] {
+  const vehiclesById = new Map<string, typeof vehicles[number]>();
+  const vehiclesByPreviousId = new Map<string, typeof vehicles[number]>();
+  const vehiclesByNumber = new Map<string, typeof vehicles[number]>();
+  const vehiclesByPreviousNumber = new Map<string, typeof vehicles[number]>();
+  for (const vehicle of vehicles) {
+    const vehicleId = vehicle.vehicleId.trim().toLocaleLowerCase();
+    const vehicleNumber = normalizeReportKey(vehicle.vehicleNumber);
+    if (vehicleId) vehiclesById.set(vehicleId, vehicle);
+    if (vehicleNumber) vehiclesByNumber.set(vehicleNumber, vehicle);
+    for (const previousId of vehicle.previousVehicleIds ?? []) {
+      const key = previousId.trim().toLocaleLowerCase();
+      if (key) vehiclesByPreviousId.set(key, vehicle);
+    }
+    for (const previousNumber of vehicle.previousVehicleNumbers ?? []) {
+      const key = normalizeReportKey(previousNumber);
+      if (key) vehiclesByPreviousNumber.set(key, vehicle);
+    }
+  }
+
   return receipts.map((receipt) => {
     const bill = receipt.bill.content;
+    const snapshotVehicleNumber = bill.vehicle.vehicleNumber || receipt.vehicleNumber;
+    const vehicleId = bill.vehicle.id.trim().toLocaleLowerCase();
+    const normalizedVehicleNumber = normalizeReportKey(snapshotVehicleNumber);
+    const currentVehicle = vehiclesByPreviousId.get(vehicleId)
+      ?? vehiclesByPreviousNumber.get(normalizedVehicleNumber)
+      ?? vehiclesById.get(vehicleId)
+      ?? vehiclesByNumber.get(normalizedVehicleNumber);
+    const currentVehicleNumber = currentVehicle?.vehicleNumber || snapshotVehicleNumber;
+    const previousVehicleNumber = normalizeReportKey(snapshotVehicleNumber) !== normalizeReportKey(currentVehicleNumber)
+      ? snapshotVehicleNumber
+      : currentVehicle?.previousVehicleNumbers?.at(-1) || '—';
     const total = receipt.status === 'PAID' ? receipt.totalAmount : 0;
     return {
       id: receipt.id,
-      vehicleNumber: bill.vehicle.vehicleNumber,
-      previousVehicleNumber: '—',
+      vehicleNumber: currentVehicleNumber,
+      previousVehicleNumber,
       vehicleType: bill.vehicle.vehicleType || '—',
       ownerName: receipt.customerName || bill.vehicle.ownerName || '—',
       operatorName: receipt.billingType === 'MEMBERSHIP' ? bill.vehicle.operatorName || '' : '',

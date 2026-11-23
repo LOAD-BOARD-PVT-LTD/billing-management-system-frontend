@@ -21,6 +21,8 @@ export type VehicleCompliance = {
 export type MemberVehicleDetails = {
   vehicleId: string;
   vehicleNumber: string;
+  previousVehicleIds?: string[];
+  previousVehicleNumbers?: string[];
   tqmsVehicleType: string;
   tqmsVehicleTypeId: string;
   ownerType: string;
@@ -91,6 +93,22 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
   const resource = asRecord(value);
   const content = asRecord(resource?.inner_content ?? resource?.innerContent);
   const externalContent = asRecord(resource?.external_content ?? resource?.externalContent);
+  const reconciliationAudit = Array.isArray(externalContent?.reconciliationAudit)
+    ? externalContent.reconciliationAudit.map(asRecord).filter((entry): entry is JsonRecord => entry !== null)
+    : [];
+  const changedFields = reconciliationAudit.flatMap((entry) => (
+    Array.isArray(entry.changedFields)
+      ? entry.changedFields.map(asRecord).filter((field): field is JsonRecord => field !== null)
+      : []
+  ));
+  const previousVehicleIds = Array.from(new Set(changedFields
+    .filter((field) => field.field === 'tqmsVehicleId')
+    .map((field) => text(field.oldValue))
+    .filter(Boolean)));
+  const previousVehicleNumbers = Array.from(new Set(changedFields
+    .filter((field) => field.field === 'vehicleNumber')
+    .map((field) => text(field.oldValue))
+    .filter(Boolean)));
   const metadata = {
     ...asRecord(content?.metadata),
     ...asRecord(externalContent?.metadata),
@@ -136,6 +154,8 @@ export function parseMemberVehicleResource(value: unknown): MemberVehicleDetails
   return {
     vehicleId,
     vehicleNumber: text(content?.VehicleNumber ?? content?.vehicleNumber),
+    previousVehicleIds,
+    previousVehicleNumbers,
     tqmsVehicleType: text(vehicleTypeRecord?.Name ?? vehicleTypeRecord?.name ?? rawVehicleType),
     tqmsVehicleTypeId: text(
       content?.VehicleTypeId

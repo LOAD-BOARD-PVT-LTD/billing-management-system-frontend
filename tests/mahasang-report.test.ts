@@ -115,3 +115,18 @@ test('Mahasang report separates paid membership and general income by billing ty
     [0, 3600, 3600],
   );
 });
+
+test('Mahasang report shows the current and pre-reconciliation vehicle numbers', () => {
+  const [row] = buildMahasangRows([makeReceipt()], [
+    { vehicleId: 'vehicle-1', vehicleNumber: 'BA 1 CHA 1111' },
+    {
+      vehicleId: 'vehicle-2',
+      vehicleNumber: 'BA 1 CHA 2222',
+      previousVehicleIds: ['vehicle-1'],
+      previousVehicleNumbers: ['BA 1 CHA 1111'],
+    },
+  ]);
+
+  assert.equal(row.vehicleNumber, 'BA 1 CHA 2222');
+  assert.equal(row.previousVehicleNumber, 'BA 1 CHA 1111');
+});
