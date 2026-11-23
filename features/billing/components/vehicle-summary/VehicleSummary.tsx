@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { ExternalLink, LoaderCircle, Truck } from 'lucide-react';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import type { BillingVehicle } from '@/features/billing/model/types';
-import { getTqmsUrl } from '@/lib/config/tqms';
+import { getOptionalTqmsUrl } from '@/lib/config/tqms';
 
 function SummaryValue({
 	label,
@@ -43,7 +43,7 @@ export const VehicleSummary = memo(function VehicleSummary({ vehicle }: { vehicl
 	const routePermit = compliance?.RoutePermit;
 	const bluebook = compliance?.Bluebook ?? compliance?.BlueBook ?? details?.Bluebook ?? details?.BlueBook;
 	const vehicleDetailsUrl = vehicle.tqmsVehicleId
-		? getTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.tqmsVehicleId)}`)
+		? getOptionalTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.tqmsVehicleId)}`)
 		: null;
 	const formatDate = (bs?: string | number | null, ad?: string | number | null) => {
 		for (const value of [bs, ad]) {

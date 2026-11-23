@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/use-toast';
-import { getTqmsUrl } from '@/lib/config/tqms';
+import { getOptionalTqmsUrl } from '@/lib/config/tqms';
 import { useTqmsVehicleSearch } from '@/features/billing/hooks/useTqmsVehicleSearch';
 import { useUpdateBillingVehiclePhone } from '@/features/billing/hooks/useUpdateBillingVehiclePhone';
 import {
@@ -204,11 +204,16 @@ export const BillingHeader = memo(function BillingHeader({
 
 	const handleOwnerUpdate = () => {
 		if (!selectedVehicle?.tqmsVehicleId) return;
-		window.open(
-			getTqmsUrl(`/admin/vehicle/edit/${encodeURIComponent(selectedVehicle.tqmsVehicleId)}`),
-			'_blank',
-			'noopener,noreferrer',
-		);
+		const url = getOptionalTqmsUrl(`/admin/vehicle/edit/${encodeURIComponent(selectedVehicle.tqmsVehicleId)}`);
+		if (!url) {
+			toast({
+				title: 'TQMS लिङ्क उपलब्ध छैन',
+				description: 'NEXT_PUBLIC_TQMS_BASE_URL कन्फिगर गरिएको छैन।',
+				variant: 'destructive',
+			});
+			return;
+		}
+		window.open(url, '_blank', 'noopener,noreferrer');
 	};
 
 	const handlePhoneUpdate = async (input: VehiclePhoneUpdateInput) => {

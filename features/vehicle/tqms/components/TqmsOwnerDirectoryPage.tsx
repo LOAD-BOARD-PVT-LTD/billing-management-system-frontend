@@ -18,7 +18,7 @@ import {
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
 import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import { toNepaliDigits } from '@/utils/numbers';
-import { getTqmsUrl } from '@/lib/config/tqms';
+import { getOptionalTqmsUrl } from '@/lib/config/tqms';
 
 type OwnerGroup = {
   key: string;
@@ -243,23 +243,30 @@ export function TqmsOwnerDirectoryPage() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {owner.vehicles.map((vehicle) => (
-                                  <TableRow key={vehicle.vehicleId}>
-                                    <TableCell className="py-2 font-medium">{vehicle.vehicleNumber || '—'}</TableCell>
-                                    <TableCell className="py-2">{vehicle.tqmsVehicleType || '—'}</TableCell>
-                                    <TableCell className="py-2">{vehicle.vehicleId}</TableCell>
-                                    <TableCell className="py-2 text-right">
-                                      <a
-                                        href={getTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.vehicleId)}`)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                                      >
-                                        <ExternalLink aria-hidden="true" className="size-3.5" /> हेर्नुहोस्
-                                      </a>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {owner.vehicles.map((vehicle) => {
+                                  const vehicleUrl = getOptionalTqmsUrl(`/admin/vehicle/view/${encodeURIComponent(vehicle.vehicleId)}`);
+                                  return (
+                                    <TableRow key={vehicle.vehicleId}>
+                                      <TableCell className="py-2 font-medium">{vehicle.vehicleNumber || '—'}</TableCell>
+                                      <TableCell className="py-2">{vehicle.tqmsVehicleType || '—'}</TableCell>
+                                      <TableCell className="py-2">{vehicle.vehicleId}</TableCell>
+                                      <TableCell className="py-2 text-right">
+                                        {vehicleUrl ? (
+                                          <a
+                                            href={vehicleUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                                          >
+                                            <ExternalLink aria-hidden="true" className="size-3.5" /> हेर्नुहोस्
+                                          </a>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                           </Table>
                         </TableCell>
