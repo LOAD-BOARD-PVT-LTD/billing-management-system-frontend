@@ -156,6 +156,31 @@ describe('1. Billing Rule Configuration', () => {
       ]));
     });
 
+    test('allows creating a fee head in a new fiscal year even if legacy duplicates exist in an older fiscal year', () => {
+      const previousFeeHeads = [
+        { id: 'legacy-1', fiscalYearId: '2082/83', name: 'बिलम्ब बापत', status: 'ACTIVE' as const },
+        { id: 'legacy-2', fiscalYearId: '2082/83', name: 'बिलम्ब बापत', status: 'INACTIVE' as const },
+      ];
+      assert.doesNotThrow(() => assertUniqueFeeHeadNames(
+        [
+          ...previousFeeHeads,
+          { id: 'new-1', fiscalYearId: '2083/84', name: 'बिलम्ब बापत', status: 'ACTIVE' },
+        ],
+        previousFeeHeads,
+      ));
+      assert.throws(
+        () => assertUniqueFeeHeadNames(
+          [
+            ...previousFeeHeads,
+            { id: 'new-1', fiscalYearId: '2083/84', name: 'बिलम्ब बापत', status: 'ACTIVE' },
+            { id: 'new-2', fiscalYearId: '2083/84', name: 'बिलम्ब बापत', status: 'ACTIVE' },
+          ],
+          previousFeeHeads,
+        ),
+        /पहिले नै छ/u,
+      );
+    });
+
     test('rejects duplicate names before issuing API writes', async () => {
       let writeCount = 0;
       apiClient.post = async <T>(): Promise<T> => { writeCount += 1; return undefined as T; };

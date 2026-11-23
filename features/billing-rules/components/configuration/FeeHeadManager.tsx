@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/use-toast';
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import type { BillingRule, FiscalYear } from '@/features/billing-rules/model/types';
 import { ArrowDown, ArrowUp, Pencil, Plus, Power, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FeeHeadDialog } from '@/features/billing-rules/components/configuration/FeeHeadDialog';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
@@ -14,6 +14,7 @@ import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-h
 interface FeeHeadManagerProps {
   feeHeads: FeeHead[];
   fiscalYears: FiscalYear[];
+  fiscalYearId?: string;
   rules: BillingRule[];
   onCreate: (feeHead: FeeHead) => Promise<unknown> | void;
   onUpdate: (feeHead: FeeHead) => Promise<unknown> | void;
@@ -21,7 +22,16 @@ interface FeeHeadManagerProps {
   isSaving: boolean;
 }
 
-export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdate, onReorder, isSaving }: FeeHeadManagerProps) {
+export function FeeHeadManager({
+  feeHeads,
+  fiscalYears,
+  fiscalYearId,
+  rules,
+  onCreate,
+  onUpdate,
+  onReorder,
+  isSaving,
+}: FeeHeadManagerProps) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FeeHead | null>(null);
   const [deactivating, setDeactivating] = useState<FeeHead | null>(null);
@@ -29,13 +39,33 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
   const [emptyValue] = useState<FeeHead>(() => ({ id: '', code: '', fiscalYearId: null, name: '', status: 'ACTIVE' }));
   const { toast } = useToast();
   const fiscalYearNames = new Map(fiscalYears.map((year) => [year.id, year.name]));
-  const orderedFeeHeads = sortFeeHeadsByDisplayOrder(feeHeads);
+  const allOrderedFeeHeads = sortFeeHeadsByDisplayOrder(feeHeads);
+  const orderedFeeHeads = fiscalYearId && fiscalYearId !== 'all'
+    ? allOrderedFeeHeads.filter((feeHead) => feeHead.fiscalYearId === fiscalYearId)
+    : allOrderedFeeHeads;
+  const defaultFiscalYearId = fiscalYears.find((year) => year.id === fiscalYearId)?.id
+    ?? fiscalYears.find((year) => year.status === 'ACTIVE' && year.isDefault)?.id
+    ?? fiscalYears.find((year) => year.status === 'ACTIVE')?.id
+    ?? fiscalYears[0]?.id
+    ?? null;
+  const dialogInitialValue = useMemo<FeeHead>(
+    () => editing ?? { ...emptyValue, fiscalYearId: defaultFiscalYearId },
+    [defaultFiscalYearId, editing, emptyValue],
+  );
 
   const moveFeeHead = async (index: number, direction: -1 | 1) => {
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= orderedFeeHeads.length) return;
-    const reordered = [...orderedFeeHeads];
-    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    const reorderedVisibleFeeHeads = [...orderedFeeHeads];
+    [reorderedVisibleFeeHeads[index], reorderedVisibleFeeHeads[targetIndex]] = [
+      reorderedVisibleFeeHeads[targetIndex],
+      reorderedVisibleFeeHeads[index],
+    ];
+    const visibleFeeHeadIds = new Set(orderedFeeHeads.map((feeHead) => feeHead.id));
+    let visibleIndex = 0;
+    const reordered = allOrderedFeeHeads.map((feeHead) => (
+      visibleFeeHeadIds.has(feeHead.id) ? reorderedVisibleFeeHeads[visibleIndex++] : feeHead
+    ));
     try {
       await onReorder(reordered.map((feeHead, displayOrder) => ({ ...feeHead, displayOrder })));
     } catch (error) {
@@ -139,7 +169,7 @@ export function FeeHeadManager({ feeHeads, fiscalYears, rules, onCreate, onUpdat
       <FeeHeadDialog
         open={open}
         onOpenChange={setOpen}
-        initialValue={editing ?? { ...emptyValue, fiscalYearId: fiscalYears.find((year) => year.isDefault)?.id ?? fiscalYears[0]?.id ?? null }}
+        initialValue={dialogInitialValue}
         fiscalYears={fiscalYears}
         fiscalYearLocked={Boolean(editing && rules.some((rule) => rule.feeHeadId === editing.id))}
         onSubmit={async (value) => {

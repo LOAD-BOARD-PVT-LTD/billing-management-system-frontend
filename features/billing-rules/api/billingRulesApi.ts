@@ -227,7 +227,7 @@ export const billingRulesApi = {
   },
 
   async save(config: BillingRuleConfig, previousConfig: BillingRuleConfig): Promise<BillingRuleResourceDocument> {
-    assertUniqueFeeHeadNames(config.feeHeads);
+    assertUniqueFeeHeadNames(config.feeHeads, previousConfig.feeHeads);
     assertNoCrossScopeFeeHeadRules(config);
 
     const defaultYears = config.fiscalYears.filter((year) => year.isDefault === true);

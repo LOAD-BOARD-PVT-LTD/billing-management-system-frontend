@@ -21,9 +21,10 @@ export function FeeHeadDialog({ open, onOpenChange, initialValue, fiscalYears, f
   const [value, setValue] = useState<FeeHead>(initialValue);
 
   useEffect(() => {
+    if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setValue(initialValue);
-  }, [initialValue]);
+  }, [open, initialValue]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
