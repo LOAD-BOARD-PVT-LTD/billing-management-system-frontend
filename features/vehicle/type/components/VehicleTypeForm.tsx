@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,25 +53,33 @@ export function VehicleTypeForm({
         selectedTypeIds: form.selectedTypeIds,
       });
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Failed to save vehicle type');
+      setFormError(error instanceof Error ? error.message : 'सवारी श्रेणी सुरक्षित गर्न सकिएन।');
     }
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pt-3">
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pb-3">
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-2.5 shadow-sm">
-          <label className="mb-1 block text-xs font-medium text-slate-700">सवारी श्रेणी</label>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+        <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5">
+          <label htmlFor="vehicle-category-name" className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-foreground">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+              १
+            </span>
+            बिलिङ सवारी श्रेणीको नाम
+          </label>
           <Input
+            id="vehicle-category-name"
             value={form.category}
             onChange={(event) => {
               setForm((previous) => ({ ...previous, category: event.target.value }));
               setFormError(null);
             }}
-            placeholder="जस्तै: Heavy Truck"
-            className="border-slate-200 bg-slate-50 text-sm"
+            placeholder="उदाहरण: Heavy Truck, Mini Truck, Tipper"
+            className="bg-card text-sm"
           />
-          <p className="mt-1 text-[10px] text-slate-500">उदाहरण: Heavy Truck</p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            यो नाम बिलिङ नियम र रिपोर्टमा सवारी वर्गको रूपमा देखिन्छ।
+          </p>
         </div>
 
         <TqmsVehicleTypeSelector
@@ -85,16 +94,19 @@ export function VehicleTypeForm({
         />
 
         {formError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</div>
+          <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>{formError}</span>
+          </div>
         )}
       </div>
 
-      <div className="-mx-4 flex shrink-0 justify-end gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
-        <Button type="button" variant="outline" onClick={onCancel} className="min-w-[120px]">
+      <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-border/80 bg-muted/20 px-5 py-3.5">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           रद्द गर्नुहोस्
         </Button>
-        <Button type="button" onClick={() => void handleSubmit()} loading={isSubmitting} className="min-w-[180px]">
-          {mode === 'create' ? 'सवारी प्रकार सेभ' : 'परिवर्तन सेभ'}
+        <Button type="button" onClick={() => void handleSubmit()} loading={isSubmitting} className="min-w-[160px]">
+          {mode === 'create' ? 'श्रेणी सुरक्षित गर्नुहोस्' : 'परिवर्तन सुरक्षित गर्नुहोस्'}
         </Button>
       </div>
     </div>
