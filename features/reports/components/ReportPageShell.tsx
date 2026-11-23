@@ -16,6 +16,7 @@ type ReportPageShellProps = {
   onExportCsv: () => void;
   onExportPdf?: () => void;
   exportDisabled: boolean;
+  isExportingPdf?: boolean;
   children?: ReactNode;
 };
 
@@ -29,6 +30,7 @@ export function ReportPageShell({
   onExportCsv,
   onExportPdf,
   exportDisabled,
+  isExportingPdf = false,
   children,
 }: ReportPageShellProps) {
   return (
@@ -48,10 +50,10 @@ export function ReportPageShell({
       </div>
       <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sky-100 pt-3">
         <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={onExportCsv} disabled={exportDisabled}>
-          <Download className="h-4 w-4" aria-hidden="true" />CSV मा निर्यात
+          <Download className="h-4 w-4" aria-hidden="true" />Excel मा निर्यात
         </Button>
         {onExportPdf ? (
-          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={onExportPdf} disabled={exportDisabled}>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={onExportPdf} disabled={exportDisabled || isExportingPdf} loading={isExportingPdf}>
             <FileDown className="h-4 w-4" aria-hidden="true" />PDF मा निर्यात
           </Button>
         ) : null}

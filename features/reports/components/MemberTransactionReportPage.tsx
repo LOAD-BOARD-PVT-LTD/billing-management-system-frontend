@@ -19,10 +19,10 @@ import { useVehicleBlacklist } from '@/features/vehicle/blacklist/hooks/useVehic
 import { useVehicleTypes } from '@/features/vehicle/type/hooks/useVehicleTypes';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import type { MemberTransactionRow } from '@/features/reports/types/summary-reports';
-import type { ReportHeaderDetails } from '@/features/reports/types/report-header';
 import { buildMemberTransactionCandidates, searchMemberTransactionCandidates } from '@/features/reports/utils/member-transaction-report';
 import { formatReportAmount, formatReportDate, normalizeReportKey } from '@/features/reports/utils/report-format';
-import { downloadReportCsv, reportHeaderCsvRows } from '@/features/reports/utils/report-csv';
+import { createMemberTransactionReportTemplate } from '@/features/reports/templates/report-templates';
+import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { useReportHeaderDetails } from '@/features/reports/hooks/use-report-header-details';
 import { useTqmsMemberRegistry } from '@/features/vehicle/tqms/hooks/useTqmsMemberRegistry';
 import { toEnglishDigits, toNepaliDigits } from '@/utils/numbers';
@@ -39,16 +39,6 @@ const REPORT_COLUMNS = [
 ] as const;
 
 type ReportColumnId = (typeof REPORT_COLUMNS)[number]['id'];
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/gu, (character) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[character] ?? character);
-}
 
 function formatComplianceDate(
   startBs?: string | number | null,
@@ -68,66 +58,8 @@ function getExtraAmount(row: MemberTransactionRow): number {
   return Math.max(0, row.receipt.totalAmount - billItemAmount);
 }
 
-function openMemberReportPrintView(
-  rows: MemberTransactionRow[],
-  headerDetails: ReportHeaderDetails,
-  profile: Array<[string, string]>,
-): boolean {
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return false;
-  const bodyRows = rows.map((row, index) => `
-    <tr>
-      <td>${toNepaliDigits(index + 1)}</td>
-      <td>${escapeHtml(formatReportDate(row.receipt.paymentDate))}</td>
-      <td>${escapeHtml(formatReportDate(row.receipt.validUntil))}</td>
-      <td>${escapeHtml(toNepaliDigits(row.receipt.receiptNumber))}</td>
-      <td>${escapeHtml(row.receipt.bill.content.note || row.feeTitles)}</td>
-      <td class="amount">${escapeHtml(formatReportAmount(row.receipt.totalAmount))}</td>
-      <td class="amount">${escapeHtml(formatReportAmount(getExtraAmount(row)))}</td>
-    </tr>`).join('');
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html>
-    <html lang="ne">
-      <head>
-        <meta charset="utf-8">
-        <title>सदस्यता तथा कारोबार रिपोर्ट</title>
-        <style>
-          @page { size: landscape; margin: 12mm; }
-          body { color: #111827; font: 13px system-ui, sans-serif; }
-          h1 { margin: 0 0 4px; text-align: center; font-size: 20px; }
-          .template { margin-bottom: 18px; text-align: center; }
-          .template p { margin: 2px 0; }
-          .profile { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 24px; margin-bottom: 18px; }
-          .profile p { margin: 0; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { padding: 7px 6px; border: 1px solid #d1d5db; text-align: left; vertical-align: top; }
-          th { background: #f3f4f6; }
-          .amount { text-align: right; white-space: nowrap; }
-        </style>
-      </head>
-      <body>
-        <div class="template">
-          <h1>${escapeHtml(headerDetails.organizationName || '—')}</h1>
-          <p>${escapeHtml(headerDetails.officeAddress || '—')}</p>
-          <p>${escapeHtml(headerDetails.branchName || '—')}</p>
-          <p>${escapeHtml(headerDetails.reportTitle)} (${escapeHtml(headerDetails.reportDateRange)})</p>
-          <p>मिति: ${escapeHtml(headerDetails.reportDateLine)}</p>
-        </div>
-        <div class="profile">
-          ${profile.map(([label, value]) => `<p>${escapeHtml(label)}: ${escapeHtml(value || '—')}</p>`).join('')}
-        </div>
-        <table>
-          <thead><tr><th>सि.नं.</th><th>मिति</th><th>मिति सम्म</th><th>रसिद नं.</th><th>कैफियत</th><th>रकम रु.</th><th>जम्मा मध्ये अतिरिक्त</th></tr></thead>
-          <tbody>${bodyRows || '<tr><td colspan="7">कारोबार विवरण भेटिएन।</td></tr>'}</tbody>
-        </table>
-      </body>
-    </html>`);
-  printWindow.document.close();
-  window.setTimeout(() => printWindow.print(), 250);
-  return true;
-}
-
 export function MemberTransactionReportPage() {
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const { records, isLoading, error } = useReceipts();
   const { vehicles: registryVehicles, error: registryError } = useTqmsMemberRegistry();
   const { fiscalYears, error: fiscalYearsError } = useFiscalYearManagement();
@@ -237,32 +169,45 @@ export function MemberTransactionReportPage() {
     setPage(1);
   };
 
-  const exportCsv = () => {
-    if (!selectedCandidate) return;
-    downloadReportCsv(
-      selectedRows,
-      [
-        ...selectedProfile.map(([label, value]) => ({ label, value: () => value || '—' })),
-        { label: 'मिति', value: (row) => formatReportDate(row.receipt.paymentDate) },
-        { label: 'मिति सम्म', value: (row) => formatReportDate(row.receipt.validUntil) },
-        { label: 'रसिद नं.', value: (row) => row.receipt.receiptNumber },
-        { label: 'कैफियत', value: (row) => row.receipt.bill.content.note || row.feeTitles },
-        { label: 'रकम रु.', value: (row) => row.receipt.totalAmount },
-        { label: 'जम्मा मध्ये अतिरिक्त', value: (row) => getExtraAmount(row) },
-      ],
-      `membership-transaction-${selectedCandidate.vehicleNumber.replace(/[^\p{L}\p{N}-]/gu, '-')}`,
-      reportHeaderCsvRows(header.details),
-    );
+  const buildMemberExport = () => {
+    if (!selectedCandidate) return null;
+    const rows = selectedRows.map((row) => ({
+      paymentDate: row.receipt.paymentDate,
+      validUntil: row.receipt.validUntil,
+      receiptNumber: row.receipt.receiptNumber,
+      remarks: row.receipt.bill.content.note || row.feeTitles,
+      totalAmount: row.receipt.totalAmount,
+      extraAmount: getExtraAmount(row),
+    }));
+    const template = createMemberTransactionReportTemplate({
+      header: header.details,
+      filename: `membership-transaction-${selectedCandidate.vehicleNumber.replace(/[^\p{L}\p{N}-]/gu, '-')}`,
+      profile: selectedProfile,
+      includeHeader: true,
+    });
+    return { rows, template };
   };
 
-  const exportPdf = () => {
-    if (!selectedCandidate) return;
-    if (!openMemberReportPrintView(selectedRows, header.details, selectedProfile)) {
+  const exportCsv = () => {
+    const payload = buildMemberExport();
+    if (!payload) return;
+    exportReportExcel(payload.template, payload.rows);
+  };
+
+  const exportPdf = async () => {
+    const payload = buildMemberExport();
+    if (!payload || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportReportPdf(payload.template, payload.rows);
+    } catch (cause) {
       toast({
         title: 'PDF निर्यात सुरु गर्न सकिएन',
-        description: 'ब्राउजरमा नयाँ विन्डो खोल्ने अनुमति दिनुहोस्।',
+        description: cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
         variant: 'destructive',
       });
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -286,7 +231,7 @@ export function MemberTransactionReportPage() {
           <Button type="button" variant="outline" className="h-10 gap-2" onClick={exportCsv} disabled={!selectedCandidate || selectedRows.length === 0}>
             <Download className="h-4 w-4" aria-hidden="true" />Excel निकाल्नुहोस्
           </Button>
-          <Button type="button" variant="outline" className="h-10 gap-2" onClick={exportPdf} disabled={!selectedCandidate || selectedRows.length === 0}>
+          <Button type="button" variant="outline" className="h-10 gap-2" onClick={() => void exportPdf()} disabled={!selectedCandidate || selectedRows.length === 0 || isExportingPdf} loading={isExportingPdf}>
             <FileDown className="h-4 w-4" aria-hidden="true" />PDF निकाल्नुहोस्
           </Button>
         </form>

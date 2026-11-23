@@ -1,16 +1,17 @@
 export const INCOME_REPORT_COLUMN_OPTIONS = [
+  { id: 'vehicleNumber', label: 'गाडी नं.', defaultVisible: true, required: true },
+  { id: 'vehicleType', label: 'सवारी प्रकार', defaultVisible: true, required: false },
+  { id: 'customerName', label: 'धनीको नाम', defaultVisible: true, required: false },
+  { id: 'note', label: 'कैफियत', defaultVisible: true, required: false },
   { id: 'receiptNumber', label: 'रसिद नं.', defaultVisible: true, required: true },
-  { id: 'vehicleNumber', label: 'गाडी नं. / प्रकार', defaultVisible: true, required: true },
-  { id: 'customerName', label: 'ग्राहक / सदस्य', defaultVisible: true, required: false },
-  { id: 'feeTitle', label: 'आम्दानी शीर्षक', defaultVisible: true, required: false },
-  { id: 'billingEntity', label: 'Billing Entity', defaultVisible: true, required: false },
-  { id: 'branchName', label: 'शाखा', defaultVisible: true, required: false },
-  { id: 'userName', label: 'प्रयोगकर्ता', defaultVisible: false, required: false },
-  { id: 'paymentMethod', label: 'भुक्तानी विधि', defaultVisible: true, required: false },
-  { id: 'paymentDate', label: 'मिति', defaultVisible: true, required: false },
-  { id: 'amount', label: 'शुल्क रकम', defaultVisible: true, required: false },
-  { id: 'receiptTotal', label: 'रसिद जम्मा', defaultVisible: true, required: false },
-  { id: 'status', label: 'स्थिति', defaultVisible: true, required: false },
+  { id: 'membershipIncome', label: 'सदस्यताबाट', defaultVisible: true, required: false },
+  { id: 'otherIncome', label: 'अन्य आम्दानी', defaultVisible: true, required: false },
+  { id: 'receiptTotal', label: 'जम्मा', defaultVisible: true, required: false },
+  { id: 'billingMonths', label: 'अवधि महिना', defaultVisible: true, required: false },
+  { id: 'paymentMethod', label: 'भुक्तानी तरिका', defaultVisible: true, required: false },
+  { id: 'paymentDate', label: 'का. मिति', defaultVisible: true, required: false },
+  { id: 'periodStart', label: 'देखि', defaultVisible: true, required: false },
+  { id: 'periodEnd', label: 'सम्म', defaultVisible: true, required: false },
 ] as const;
 
 export type IncomeReportColumnId = (typeof INCOME_REPORT_COLUMN_OPTIONS)[number]['id'];

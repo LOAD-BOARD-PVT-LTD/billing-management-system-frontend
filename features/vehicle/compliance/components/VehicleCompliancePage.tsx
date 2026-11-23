@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { Download, Filter, RefreshCw, Search } from 'lucide-react';
 import Link from 'next/link';
+import { organizationConfig } from '@/constants/organization';
+import { exportReportExcel, type ReportExportTemplate } from '@/shared/report-export';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Badge } from '@/components/ui/badge';
@@ -171,25 +173,29 @@ function ExpiryCell({ period }: { period: VehicleDocumentPeriod }) {
 }
 
 function downloadArrearsCsv(rows: ArrearsListRow[], view: ArrearsView) {
-  const headers = ['सवारी नम्बर', 'सवारी प्रकार', 'धनीको नाम', 'संचालक', 'फोन नम्बर', 'रसिद नम्बर', 'भुक्तानी मिति', 'म्याद'];
-  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const data = rows.map((row) => [
-    row.vehicleNumber,
-    row.vehicleType,
-    row.ownerName,
-    row.operatorName,
-    row.phone,
-    row.receiptNumber,
-    row.billingDate,
-    row.expiryDate,
-  ]);
-  const csv = [headers, ...data].map((row) => row.map(escape).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `bakyauda-myad-${view}.csv`;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const template: ReportExportTemplate<ArrearsListRow> = {
+    id: `bakyauda-myad-${view}`,
+    filename: `bakyauda-myad-${view}`,
+    sheetName: 'बक्यौता म्याद सूची',
+    orientation: 'landscape',
+    header: {
+      organizationName: organizationConfig.nameNepali,
+      title: 'बक्यौता / म्याद समाप्त सवारी सूची',
+    },
+    columns: [
+      { id: 'serial', label: 'सि.नं.', width: 32, align: 'center', pdfValue: (_r, i) => toNepaliDigits(i + 1), excelValue: (_r, i) => i + 1 },
+      { id: 'vehicleNumber', label: 'सवारी नम्बर', width: 85, pdfValue: (r) => r.vehicleNumber || '-' },
+      { id: 'vehicleType', label: 'सवारी प्रकार', width: 65, pdfValue: (r) => r.vehicleType || '-' },
+      { id: 'ownerName', label: 'धनीको नाम', width: 100, pdfValue: (r) => r.ownerName || '-' },
+      { id: 'operatorName', label: 'संचालक', width: 95, pdfValue: (r) => r.operatorName || '-' },
+      { id: 'phone', label: 'फोन नम्बर', width: 65, pdfValue: (r) => r.phone || '-' },
+      { id: 'receiptNumber', label: 'रसिद नम्बर', width: 60, pdfValue: (r) => r.receiptNumber || '-' },
+      { id: 'billingDate', label: 'भुक्तानी मिति', width: 65, align: 'center', pdfValue: (r) => r.billingDate || '-' },
+      { id: 'expiryDate', label: 'म्याद', width: 65, align: 'center', pdfValue: (r) => r.expiryDate || '-' },
+    ],
+    summaryFooter: (list) => [{ label: `जम्मा सवारी: ${toNepaliDigits(list.length)} वटा` }],
+  };
+  exportReportExcel(template, rows);
 }
 
 export function VehicleCompliancePage() {

@@ -16,7 +16,8 @@ import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { useVehicleTypes } from '@/features/vehicle/type/hooks/useVehicleTypes';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
 import { formatReportAmount, formatReportDate, normalizeReportKey } from '@/features/reports/utils/report-format';
-import { downloadReportCsv, reportHeaderCsvRows } from '@/features/reports/utils/report-csv';
+import { createVehicleCategoryReportTemplate } from '@/features/reports/templates/report-templates';
+import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
 import type { IncomeReportFilters } from '@/features/reports/types/income-report';
 import { toNepaliDigits } from '@/utils/numbers';
@@ -186,7 +187,7 @@ function ReportFilters({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         <div className="min-w-0 space-y-1.5">
           <label className="text-xs font-medium" htmlFor="vehicle-report-fiscal-year">वित्तीय वर्ष</label>
-          <FiscalYearSelect id="vehicle-report-fiscal-year" value={filters.fiscalYear} onChange={(value) => onUpdate('fiscalYear', value)} optionsOverride={fiscalYearOptions} includeAllOption />
+          <FiscalYearSelect id="vehicle-report-fiscal-year" className="[&>label]:hidden" value={filters.fiscalYear} onChange={(value) => onUpdate('fiscalYear', value)} optionsOverride={fiscalYearOptions} includeAllOption />
         </div>
         <FilterSelect id="vehicle-report-branch" label="शाखा" value={filters.branch} options={branches.map((value) => ({ value, label: value }))} onChange={(value) => onUpdate('branch', value)} />
         <FilterSelect id="vehicle-report-fee-head" label="आम्दानी शीर्षक" value={filters.feeHead} options={feeHeads} onChange={(value) => onUpdate('feeHead', value)} />
@@ -263,7 +264,8 @@ export function VehicleCategoryReportPage() {
   const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState('all');
-  const [includeHeader, setIncludeHeader] = useState(false);
+  const [includeHeader, setIncludeHeader] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const header = useReportHeaderDetails('सवारी वर्गअनुसार मासिक आम्दानी रिपोर्ट', filters.dateFrom, filters.dateTo);
@@ -316,45 +318,44 @@ export function VehicleCategoryReportPage() {
     setVehicleTypeFilter('all');
     setPage(1);
   };
-  const exportCsv = () => downloadReportCsv(
-    allFilteredRows.map((row) => ({
-      vehicleNumber: row.receipt.vehicleNumber,
-      vehicleType: row.vehicleType,
-      route: row.route,
-      routePermitExpiry: row.routePermitExpiry,
-      ownerName: row.ownerName,
-      operatorName: row.operatorName,
-      note: row.receipt.bill.content.note,
-      receiptNumber: row.receipt.receiptNumber,
-      membershipIncome: row.membershipIncome,
-      otherIncome: row.otherIncome,
-      total: row.total,
-      periodMonths: row.receipt.bill.content.billingMonths,
-      paymentMethod: row.receipt.paymentMethod,
-      billingDate: row.receipt.billingDate,
-      periodStart: row.receipt.bill.content.periodStart,
-      periodEnd: row.receipt.bill.content.periodEnd,
-    })),
-    [
-      { label: 'गाडी नं.', value: (row) => row.vehicleNumber },
-      { label: 'सवारी प्रकार', value: (row) => row.vehicleType },
-      { label: 'रुट परमिट', value: (row) => row.route },
-      { label: 'रुट परमिट म्याद समाप्ति मिति', value: (row) => row.routePermitExpiry },
-      { label: 'धनीको नाम', value: (row) => `${row.operatorName ? `संचालक: ${row.operatorName} ` : ''}धनीको नाम: ${row.ownerName}` },
-      { label: 'कैफियत', value: (row) => row.note },
-      { label: 'रसिद नं.', value: (row) => row.receiptNumber },
-      { label: 'सदस्यताबाट', value: (row) => row.membershipIncome },
-      { label: 'अन्य आम्दानी', value: (row) => row.otherIncome },
-      { label: 'जम्मा', value: (row) => row.total },
-      { label: 'अवधि महिना', value: (row) => row.periodMonths },
-      { label: 'भुक्तानी तरिका', value: (row) => row.paymentMethod },
-      { label: 'का. मिति', value: (row) => row.billingDate },
-      { label: 'देखि', value: (row) => row.periodStart },
-      { label: 'सम्म', value: (row) => row.periodEnd },
-    ],
-    'vehicle-category-income-report',
-    includeHeader ? reportHeaderCsvRows(header.details) : [],
-  );
+  const exportRows = allFilteredRows.map((row) => ({
+    vehicleNumber: row.receipt.vehicleNumber,
+    vehicleType: row.vehicleType,
+    route: row.route,
+    routePermitExpiry: row.routePermitExpiry,
+    ownerName: row.ownerName,
+    operatorName: row.operatorName,
+    note: row.receipt.bill.content.note,
+    receiptNumber: row.receipt.receiptNumber,
+    membershipIncome: row.membershipIncome,
+    otherIncome: row.otherIncome,
+    total: row.total,
+    periodMonths: row.receipt.bill.content.billingMonths,
+    paymentMethod: row.receipt.paymentMethod,
+    billingDate: row.receipt.billingDate,
+    periodStart: row.receipt.bill.content.periodStart,
+    periodEnd: row.receipt.bill.content.periodEnd,
+  }));
+  const exportTemplate = createVehicleCategoryReportTemplate({
+    header: header.details,
+    includeHeader,
+  });
+  const exportCsv = () => exportReportExcel(exportTemplate, exportRows);
+  const exportPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportReportPdf(exportTemplate, exportRows);
+    } catch (cause) {
+      toast({
+        title: 'PDF निर्यात सुरु गर्न सकिएन',
+        description: cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const retry = () => {
     void receiptsQuery.reload();
@@ -388,6 +389,8 @@ export function VehicleCategoryReportPage() {
         includeHeaderDetails={includeHeader}
         onIncludeHeaderDetailsChange={setIncludeHeader}
         onExportCsv={exportCsv}
+        onExportPdf={() => void exportPdf()}
+        isExportingPdf={isExportingPdf}
         exportDisabled={isLoading || Boolean(error) || allFilteredRows.length === 0}
       />
       {error ? (

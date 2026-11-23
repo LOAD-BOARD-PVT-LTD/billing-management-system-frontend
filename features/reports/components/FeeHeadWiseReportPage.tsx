@@ -13,7 +13,8 @@ import type { FeeHead, FiscalYear } from '@/features/billing-rules/model/types';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { mapIncomeReportRows } from '@/features/reports/services/income-report.service';
-import { downloadReportCsv, reportHeaderCsvRows } from '@/features/reports/utils/report-csv';
+import { createFeeHeadWiseReportTemplate } from '@/features/reports/templates/report-templates';
+import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { filterIncomeReportRows, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
 import { formatReportAmount, formatReportDate } from '@/features/reports/utils/report-format';
 import { toNepaliDigits } from '@/utils/numbers';
@@ -105,7 +106,8 @@ export function FeeHeadWiseReportPage() {
   const billingRules = useBillingRules();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
   const header = useReportHeaderDetails('शीर्षक अनुसार रिपोर्ट', filters.dateFrom, filters.dateTo);
-  const [includeHeader, setIncludeHeader] = useState(false);
+  const [includeHeader, setIncludeHeader] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [page, setPage] = useState(1);
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
@@ -163,25 +165,25 @@ export function FeeHeadWiseReportPage() {
     setPage(1);
   };
 
-  const exportCsv = () => {
-    const columns = [
-      { label: 'रसिद नं.', value: (row: FeeHeadReportRow) => row.receipt.receiptNumber },
-      { label: 'सवारी नं.', value: (row: FeeHeadReportRow) => row.receipt.vehicleNumber },
-      { label: 'धनी / संचालक विवरण', value: (row: FeeHeadReportRow) => `${row.receipt.customerName} ${getOperatorName(row.receipt)} ${row.receipt.bill.content.vehicle.phone}`.trim() },
-      { label: 'सवारी प्रकार', value: (row: FeeHeadReportRow) => row.receipt.bill.content.vehicle.vehicleType },
-      ...visibleFeeHeads.map((feeHead) => ({
-        label: `${getFeeHeadNumber(billingRules.config.feeHeads.indexOf(feeHead))}. ${feeHead.name}`,
-        value: (row: FeeHeadReportRow) => row.amounts[feeHead.id] ?? 0,
-      })),
-      { label: 'जम्मा', value: (row: FeeHeadReportRow) => row.receipt.totalAmount },
-      { label: 'कैफियत', value: (row: FeeHeadReportRow) => row.receipt.bill.content.note },
-    ];
-    downloadReportCsv(
-      allRows,
-      columns,
-      'sirsak-anusar-report',
-      includeHeader ? reportHeaderCsvRows(header.details) : [],
-    );
+  const exportRows = allRows.map((row) => ({
+    ...row,
+    operatorName: getOperatorName(row.receipt),
+  }));
+  const exportTemplate = createFeeHeadWiseReportTemplate({
+    header: header.details,
+    visibleFeeHeads,
+    allFeeHeads: billingRules.config.feeHeads,
+    includeHeader,
+  });
+  const exportCsv = () => exportReportExcel(exportTemplate, exportRows);
+  const exportPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportReportPdf(exportTemplate, exportRows);
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const retry = () => {
@@ -202,6 +204,8 @@ export function FeeHeadWiseReportPage() {
         includeHeaderDetails={includeHeader}
         onIncludeHeaderDetailsChange={setIncludeHeader}
         onExportCsv={exportCsv}
+        onExportPdf={() => void exportPdf()}
+        isExportingPdf={isExportingPdf}
         exportDisabled={isLoading || Boolean(error) || allRows.length === 0}
       />
 

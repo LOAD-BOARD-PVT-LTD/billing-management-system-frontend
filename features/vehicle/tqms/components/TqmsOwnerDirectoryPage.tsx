@@ -15,8 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { organizationConfig } from '@/constants/organization';
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
 import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
+import { exportReportExcel, type ReportExportTemplate } from '@/shared/report-export';
 import { toNepaliDigits } from '@/utils/numbers';
 import { getOptionalTqmsUrl } from '@/lib/config/tqms';
 
@@ -70,24 +72,28 @@ function groupVehicles(vehicles: MemberVehicleDetails[]): OwnerGroup[] {
 }
 
 function downloadOwnerCsv(owners: OwnerGroup[]) {
-  const headers = ['नाम', 'धनी प्रकार', 'फोन नम्बर', 'पहिचान नम्बर', 'ठेगाना', 'कुल सवारी', 'सवारी नम्बरहरू'];
-  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const rows = owners.map((owner) => [
-    owner.name,
-    owner.type || '—',
-    owner.phone || '—',
-    owner.identityNumber || '—',
-    owner.address || '—',
-    String(owner.vehicles.length),
-    owner.vehicles.map((vehicle) => vehicle.vehicleNumber || vehicle.vehicleId).join(', '),
-  ]);
-  const csv = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'tqms-owner-directory.csv';
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const template: ReportExportTemplate<OwnerGroup> = {
+    id: 'tqms-owner-directory',
+    filename: 'tqms-owner-directory',
+    sheetName: 'TQMS सवारी धनी',
+    orientation: 'landscape',
+    header: {
+      organizationName: organizationConfig.nameNepali,
+      title: 'TQMS सवारी धनी निर्देशिका',
+    },
+    columns: [
+      { id: 'serial', label: 'सि.नं.', width: 32, align: 'center', pdfValue: (_r, i) => toNepaliDigits(i + 1), excelValue: (_r, i) => i + 1 },
+      { id: 'name', label: 'नाम', width: 110, pdfValue: (o) => o.name || '-' },
+      { id: 'type', label: 'धनी प्रकार', width: 65, pdfValue: (o) => o.type || '-' },
+      { id: 'phone', label: 'फोन नम्बर', width: 68, pdfValue: (o) => o.phone || '-' },
+      { id: 'identityNumber', label: 'पहिचान नम्बर', width: 75, pdfValue: (o) => o.identityNumber || '-' },
+      { id: 'address', label: 'ठेगाना', width: 95, pdfValue: (o) => o.address || '-' },
+      { id: 'count', label: 'कुल सवारी', width: 45, align: 'center', pdfValue: (o) => toNepaliDigits(o.vehicles.length), excelValue: (o) => o.vehicles.length },
+      { id: 'vehicles', label: 'सवारी नम्बरहरू', width: 140, pdfValue: (o) => o.vehicles.map((v) => v.vehicleNumber || v.vehicleId).join(', ') },
+    ],
+    summaryFooter: (rows) => [{ label: `जम्मा सवारी धनी: ${toNepaliDigits(rows.length)} जना` }],
+  };
+  exportReportExcel(template, owners);
 }
 
 function lastSyncLabel(date: Date | null) {

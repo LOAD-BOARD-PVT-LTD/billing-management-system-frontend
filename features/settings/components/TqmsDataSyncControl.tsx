@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock3, Database, Download, RefreshCw } from 'lucide-react';
 
+import { organizationConfig } from '@/constants/organization';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { exportReportExcel, type ReportExportTemplate } from '@/shared/report-export';
 import { useMemberVehicles } from '@/features/members/hooks/use-member-vehicles';
 import { useTqmsVehicleTypes } from '@/features/vehicle/mappings/tqms-vehicle-type/hooks/useTqmsVehicleTypes';
 import { parseTqmsDataSyncResult, type TqmsDataSyncResult, type TqmsSkippedRecord } from '@/features/settings/utils/tqms-data-sync';
@@ -26,29 +28,29 @@ function formatSyncDate(value: string): string {
     : new Intl.DateTimeFormat('ne-NP', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function csvCell(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
-}
-
 function downloadSkippedRecords(records: TqmsSkippedRecord[], headings: string[]): void {
-  const rows = records.map((record) => [
-    record.vehicleId,
-    record.owner,
-    record.phone,
-    record.vehicleType,
-    record.branch,
-    record.address,
-    record.citizenshipNumber,
-    record.registrationStatus,
-    record.reason,
-  ]);
-  const content = `\uFEFF${[headings, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}`;
-  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'tqms-skipped-records.csv';
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const template: ReportExportTemplate<TqmsSkippedRecord> = {
+    id: 'tqms-skipped-records',
+    filename: 'tqms-skipped-records',
+    sheetName: 'TQMS Skipped',
+    orientation: 'landscape',
+    header: {
+      organizationName: organizationConfig.nameNepali,
+      title: 'TQMS Sync Skipped Records',
+    },
+    columns: [
+      { id: 'vehicleId', label: headings[0] ?? 'Vehicle ID', width: 60, pdfValue: (r) => r.vehicleId },
+      { id: 'owner', label: headings[1] ?? 'Owner', width: 95, pdfValue: (r) => r.owner },
+      { id: 'phone', label: headings[2] ?? 'Phone', width: 65, pdfValue: (r) => r.phone },
+      { id: 'vehicleType', label: headings[3] ?? 'Vehicle Type', width: 65, pdfValue: (r) => r.vehicleType },
+      { id: 'branch', label: headings[4] ?? 'Branch', width: 65, pdfValue: (r) => r.branch },
+      { id: 'address', label: headings[5] ?? 'Address', width: 85, pdfValue: (r) => r.address },
+      { id: 'citizenshipNumber', label: headings[6] ?? 'Citizenship', width: 70, pdfValue: (r) => r.citizenshipNumber },
+      { id: 'registrationStatus', label: headings[7] ?? 'Status', width: 55, pdfValue: (r) => r.registrationStatus },
+      { id: 'reason', label: headings[8] ?? 'Reason', width: 110, pdfValue: (r) => r.reason },
+    ],
+  };
+  exportReportExcel(template, records);
 }
 
 export function TqmsDataSyncControl() {

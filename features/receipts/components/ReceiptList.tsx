@@ -20,7 +20,8 @@ import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-recei
 import { usePrintReceipt } from '@/features/receipts/hooks/use-print-receipt';
 import { useReceiptCancelWindow } from '@/features/settings/hooks/useReceiptCancelWindow';
 import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
-import { buildReceiptExportCsv } from '@/features/receipts/utils/receipt-export';
+import { createReceiptsExportTemplate } from '@/features/receipts/utils/receipt-export';
+import { exportReportExcel } from '@/shared/report-export';
 
 const PAGE_SIZE = 10;
 
@@ -46,13 +47,7 @@ function sortValue(receipt: ReceiptRecord, column: string): string | number {
 }
 
 function downloadCsv(rows: ReceiptRecord[], columns: ReceiptColumnId[], fiscalYear: string) {
-	const csv = buildReceiptExportCsv(rows, columns);
-	const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-	const link = document.createElement('a');
-	link.href = url;
-	link.download = `receipts-${fiscalYear.replaceAll('/', '-')}.csv`;
-	link.click();
-	window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+	exportReportExcel(createReceiptsExportTemplate(columns, fiscalYear), rows);
 }
 
 export function ReceiptList() {

@@ -8,7 +8,7 @@ import {
   type IncomeReportColumnId,
 } from '@/features/reports/utils/income-report-columns';
 
-const PREFERENCE_KEY = 'billing.income-report.visible-columns.v1';
+const PREFERENCE_KEY = 'billing.income-report.visible-columns.v2';
 
 function validColumns(value: unknown): IncomeReportColumnId[] | null {
   if (!Array.isArray(value)) return null;

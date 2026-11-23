@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { organizationConfig } from '@/constants/organization';
 import { useTqmsMemberRegistry } from '@/features/vehicle/tqms/hooks/useTqmsMemberRegistry';
 import type { TqmsRegistryVehicle } from '@/features/vehicle/tqms/model/tqms-member-registry';
+import { exportReportExcel, exportReportPdf, type ReportExportTemplate } from '@/shared/report-export';
 import { toNepaliDigits } from '@/utils/numbers';
-import { downloadDocument, renderPdfPages } from '@/shared/document-generation';
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const PDF_ROWS_PER_PAGE = 30;
@@ -38,28 +39,30 @@ function summarizeVehicleNumbers(rows: TqmsRegistryVehicle[]): VehicleNumberSumm
 }
 
 function downloadCsv(rows: TqmsRegistryVehicle[]) {
-  const columns: Array<[string, (row: TqmsRegistryVehicle) => string]> = [
-    ['सवारी नम्बर', (row) => row.vehicleNumber],
-    ['सवारी प्रकार', (row) => row.vehicleType],
-    ['संचालक', (row) => row.operatorName ?? row.vehicleOwnerName],
-    ['सवारी धनी', (row) => row.vehicleOwnerName],
-    ['फोन नम्बर', (row) => row.phone],
-    ['संघ शाखा', (row) => row.branch],
-    ['स्थिति', (row) => row.status],
-    ['ठेगाना', (row) => row.address],
-    ['नागरिकता नम्बर', (row) => row.citizenshipNumber],
-  ];
-  const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;
-  const content = [
-    columns.map(([label]) => escape(label)).join(','),
-    ...rows.map((row) => columns.map(([, value]) => escape(value(row))).join(',')),
-  ].join('\r\n');
-  const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'tqms-member-registry.csv';
-  link.click();
-  URL.revokeObjectURL(url);
+  const template: ReportExportTemplate<TqmsRegistryVehicle> = {
+    id: 'tqms-member-registry',
+    filename: 'tqms-member-registry',
+    sheetName: 'TQMS सदस्य दर्ता',
+    orientation: 'landscape',
+    header: {
+      organizationName: organizationConfig.nameNepali,
+      title: 'TQMS सदस्य दर्ता सूची',
+    },
+    columns: [
+      { id: 'serial', label: 'सि.नं.', width: 32, align: 'center', pdfValue: (_r, i) => toNepaliDigits(i + 1), excelValue: (_r, i) => i + 1 },
+      { id: 'vehicleNumber', label: 'सवारी नम्बर', width: 82, pdfValue: (r) => r.vehicleNumber || '-' },
+      { id: 'vehicleType', label: 'सवारी प्रकार', width: 65, pdfValue: (r) => r.vehicleType || '-' },
+      { id: 'operator', label: 'संचालक', width: 95, pdfValue: (r) => r.operatorName ?? r.vehicleOwnerName ?? '-' },
+      { id: 'owner', label: 'सवारी धनी', width: 95, pdfValue: (r) => r.vehicleOwnerName || '-' },
+      { id: 'phone', label: 'फोन नम्बर', width: 65, pdfValue: (r) => r.phone || '-' },
+      { id: 'branch', label: 'संघ शाखा', width: 65, pdfValue: (r) => r.branch || '-' },
+      { id: 'status', label: 'स्थिति', width: 50, align: 'center', pdfValue: (r) => r.status || '-' },
+      { id: 'address', label: 'ठेगाना', width: 85, pdfValue: (r) => r.address || '-' },
+      { id: 'citizenship', label: 'नागरिकता नम्बर', width: 70, pdfValue: (r) => r.citizenshipNumber || '-' },
+    ],
+    summaryFooter: (list) => [{ label: `जम्मा सवारी: ${toNepaliDigits(list.length)} वटा` }],
+  };
+  exportReportExcel(template, rows);
 }
 
 function RegistryPagination({
@@ -225,19 +228,37 @@ export function TqmsMemberRegistryPage() {
     setIsDownloadingPdf(true);
     setPdfError(null);
     try {
-      const root = pdfContentRef.current;
-      if (!root) throw new Error('PDF सामग्री उपलब्ध छैन।');
-      if (pdfPages.length === 0) throw new Error('डाउनलोड गर्न सवारी नम्बर उपलब्ध छैन।');
-      const elements = Array.from(root.querySelectorAll<HTMLElement>('[data-tqms-pdf-page]'));
-      if (elements.length !== pdfPages.length) throw new Error('PDF पृष्ठहरू तयार भएनन्।');
-      const blob = await renderPdfPages(elements, {
+      if (vehicleNumberSummary.uniqueNumbers.length === 0 && vehicleNumberSummary.duplicateNumbers.length === 0) {
+        throw new Error('डाउनलोड गर्न सवारी नम्बर उपलब्ध छैन।');
+      }
+      const duplicateCountByNumber = new Map(
+        vehicleNumberSummary.duplicateNumbers.map((item) => [item.number, item.count]),
+      );
+      const pdfRows = vehicleNumberSummary.uniqueNumbers.map((number) => ({
+        number,
+        count: duplicateCountByNumber.get(number) ?? 1,
+      }));
+      const template: ReportExportTemplate<{ number: string; count: number }> = {
+        id: 'tqms-unique-vehicle-numbers',
+        filename: 'tqms-unique-vehicle-numbers',
+        sheetName: 'सवारी नम्बर',
         orientation: 'portrait',
-        copies: 1,
-      });
-      if (blob.type !== 'application/pdf' || blob.size === 0) throw new Error('सवारी नम्बर PDF तयार भएन।');
-      const url = URL.createObjectURL(blob);
-      downloadDocument(url, 'tqms-unique-vehicle-numbers');
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        header: {
+          organizationName: organizationConfig.nameNepali,
+          title: 'TQMS अद्वितीय सवारी नम्बर सूची',
+          rightMeta: `दोहोरो नम्बर: ${toNepaliDigits(vehicleNumberSummary.duplicateNumbers.length)}`,
+        },
+        columns: [
+          { id: 'serial', label: 'सि.नं.', width: 20, align: 'center', pdfValue: (_r, i) => toNepaliDigits(i + 1), excelValue: (_r, i) => i + 1 },
+          { id: 'number', label: 'सवारी नम्बर', width: 65, pdfValue: (r) => r.number },
+          { id: 'count', label: 'संख्या', width: 25, align: 'center', pdfValue: (r) => toNepaliDigits(r.count), excelValue: (r) => r.count },
+        ],
+        summaryFooter: () => [
+          { label: `जम्मा अद्वितीय सवारी: ${toNepaliDigits(vehicleNumberSummary.uniqueNumbers.length)}` },
+          { label: `दोहोरो सवारी नम्बर: ${toNepaliDigits(vehicleNumberSummary.duplicateNumbers.length)}` },
+        ],
+      };
+      await exportReportPdf(template, pdfRows);
     } catch (cause) {
       setPdfError(cause instanceof Error ? cause.message : 'सवारी नम्बर PDF बनाउन सकिएन।');
     } finally {

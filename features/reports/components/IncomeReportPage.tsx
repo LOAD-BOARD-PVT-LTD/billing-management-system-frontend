@@ -13,8 +13,9 @@ import { useIncomeReportColumns } from '@/features/reports/hooks/use-income-repo
 import { useIncomeReport } from '@/features/reports/hooks/use-income-report';
 import { useIncomeReportFilters } from '@/features/reports/hooks/use-income-report-filters';
 import { useReportHeaderDetails } from '@/features/reports/hooks/use-report-header-details';
-import { downloadIncomeReportCsv, openIncomeReportPrintView } from '@/features/reports/services/income-report.service';
-import { filterIncomeReportRows, getIncomeReportDateLabel, getIncomeReportExportLabel, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import { buildAmdaniExportRows, createAmdaniReportTemplate } from '@/features/reports/templates/amdani-report.template';
+import { filterIncomeReportRows, getIncomeReportExportLabel, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import type { IncomeReportFilters as IncomeReportFilterValues, IncomeReportRow } from '@/features/reports/types/income-report';
 import type { SortDirection } from '@/components/data-tables/DataTableColumnHeader';
 import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
@@ -54,30 +55,40 @@ function SummaryCard({ label, value, description, accent }: { label: string; val
 }
 
 export function IncomeReportPage() {
-  const { rows, isLoading, error, reload } = useIncomeReport();
+  const { rows, receipts, isLoading, error, reload } = useIncomeReport();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
-  const header = useReportHeaderDetails('मिति अनुसार दैनिक आम्दानी', filters.dateFrom, filters.dateTo);
+  const header = useReportHeaderDetails('दैनिक आम्दानी', filters.dateFrom, filters.dateTo);
   const { visibleColumns, applyColumns } = useIncomeReportColumns();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
-  const [includeHeaderDetails, setIncludeHeaderDetails] = useState(false);
+  const [includeHeaderDetails, setIncludeHeaderDetails] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [sortColumn, setSortColumn] = useState<IncomeReportSortKey>('paymentDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
   const filteredRows = useMemo(() => filterIncomeReportRows(rows, filters), [rows, filters]);
+  const receiptRows = useMemo(() => {
+    const uniqueByReceipt = new Map<string, IncomeReportRow>();
+    for (const row of filteredRows) {
+      if (!uniqueByReceipt.has(row.receiptId)) {
+        uniqueByReceipt.set(row.receiptId, row);
+      }
+    }
+    return Array.from(uniqueByReceipt.values());
+  }, [filteredRows]);
   const exportHeader = header.details;
   const sortedRows = useMemo(() => {
-    if (!sortDirection) return filteredRows;
+    if (!sortDirection) return receiptRows;
     const direction = sortDirection === 'asc' ? 1 : -1;
-    return [...filteredRows].sort((first, second) => {
+    return [...receiptRows].sort((first, second) => {
       const left = sortValue(first, sortColumn);
       const right = sortValue(second, sortColumn);
       return (typeof left === 'number' && typeof right === 'number'
         ? left - right
         : String(left).localeCompare(String(right), 'ne')) * direction;
     });
-  }, [filteredRows, sortColumn, sortDirection]);
+  }, [receiptRows, sortColumn, sortDirection]);
 
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -106,23 +117,33 @@ export function IncomeReportPage() {
     setPage(1);
   };
 
-  const exportExcel = () => downloadIncomeReportCsv(
-    sortedRows,
-    getIncomeReportExportLabel(filters),
-    visibleColumns,
-    includeHeaderDetails ? exportHeader : undefined,
+  const amdaniExportRows = useMemo(
+    () => buildAmdaniExportRows(receipts, sortedRows.map((row) => row.receiptId)),
+    [receipts, sortedRows],
   );
-  const exportPdf = () => {
-    if (!openIncomeReportPrintView(
-      sortedRows,
-      getIncomeReportDateLabel(filters),
-      includeHeaderDetails ? exportHeader : undefined,
-    )) {
+  const amdaniTemplate = useMemo(
+    () => createAmdaniReportTemplate({
+      header: exportHeader,
+      filename: getIncomeReportExportLabel(filters),
+      includeHeader: includeHeaderDetails,
+    }),
+    [exportHeader, filters, includeHeaderDetails],
+  );
+
+  const exportExcel = () => exportReportExcel(amdaniTemplate, amdaniExportRows);
+  const exportPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportReportPdf(amdaniTemplate, amdaniExportRows);
+    } catch (cause) {
       toast({
         title: 'PDF निर्यात सुरु गर्न सकिएन',
-        description: 'ब्राउजरमा नयाँ विन्डो खोल्ने अनुमति दिनुहोस्।',
+        description: cause instanceof Error ? cause.message : 'कृपया पुनः प्रयास गर्नुहोस्।',
         variant: 'destructive',
       });
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -144,10 +165,10 @@ export function IncomeReportPage() {
         </div>
         <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-sky-100 pt-3">
           <IncomeReportColumnMenu visibleColumns={visibleColumns} onApply={applyColumns} />
-          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportExcel} disabled={isLoading || Boolean(error) || sortedRows.length === 0}>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportExcel} disabled={isLoading || Boolean(error) || amdaniExportRows.length === 0}>
             <Download className="h-4 w-4" aria-hidden="true" />Excel मा निर्यात
           </Button>
-          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={exportPdf} disabled={isLoading || Boolean(error)}>
+          <Button type="button" variant="outline" size="sm" className="h-9 gap-2 bg-white" onClick={() => void exportPdf()} disabled={isLoading || Boolean(error) || isExportingPdf} loading={isExportingPdf}>
             <FileDown className="h-4 w-4" aria-hidden="true" />PDF मा निर्यात
           </Button>
         </div>

@@ -10,6 +10,7 @@ export function useIncomeReport() {
 
   return {
     rows,
+    receipts: receipts.records,
     isLoading: receipts.isLoading,
     error: receipts.error,
     reload: receipts.reload,
