@@ -2,6 +2,7 @@ export type DashboardMetric = {
   title: string;
   value: number;
   change?: number;
+  href?: string;
   icon:
     | 'members'
     | 'activeMembers'

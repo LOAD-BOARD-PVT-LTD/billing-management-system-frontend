@@ -1,29 +1,57 @@
 import type { CollectionItem } from '@/features/dashboard/data/dashboard-data';
-import { formatCurrency } from '@/utils/numbers';
+import { formatCurrency, toNepaliDigits } from '@/utils/numbers';
 
-export function CollectionSummary({ items }: { items: CollectionItem[] }) {
+export function CollectionSummary({
+  items,
+  title = 'शीर्षकअनुसार सङ्कलन',
+  subtitle = 'छानिएको आर्थिक वर्ष',
+  rightLabel = 'हिस्सा',
+  emptyText = 'सङ्कलन विवरण उपलब्ध छैन।',
+}: {
+  items: CollectionItem[];
+  title?: string;
+  subtitle?: string;
+  rightLabel?: string;
+  emptyText?: string;
+}) {
   return (
-    <section className="rounded-md border bg-card p-4 shadow-sm shadow-black/[0.02]" aria-labelledby="collection-summary-title">
+    <section className="rounded-xl border border-border/80 bg-card p-4 shadow-sm" aria-label={title}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 id="collection-summary-title" className="text-sm font-semibold">शीर्षकअनुसार सङ्कलन</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">चालु आर्थिक वर्ष</p>
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
         </div>
-        <span className="text-xs font-medium text-muted-foreground">लक्ष्य प्रगति</span>
+        <span className="text-xs font-medium text-muted-foreground">{rightLabel}</span>
       </div>
-      <ul className="space-y-4">
-        {items.map((item) => (
-          <li key={item.label}>
-            <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-              <span className="truncate font-medium">{item.label}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">रु {formatCurrency(item.amount)}</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={`${item.label} लक्ष्य प्रगति`} aria-valuenow={item.share} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-full rounded-full bg-primary" style={{ width: `${item.share}%` }} />
-            </div>
-          </li>
-        ))}
-      </ul>
+
+      {items.length === 0 ? (
+        <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-xs text-muted-foreground">
+          {emptyText}
+        </div>
+      ) : (
+        <ul className="space-y-3.5">
+          {items.map((item) => (
+            <li key={item.label}>
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                <span className="truncate font-medium text-foreground">{item.label}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  रु {formatCurrency(item.amount)} ({toNepaliDigits(item.share)}%)
+                </span>
+              </div>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label={`${item.label} हिस्सा`}
+                aria-valuenow={item.share}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${item.share}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

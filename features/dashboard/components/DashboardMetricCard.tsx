@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -33,8 +34,8 @@ const metricTones = {
   inactiveMembers: 'bg-amber-50 text-amber-700 ring-amber-100',
   blacklistedMembers: 'bg-rose-50 text-rose-700 ring-rose-100',
   displacedMembers: 'bg-cyan-50 text-cyan-700 ring-cyan-100',
-  vehicles: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  income: 'bg-amber-50 text-amber-700 ring-amber-100',
+  vehicles: 'bg-sky-50 text-sky-700 ring-sky-100',
+  income: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
   pending: 'bg-rose-50 text-rose-700 ring-rose-100',
 };
 
@@ -46,14 +47,16 @@ export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
     ? `रु ${formatCurrency(metric.value)}`
     : formatNumber(metric.value);
 
-  return (
-    <article className="min-w-0 rounded-md border bg-card p-4 shadow-sm shadow-black/[0.02]">
+  const content = (
+    <article className="group h-full min-w-0 rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm text-muted-foreground">{metric.title}</p>
-          <p className="mt-2 truncate text-xl font-semibold tabular-nums text-foreground">{formattedValue}</p>
+          <p className="truncate text-xs font-medium text-muted-foreground">{metric.title}</p>
+          <p className="mt-2 truncate text-xl font-semibold tracking-tight tabular-nums text-foreground">
+            {formattedValue}
+          </p>
         </div>
-        <span className={`grid size-10 shrink-0 place-items-center rounded-md ring-1 ${metricTones[metric.icon]}`}>
+        <span className={`grid size-10 shrink-0 place-items-center rounded-lg ring-1 ${metricTones[metric.icon]}`}>
           <Icon aria-hidden="true" className="size-5" />
         </span>
       </div>
@@ -66,4 +69,14 @@ export function DashboardMetricCard({ metric }: { metric: DashboardMetric }) {
       ) : null}
     </article>
   );
+
+  if (metric.href) {
+    return (
+      <Link href={metric.href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
