@@ -95,6 +95,7 @@ export function IncomeReportFilters({
           <label className="text-xs font-medium text-foreground" htmlFor="income-fiscal-year">वित्तीय वर्ष</label>
           <FiscalYearSelect
             id="income-fiscal-year"
+            className="[&>label]:hidden"
             value={filters.fiscalYear}
             onChange={(value) => onUpdate('fiscalYear', value)}
             optionsOverride={fiscalYearOptions}

@@ -1,10 +1,8 @@
 'use client';
-
 import { useMemo, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { ReceiptColumnMenu } from '@/features/receipts/components/ReceiptColumnMenu';
 import { ReceiptFilters } from '@/features/receipts/components/ReceiptFilters';
@@ -22,6 +20,7 @@ import { useReceiptCancelWindow } from '@/features/settings/hooks/useReceiptCanc
 import { getReceiptOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
 import { createReceiptsExportTemplate } from '@/features/receipts/utils/receipt-export';
 import { exportReportExcel } from '@/shared/report-export';
+import { getReceiptBillIdSortValue } from '@/lib/receipts/receipt-bill-sort';
 
 const PAGE_SIZE = 10;
 
@@ -58,7 +57,7 @@ export function ReceiptList() {
 	const fiscalYears = Array.from(new Set(records.map((receipt) => receipt.fiscalYear).filter(Boolean)));
 	const [fiscalYear, setFiscalYear] = useState('all');
 	const [page, setPage] = useState(1);
-	const [sortColumn, setSortColumn] = useState('paymentDate');
+	const [sortColumn, setSortColumn] = useState('receiptNumber');
 	const [sortDirection, setSortDirection] = useState<ReceiptSortDirection>('desc');
 	const [copyCount, setCopyCount] = useState(1);
 	const { printReceipt, printingReceiptId } = usePrintReceipt();
@@ -69,6 +68,14 @@ export function ReceiptList() {
 		if (!sortDirection) return filteredRecords;
 		const direction = sortDirection === 'asc' ? 1 : -1;
 		return [...filteredRecords].sort((first, second) => {
+			if (sortColumn === 'receiptNumber') {
+				const left = getReceiptBillIdSortValue(first.bill.id, first.receiptNumber);
+				const right = getReceiptBillIdSortValue(second.bill.id, second.receiptNumber);
+				if (left !== null && right !== null) return (left < right ? -1 : left > right ? 1 : 0) * direction;
+				if (left !== null) return -1 * direction;
+				if (right !== null) return 1 * direction;
+				return String(first.receiptNumber).localeCompare(String(second.receiptNumber), 'ne') * direction;
+			}
 			const left = sortValue(first, sortColumn);
 			const right = sortValue(second, sortColumn);
 			return (typeof left === 'number' && typeof right === 'number' ? left - right : String(left).localeCompare(String(right), 'ne')) * direction;

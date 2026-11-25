@@ -73,10 +73,6 @@ export function areOwnersArraysEqual(billingOwnersRaw: unknown, tqmsOwnersRaw: u
 		const tAddr = normalizeReconciliationText(t.Address ?? t.address);
 		if (bAddr !== tAddr) return false;
 
-		const bBranch = normalizeReconciliationText(b.SanghBranch ?? b.sanghBranch);
-		const tBranch = normalizeReconciliationText(t.SanghBranch ?? t.sanghBranch);
-		if (bBranch !== tBranch) return false;
-
 		const bCit = normalizeReconciliationText(
 			b.CitizenshipNumber ?? b.citizenshipNumber ?? b.IdentityNumber ?? b.identityNumber,
 		);
@@ -197,9 +193,8 @@ export function compareVehiclesForReconciliation(
 			label: 'संघ शाखा (Sangh Branch)',
 			billingValue: billing.branch.trim() || '—',
 			tqmsValue: tqms.branch.trim() || '—',
-			isChanged:
-				normalizeReconciliationText(billing.branch) !==
-				normalizeReconciliationText(tqms.branch),
+			// Sthaniya (SanghBranch) changes in TQMS must not trigger vehicle or owner reconciliation.
+			isChanged: false,
 		},
 		{
 			key: 'ownerAddress',
@@ -372,7 +367,9 @@ export async function reconcileVehicleLookup(
 	if (changedDiffs.length === 0) {
 		return {
 			type: 'MATCHED',
-			billingVehicle,
+			billingVehicle: tqmsVehicle.branch
+				? { ...billingVehicle, branch: tqmsVehicle.branch }
+				: billingVehicle,
 			tqmsVehicle,
 			billingResource,
 			diffs,
@@ -388,6 +385,32 @@ export async function reconcileVehicleLookup(
 	};
 }
 
+function syncOwnerBranchesFromTqms(
+	existingOwnersRaw: unknown,
+	tqmsOwnersRaw: unknown,
+	fallbackBranch: string,
+): unknown {
+	if (!Array.isArray(existingOwnersRaw)) return existingOwnersRaw;
+	const tqmsOwners = Array.isArray(tqmsOwnersRaw)
+		? tqmsOwnersRaw.filter((o): o is Record<string, unknown> => Boolean(o && typeof o === 'object' && !Array.isArray(o)))
+		: [];
+
+	return existingOwnersRaw.map((owner, index) => {
+		if (!owner || typeof owner !== 'object' || Array.isArray(owner)) return owner;
+		const existing = owner as Record<string, unknown>;
+		const matchedTqms = tqmsOwners[index];
+		const nextBranch = String(
+			matchedTqms?.SanghBranch ?? matchedTqms?.sanghBranch ?? fallbackBranch ?? '',
+		).trim();
+		if (!nextBranch) return existing;
+		return {
+			...existing,
+			SanghBranch: nextBranch,
+			...(Object.prototype.hasOwnProperty.call(existing, 'sanghBranch') ? { sanghBranch: nextBranch } : {}),
+		};
+	});
+}
+
 export function prepareTqmsUpdatePayload(
 	existingResource: VehicleResourceDocument,
 	tqmsVehicle: BillingVehicle,
@@ -397,13 +420,24 @@ export function prepareTqmsUpdatePayload(
 	ownerChangeType?: OwnerChangeType | null,
 ): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
 	const tqmsContent = { ...(tqmsVehicle.resourceContent || {}) };
+	const existingBranch = resolveVehicleOwners(
+		existingResource.innerContent.Owners ?? existingResource.innerContent.owners,
+	).branch;
+	const branchChanged = normalizeReconciliationText(existingBranch) !== normalizeReconciliationText(tqmsVehicle.branch);
+	const hasOwnerChanges = diffs.some((d) => isOwnerReconciliationDiff(d) && d.isChanged);
 	if (!ownerChangeType) {
 		delete tqmsContent.Owners;
 		delete tqmsContent.owners;
 	}
+	const existingOwners = existingResource.innerContent.Owners ?? existingResource.innerContent.owners;
+	const tqmsOwners = tqmsVehicle.resourceContent?.Owners ?? tqmsVehicle.resourceContent?.owners;
+	const syncedOwners = !ownerChangeType && branchChanged && !hasOwnerChanges && Array.isArray(existingOwners)
+		? syncOwnerBranchesFromTqms(existingOwners, tqmsOwners, tqmsVehicle.branch)
+		: undefined;
 	const innerContent: Record<string, unknown> = {
 		...existingResource.innerContent,
 		...tqmsContent,
+		...(syncedOwners !== undefined ? { Owners: syncedOwners } : {}),
 		VehicleNumber: tqmsVehicle.vehicleNumber,
 		VehicleId: tqmsVehicle.tqmsVehicleId || existingResource.innerContent.VehicleId,
 		VehicleType: tqmsVehicle.vehicleType,

@@ -10,6 +10,7 @@ import {
 } from '@/features/receipts/api/bill-resource.api';
 import {
   formatBranchReceiptNumber,
+  getReceiptBillIdSortValue,
   formatReceiptNumberWithFiscalYear,
 } from '@/lib/receipts/receipt-number-display';
 import { apiClient } from '@/lib/api/client';
@@ -65,6 +66,22 @@ describe('4. Bill API, Receipts, and Numbering', () => {
       assert.equal(formatReceiptNumberWithFiscalYear('KTM.101', '2081/82'), 'KTM.101 (२०८१/८२)');
       assert.equal(formatReceiptNumberWithFiscalYear('KTM.101', ''), 'KTM.101');
       assert.equal(formatReceiptNumberWithFiscalYear('', '2081/82'), '');
+    });
+
+    test('extracts numeric bill IDs for ascending and descending sorting', () => {
+      assert.equal(getReceiptBillIdSortValue('130', 'KTM.130')?.toString(), '130');
+      assert.equal(getReceiptBillIdSortValue('101', 'KTM.१।१०१')?.toString(), '101');
+      assert.equal(getReceiptBillIdSortValue('', 'KTM.28')?.toString(), '28');
+      assert.equal(getReceiptBillIdSortValue('', 'legacy-bill'), null);
+
+      const ascending = ['2', '11', '99'].sort((left, right) =>
+        (getReceiptBillIdSortValue(left, null) ?? BigInt(0)) < (getReceiptBillIdSortValue(right, null) ?? BigInt(0))
+          ? -1
+          : 1,
+      );
+      const descending = [...ascending].reverse();
+      assert.deepEqual(ascending, ['2', '11', '99']);
+      assert.deepEqual(descending, ['99', '11', '2']);
     });
   });
 

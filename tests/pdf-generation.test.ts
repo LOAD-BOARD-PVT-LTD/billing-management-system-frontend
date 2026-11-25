@@ -42,6 +42,9 @@ describe('5. PDF and Document Output', () => {
     test('formats amounts in Nepali words correctly', () => {
       assert.equal(formatAmountInNepaliWords(1500), 'एक हजार पाँच सय रुपैयाँ मात्र');
       assert.equal(formatAmountInNepaliWords(0), 'शून्य रुपैयाँ मात्र');
+      assert.equal(formatAmountInNepaliWords(2), 'दुई रुपैयाँ मात्र');
+      assert.equal(formatAmountInNepaliWords(22), 'बाइस रुपैयाँ मात्र');
+      assert.equal(fontasyFromUnicode('दुई'), 'b"O{');
     });
 
     test('formats count in Nepali digits', () => {

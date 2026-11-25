@@ -703,6 +703,58 @@ describe('1. Billing Rule Configuration', () => {
       );
     });
 
+    test('allows matching canonical fiscal year labels when the API returns a numeric fee-head fiscal year', async () => {
+      apiClient.post = async <T>(path: string, payload?: unknown): Promise<T> => {
+        const record = payload as { inner_content: { resourceType: string; name: string; fiscalYearId: unknown } };
+        if (record.inner_content.resourceType === 'FEE_HEAD') {
+          return {
+            id: 41,
+            resource_name: 'BillingRuleResource',
+            inner_content: {
+              resourceType: 'FEE_HEAD',
+              name: record.inner_content.name,
+              fiscalYearId: 5,
+              status: 'ACTIVE',
+            },
+          } as T;
+        }
+        return {
+          id: 42,
+          resource_name: 'BillingRuleResource',
+          inner_content: record.inner_content,
+        } as T;
+      };
+
+      const config: BillingRuleConfig = {
+        version: 1,
+        feeHeads: [
+          { id: 'fh-new', name: 'बिलम्ब बापत', code: 'LATE', fiscalYearId: '2083/84', status: 'ACTIVE' },
+        ],
+        fiscalYears: [
+          { id: '2083/84', code: '2083/84', name: '2083/84', status: 'ACTIVE', isDefault: true, startDate: '', endDate: '' },
+        ],
+        rules: [
+          {
+            id: 'rule-new',
+            feeHeadId: 'fh-new',
+            fiscalYearId: '2083/84',
+            billingEntityId: 'entity-1',
+            scope: 'COMMON',
+            vehicleCategoryId: null,
+            frequency: 'ONE_TIME',
+            period: null,
+            validity: 'SAME_DAY',
+            amount: 100,
+            status: 'ACTIVE',
+          },
+        ],
+      };
+
+      const saved = await billingRulesApi.save(config, { version: 1, feeHeads: [], fiscalYears: config.fiscalYears, rules: [] });
+      assert.equal(saved.config.feeHeads[0].fiscalYearId, '2083/84');
+      assert.equal(saved.config.rules[0].fiscalYearId, '2083/84');
+    });
+
     test('deletes removed rules without deleting unrelated resources', async () => {
       const deletedIds: string[] = [];
       apiClient.delete = async <T>(path: string): Promise<T> => {

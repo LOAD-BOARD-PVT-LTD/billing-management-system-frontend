@@ -17,6 +17,7 @@ const MANUAL_REVERSE_ENTRIES: Record<string, string> = {
   '\u092B': 'km',
   '\u0930\u094D\u0915': 's{',
   '\u092A\u094D\u0930': 'k|',
+  '\u0908': 'O{',
 };
 
 const REPHA_MARKER = '\uE000';

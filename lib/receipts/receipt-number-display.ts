@@ -1,5 +1,7 @@
 import { formatFiscalYearForDisplay } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 
+export { getReceiptBillIdSortValue } from '@/lib/receipts/receipt-bill-sort';
+
 export function formatBranchReceiptNumber(branchCode: string | null | undefined, receiptId: string | null | undefined): string {
   const code = String(branchCode ?? '').trim().replace(/\.+$/u, '');
   const id = String(receiptId ?? '').trim();

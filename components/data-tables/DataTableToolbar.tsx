@@ -11,6 +11,7 @@ export interface DataTableToolbarProps {
 	searchPlaceholder?: string;
 	children?: ReactNode;
 	className?: string;
+	compact?: boolean;
 }
 
 export function DataTableToolbar({
@@ -19,11 +20,16 @@ export function DataTableToolbar({
 	searchPlaceholder = 'Filter results...',
 	children,
 	className,
+	compact = false,
 }: DataTableToolbarProps) {
 	return (
-		<div className={cn('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', className)}>
+		<div className={cn(
+			'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
+			compact && 'sm:flex-nowrap',
+			className,
+		)}>
 			{onSearchChange ? (
-				<div className="relative w-full sm:max-w-sm">
+				<div className={cn('relative w-full sm:max-w-sm', compact && 'sm:w-72 sm:max-w-none lg:w-80')}>
 					<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
 					<Input
 						type="search"
@@ -47,7 +53,11 @@ export function DataTableToolbar({
 					) : null}
 				</div>
 			) : <span />}
-			{children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+			{children ? (
+				<div className={cn('flex items-center gap-2', compact ? 'min-w-0 flex-nowrap overflow-x-auto' : 'flex-wrap')}>
+					{children}
+				</div>
+			) : null}
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	compareVehiclesForReconciliation,
+	isOwnerReconciliationDiff,
 	normalizeReconciliationText,
 	prepareNewMemberPayload,
 	prepareOwnerChangePayload,
@@ -287,6 +288,42 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 
 			assert.ok(ownersDiff);
 			assert.equal(ownersDiff?.isChanged, true);
+		});
+
+		test('does not trigger reconciliation or owner change popup when only sthaniya (SanghBranch) changes in TQMS', () => {
+			const billing = createMockBillingVehicle({
+				branch: 'Lumbini Truck Yatayat Byawasayi Sangh',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					VehicleType: 'Bus',
+					Owners: [
+						{ Name: 'Hari Thapa', Type: 'Operator', Phone: '9800000000', Address: 'Lalitpur', SanghBranch: 'Lumbini Truck Yatayat Byawasayi Sangh' },
+						{ Name: 'Ram Bahadur', Type: 'Main Owner', Phone: '9841234567', Address: 'Kathmandu', SanghBranch: 'Lumbini Truck Yatayat Byawasayi Sangh' },
+					],
+				},
+			});
+			const tqms = createMockBillingVehicle({
+				branch: 'Loadboard sthaniya',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					VehicleType: 'Bus',
+					Owners: [
+						{ Name: 'Hari Thapa', Type: 'Operator', Phone: '9800000000', Address: 'Lalitpur', SanghBranch: 'Loadboard sthaniya' },
+						{ Name: 'Ram Bahadur', Type: 'Main Owner', Phone: '9841234567', Address: 'Kathmandu', SanghBranch: 'Loadboard sthaniya' },
+					],
+				},
+			});
+
+			const diffs = compareVehiclesForReconciliation(billing, tqms);
+			const changedDiffs = diffs.filter((d) => d.isChanged);
+			const changedOwnerDiffs = diffs.filter((d) => isOwnerReconciliationDiff(d) && d.isChanged);
+			const branchDiff = diffs.find((d) => d.key === 'branch');
+
+			assert.equal(changedDiffs.length, 0);
+			assert.equal(changedOwnerDiffs.length, 0);
+			assert.equal(branchDiff?.isChanged, false);
 		});
 	});
 
@@ -597,6 +634,39 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(result.billingVehicle.vehicleType, 'Old Bus');
 			assert.equal(result.tqmsVehicle.ownerName, 'Current TQMS Owner');
 		});
+
+		test('returns MATCHED without reconciliation when only sthaniya (SanghBranch) changed in TQMS', async () => {
+			apiClient.get = async <T>(): Promise<T> => {
+				throw new Error('Reconciliation should not read VehicleResource.');
+			};
+			apiClient.post = async <T>(): Promise<T> => ({
+				Data: {
+					cache_results: [{
+						cache_id: 'cache-2221',
+						VehicleId: '2221',
+						VehicleNumber: 'Ga Pra-35-96-GA-2221',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567', SanghBranch: 'Lumbini Truck Yatayat Byawasayi Sangh' }],
+					}],
+					tqms_results: [{
+						VehicleId: '2221',
+						VehicleNumber: 'Ga Pra-35-96-GA-2221',
+						VehicleType: 'Bus',
+						Owners: [{ Name: 'Ram Bahadur', Phone: '9841234567', SanghBranch: 'Loadboard sthaniya' }],
+					}],
+				},
+			} as T);
+
+			const result = await reconcileVehicleLookup('Ga Pra-35-96-GA-2221', {
+				receipts: [createMockReceipt('2221', 'Ga Pra-35-96-GA-2221')],
+			});
+
+			assert.equal(result.type, 'MATCHED');
+			if (result.type === 'MATCHED') {
+				assert.equal(result.billingVehicle.id, 'cache-2221');
+				assert.equal(result.billingVehicle.branch, 'Loadboard sthaniya');
+			}
+		});
 	});
 
 	describe('prepareTqmsUpdatePayload (Option 2)', () => {
@@ -631,6 +701,64 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(audits[0].action, 'UPDATE_TQMS');
 			assert.equal(audits[0].performedBy, 'admin_user');
 			assert.equal(audits[0].reason, 'TQMS renewal update');
+		});
+
+		test('updates sthaniya (SanghBranch) on UPDATE_TQMS without removing ownershipHistory or audit history', () => {
+			const existingHistory = [
+				{
+					previousOwners: [{ Name: 'Earlier Owner', Phone: '9800000001' }],
+					transferredAt: '2025-01-01T00:00:00.000Z',
+					performedBy: 'old_admin',
+					reason: 'Initial transfer',
+					transferType: 'TQMS_OWNERSHIP_TRANSFER',
+				},
+			];
+			const existingAudits = [
+				{
+					action: 'UPDATE_TQMS',
+					timestamp: '2025-02-01T00:00:00.000Z',
+					performedBy: 'old_admin',
+					reason: 'Prior update',
+					changedFields: [],
+				},
+			];
+			const resource = createMockResource('res-1', {}, {
+				ownershipHistory: existingHistory,
+				reconciliationAudit: existingAudits,
+			});
+			const tqms = createMockBillingVehicle({
+				branch: 'Narayangarh Branch',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'BA 01 KHA 1234',
+					VehicleType: 'Bus',
+					Owners: [
+						{ Name: 'Hari Thapa', Type: 'Operator', Phone: '9800000000', Address: 'Lalitpur', SanghBranch: 'Narayangarh Branch' },
+						{ Name: 'Ram Bahadur', Type: 'Main Owner', Phone: '9841234567', Address: 'Kathmandu', SanghBranch: 'Narayangarh Branch' },
+					],
+				},
+			});
+
+			const diffs = compareVehiclesForReconciliation(
+				vehicleResourceToBillingVehicle(resource),
+				tqms,
+			);
+			const payload = prepareTqmsUpdatePayload(
+				resource,
+				tqms,
+				diffs,
+				'admin_user',
+				'Sthaniya updated in TQMS',
+			);
+
+			const updatedOwners = payload.innerContent.Owners as Array<Record<string, unknown>>;
+			assert.equal(updatedOwners.length, 2);
+			assert.equal(updatedOwners[0].Name, 'Hari Thapa');
+			assert.equal(updatedOwners[0].SanghBranch, 'Narayangarh Branch');
+			assert.equal(updatedOwners[1].Name, 'Ram Bahadur');
+			assert.equal(updatedOwners[1].SanghBranch, 'Narayangarh Branch');
+			assert.deepEqual(payload.externalContent.ownershipHistory, existingHistory);
+			assert.equal((payload.externalContent.reconciliationAudit as Array<unknown>).length, 2);
 		});
 	});
 

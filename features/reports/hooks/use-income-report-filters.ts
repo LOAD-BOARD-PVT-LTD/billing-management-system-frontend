@@ -1,10 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { updateIncomeReportBillingTitle } from '@/components/common/layout/navigation/income-report-route';
 import type { IncomeReportDateBasis, IncomeReportFilters } from '@/features/reports/types/income-report';
 import { INCOME_REPORT_FILTER_KEYS, isValidDateFilter } from '@/features/reports/utils/income-report-filters';
+import { getNepaliFiscalYear } from '@/utils/nepali-calender-dates/nepali-fiscal-year';
 
 function readFilters(searchParams: URLSearchParams): IncomeReportFilters {
   const dateBasis = searchParams.get('dateBasis');
@@ -12,7 +13,7 @@ function readFilters(searchParams: URLSearchParams): IncomeReportFilters {
   const dateTo = searchParams.get('dateTo') ?? '';
 
   return {
-    fiscalYear: searchParams.get('fiscalYear') || 'all',
+    fiscalYear: searchParams.get('fiscalYear') || getNepaliFiscalYear(new Date()),
     branch: searchParams.get('branch') || 'all',
     user: searchParams.get('user') || 'all',
     billType: 'all',
@@ -27,7 +28,24 @@ export function useIncomeReportFilters() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const hasCheckedInitialLoad = useRef(false);
   const filters = useMemo(() => readFilters(new URLSearchParams(searchParams.toString())), [searchParams]);
+
+  useEffect(() => {
+    if (hasCheckedInitialLoad.current) return;
+    hasCheckedInitialLoad.current = true;
+
+    const navigationEntry = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (navigationEntry?.type !== 'reload') return;
+
+    const next = new URLSearchParams(searchParams.toString());
+    const hadReportFilters = INCOME_REPORT_FILTER_KEYS.some((key) => next.has(key));
+    if (!hadReportFilters) return;
+
+    INCOME_REPORT_FILTER_KEYS.forEach((key) => next.delete(key));
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const updateFilter = (key: keyof IncomeReportFilters, value: string | IncomeReportDateBasis) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -38,7 +56,11 @@ export function useIncomeReportFilters() {
       router.replace(updateIncomeReportBillingTitle(currentUrl, normalizedValue || 'all'), { scroll: false });
       return;
     }
-    const defaultValue = key === 'dateBasis' ? 'paymentDate' : 'all';
+    const defaultValue = key === 'dateBasis'
+      ? 'paymentDate'
+      : key === 'fiscalYear'
+        ? getNepaliFiscalYear(new Date())
+        : 'all';
     if (normalizedValue === defaultValue || !normalizedValue) next.delete(key);
     else next.set(key, normalizedValue);
     const query = next.toString();

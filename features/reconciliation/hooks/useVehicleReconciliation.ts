@@ -126,7 +126,7 @@ export function useVehicleReconciliation() {
 							ownerAddress: billingVehicle.ownerAddress,
 							resourceContent: {
 								...tqmsVehicle.resourceContent,
-								Owners: billingVehicle.resourceContent.Owners ?? billingVehicle.resourceContent.owners,
+								Owners: innerContent.Owners ?? billingVehicle.resourceContent.Owners ?? billingVehicle.resourceContent.owners,
 							},
 						}),
 						id: billingResource.id,

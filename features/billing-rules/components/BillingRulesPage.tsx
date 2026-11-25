@@ -59,7 +59,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   const [scope, setScope] = useState<Scope>('VEHICLE_TYPE');
   const [fiscalYearChoice, setFiscalYearChoice] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [feeHeadFilter, setFeeHeadFilter] = useState('all');
+  const [feeHeadChoice, setFeeHeadChoice] = useState<string | null>(null);
   const [vehicleCategoryFilter, setVehicleCategoryFilter] = useState('all');
   const [entityFilter, setEntityFilter] = useState('all');
   const [frequencyFilter, setFrequencyFilter] = useState<Frequency | 'all'>('all');
@@ -79,15 +79,13 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   const isRuleEditorOpen = Boolean(editRuleId) || ruleEditorOpen;
 
   const availableFiscalYears = config.fiscalYears;
-  const defaultFiscalYear = availableFiscalYears.find((year) => year.isDefault)
+  const defaultFiscalYear = availableFiscalYears.find((year) => year.status === 'ACTIVE' && year.isDefault)
+    ?? availableFiscalYears.find((year) => year.status === 'ACTIVE')
     ?? availableFiscalYears[0];
-  const smartDefaultFiscalYearFilter = defaultFiscalYear
-    && (config.rules.some((rule) => rule.fiscalYearId === defaultFiscalYear.id) || config.rules.length === 0)
-    ? defaultFiscalYear.id
-    : 'all';
   const fiscalYearFilter = fiscalYearChoice === 'all' || availableFiscalYears.some((year) => year.id === fiscalYearChoice)
-    ? fiscalYearChoice ?? smartDefaultFiscalYearFilter
-    : smartDefaultFiscalYearFilter;
+    ? fiscalYearChoice ?? defaultFiscalYear?.id ?? 'all'
+    : defaultFiscalYear?.id ?? 'all';
+  const feeHeadFilter = feeHeadChoice ?? 'all';
   const vehicleCategoryIds = vehicleCategories.map((category) => category.id);
   const activeVehicleCategoryFilter = vehicleCategoryIds.includes(vehicleCategoryFilter) ? vehicleCategoryFilter : 'all';
   const hasSearch = search.trim().length > 0;
@@ -150,7 +148,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
   const pageTotal = scope === 'VEHICLE_TYPE' ? vehicleRuleGroups.length : sortedRules.length;
   const resetFilters = () => {
     setSearch('');
-    setFeeHeadFilter('all');
+    setFeeHeadChoice(null);
     setVehicleCategoryFilter('all');
     setEntityFilter('all');
     setFrequencyFilter('all');
@@ -432,7 +430,11 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-end md:items-end">
           <div className="w-full space-y-2 sm:max-w-xs">
             <label className="text-sm font-medium text-foreground" htmlFor="billing-rules-fiscal-year">आर्थिक वर्ष</label>
-            <Select value={fiscalYearFilter} onValueChange={(value) => { setFiscalYearChoice(value); setPage(1); }}>
+            <Select value={fiscalYearFilter} onValueChange={(value) => {
+              setFiscalYearChoice(value);
+              setFeeHeadChoice(null);
+              setPage(1);
+            }}>
               <SelectTrigger id="billing-rules-fiscal-year" aria-label={t('forms.selectFiscalYear')}>
                 <SelectValue placeholder={t('forms.selectFiscalYear')} />
               </SelectTrigger>
@@ -547,11 +549,11 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
             searchValue={search}
             onSearchChange={(value) => { setSearch(value); setPage(1); }}
             searchPlaceholder="शुल्क शीर्षक, आर्थिक वर्ष, सवारी प्रकार खोज्नुहोस्"
-            className="items-end"
+            compact
           >
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <div className="flex min-w-0 items-center gap-2">
               {scope === 'COMMON' ? (
-                <Select value={feeHeadFilter} onValueChange={(value) => { setFeeHeadFilter(value); setPage(1); }}>
+                <Select value={feeHeadFilter} onValueChange={(value) => { setFeeHeadChoice(value); setPage(1); }}>
                   <SelectTrigger className="w-44" aria-label="शुल्क शीर्षक अनुसार फिल्टर"><SelectValue placeholder="सबै शुल्क शीर्षक" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">सबै शुल्क शीर्षक</SelectItem>
@@ -637,6 +639,7 @@ export function BillingRulesPage({ editRuleId }: BillingRulesPageProps) {
       <FeeHeadManager
         feeHeads={config.feeHeads}
         fiscalYears={config.fiscalYears}
+        fiscalYearId={fiscalYearFilter}
         rules={config.rules}
         onCreate={addFeeHead}
         onUpdate={updateFeeHead}

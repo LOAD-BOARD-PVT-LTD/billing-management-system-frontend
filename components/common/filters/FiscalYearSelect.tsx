@@ -11,6 +11,7 @@ import { cn } from '@/utils/cn';
 import { useId, useMemo } from 'react';
 import { DEFAULT_FISCAL_YEAR_SELECTOR_SETTINGS } from '@/features/settings/api/fiscal-year-selector.api';
 import { useFiscalYearSelectorSettings } from '@/features/settings/hooks/useFiscalYearSelectorSettings';
+import { toEnglishDigits } from '@/utils/numbers';
 
 const EMPTY_ARCHIVED_YEARS: string[] = [];
 
@@ -63,8 +64,23 @@ export function FiscalYearSelect({
     [effectiveYearsBack, effectiveYearsForward, effectiveArchivedYears],
   );
   const options = useMemo(() => {
-    const overrides = new Map((optionsOverride ?? []).map((option) => [option.value, option]));
-    return generatedOptions.map((option) => overrides.get(option) ?? { value: option });
+    const normalizeValue = (value: string) => toEnglishDigits(value).trim().replace(/\s+/g, '');
+    const overrides = new Map(
+      (optionsOverride ?? []).map((option) => [normalizeValue(option.value), option]),
+    );
+    const mergedOptions = new Map<string, { value: string; label?: string; isCurrent?: boolean; isPrevious?: boolean }>();
+
+    for (const value of generatedOptions) {
+      const key = normalizeValue(value);
+      mergedOptions.set(key, overrides.get(key) ?? { value });
+    }
+
+    for (const option of optionsOverride ?? []) {
+      const key = normalizeValue(option.value);
+      if (!mergedOptions.has(key)) mergedOptions.set(key, option);
+    }
+
+    return Array.from(mergedOptions.values());
   }, [generatedOptions, optionsOverride]);
 
   const handleChange = (nextValue: string) => {

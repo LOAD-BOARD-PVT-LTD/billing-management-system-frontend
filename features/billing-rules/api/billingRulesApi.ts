@@ -230,6 +230,24 @@ export const billingRulesApi = {
     assertUniqueFeeHeadNames(config.feeHeads, previousConfig.feeHeads);
     assertNoCrossScopeFeeHeadRules(config);
 
+    const fiscalYearIdentityByAlias = new Map<string, string>();
+    for (const year of config.fiscalYears) {
+      const identity = canonicalizeFiscalYearLabel(year.code)
+        ?? canonicalizeFiscalYearLabel(year.name)
+        ?? canonicalizeFiscalYearLabel(year.id)
+        ?? year.id;
+      for (const alias of [year.id, year.code, year.name, identity]) {
+        if (alias) fiscalYearIdentityByAlias.set(String(alias).trim(), identity);
+      }
+    }
+    const resolveFiscalYearIdentity = (value: string | null): string => {
+      if (!value) return '';
+      const trimmed = String(value).trim();
+      return fiscalYearIdentityByAlias.get(trimmed)
+        ?? canonicalizeFiscalYearLabel(trimmed)
+        ?? trimmed;
+    };
+
     const defaultYears = config.fiscalYears.filter((year) => year.isDefault === true);
     if (defaultYears.length > 1) throw new Error('आर्थिक वर्षमध्ये एउटा मात्र पूर्वनिर्धारित वर्ष छान्नुहोस्।');
     if (defaultYears.some((year) => year.status !== 'ACTIVE')) throw new Error('निष्क्रिय आर्थिक वर्षलाई पूर्वनिर्धारित बनाउन मिल्दैन।');
@@ -256,6 +274,7 @@ export const billingRulesApi = {
       const savedFeeHead = {
         ...(document.config.feeHeads[0] ?? feeHead),
         displayOrder: document.config.feeHeads[0]?.displayOrder ?? feeHead.displayOrder,
+        fiscalYearId: feeHead.fiscalYearId,
       };
       savedFeeHeads.push(savedFeeHead);
       feeHeadIdMap.set(feeHead.id, savedFeeHead.id);
@@ -275,7 +294,8 @@ export const billingRulesApi = {
     const savedFeeHeadsById = new Map(savedFeeHeads.map((feeHead) => [feeHead.id, feeHead]));
     for (const rule of savedConfig.rules) {
       const feeHead = savedFeeHeadsById.get(rule.feeHeadId);
-      if (feeHead?.fiscalYearId && feeHead.fiscalYearId !== rule.fiscalYearId) {
+      if (feeHead?.fiscalYearId
+        && resolveFiscalYearIdentity(feeHead.fiscalYearId) !== resolveFiscalYearIdentity(rule.fiscalYearId)) {
         throw new Error(`"${feeHead.name}" शुल्क शीर्षक र बिलिङ नियमको आर्थिक वर्ष मिलेन।`);
       }
     }

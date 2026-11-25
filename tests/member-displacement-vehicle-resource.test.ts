@@ -4,7 +4,7 @@ import {
 	removeMemberDisplaced,
 	tagMemberDisplaced,
 } from '@/features/members/api/member-resource.api';
-import { fetchMemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
+import { fetchMemberVehicleDetails, parseMemberVehicleResource } from '@/features/members/api/member-vehicle.api';
 import { apiClient } from '@/lib/api/client';
 
 describe('Member displacement is stored in VehicleResource metadata', () => {
@@ -126,5 +126,26 @@ describe('Member displacement is stored in VehicleResource metadata', () => {
 		assert.equal(vehicles.length, 1);
 		assert.equal(vehicles[0].isDisplaced, false);
 		assert.equal(vehicles[0].displacedReason, '');
+	});
+
+	it('reads previous vehicle number and ID from reconciliation audit history', () => {
+		const vehicle = parseMemberVehicleResource({
+			id: 'vehicle-resource-1',
+			inner_content: {
+				VehicleId: 'V2',
+				VehicleNumber: 'BA 1 CHA 2222',
+			},
+			external_content: {
+				reconciliationAudit: [{
+					changedFields: [
+						{ field: 'vehicleNumber', oldValue: 'BA 1 CHA 1111', newValue: 'BA 1 CHA 2222' },
+						{ field: 'tqmsVehicleId', oldValue: 'V1', newValue: 'V2' },
+					],
+				}],
+			},
+		});
+
+		assert.deepEqual(vehicle.previousVehicleNumbers, ['BA 1 CHA 1111']);
+		assert.deepEqual(vehicle.previousVehicleIds, ['V1']);
 	});
 });
