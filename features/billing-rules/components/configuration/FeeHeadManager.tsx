@@ -6,9 +6,10 @@ import { useToast } from '@/components/ui/use-toast';
 import type { FeeHead } from '@/features/billing-rules/model/types';
 import type { BillingRule, FiscalYear } from '@/features/billing-rules/model/types';
 import { ArrowDown, ArrowUp, Pencil, Plus, Power, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FeeHeadDialog } from '@/features/billing-rules/components/configuration/FeeHeadDialog';
+import { findDuplicateFeeHead } from '@/features/billing-rules/utils/fee-head-name-validation';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 
 interface FeeHeadManagerProps {
@@ -36,6 +37,7 @@ export function FeeHeadManager({
   const [editing, setEditing] = useState<FeeHead | null>(null);
   const [deactivating, setDeactivating] = useState<FeeHead | null>(null);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  const isSubmittingFeeHeadRef = useRef(false);
   const [emptyValue] = useState<FeeHead>(() => ({ id: '', code: '', fiscalYearId: null, name: '', status: 'ACTIVE' }));
   const { toast } = useToast();
   const fiscalYearNames = new Map(fiscalYears.map((year) => [year.id, year.name]));
@@ -85,6 +87,7 @@ export function FeeHeadManager({
           type="button"
           variant="outline"
           size="xs"
+          disabled={isSaving}
           leftIcon={<Plus className="h-3.5 w-3.5" />}
           onClick={() => { setEditing(null); setOpen(true); }}
         >
@@ -144,6 +147,18 @@ export function FeeHeadManager({
                     setDeactivating(feeHead);
                     return;
                   }
+                  const activeDuplicate = findDuplicateFeeHead(
+                    feeHeads.filter((item) => item.status === 'ACTIVE'),
+                    feeHead,
+                  );
+                  if (activeDuplicate) {
+                    toast({
+                      title: 'शुल्क शीर्षक सक्रिय गर्न सकिएन',
+                      description: `"${feeHead.name.trim()}" नामको सक्रिय शुल्क शीर्षक यो आर्थिक वर्षमा पहिले नै छ।`,
+                      variant: 'destructive',
+                    });
+                    return;
+                  }
                   void (async () => {
                     try {
                       await onUpdate({ ...feeHead, status: 'ACTIVE' });
@@ -170,9 +185,13 @@ export function FeeHeadManager({
         open={open}
         onOpenChange={setOpen}
         initialValue={dialogInitialValue}
+        existingFeeHeads={feeHeads}
         fiscalYears={fiscalYears}
         fiscalYearLocked={Boolean(editing && rules.some((rule) => rule.feeHeadId === editing.id))}
+        isSaving={isSaving}
         onSubmit={async (value) => {
+          if (isSubmittingFeeHeadRef.current || isSaving) return;
+          isSubmittingFeeHeadRef.current = true;
           try {
             if (editing) await onUpdate(value);
             else await onCreate(value);
@@ -184,6 +203,8 @@ export function FeeHeadManager({
               description: error instanceof Error ? error.message : 'कृपया फेरि प्रयास गर्नुहोस्।',
               variant: 'destructive',
             });
+          } finally {
+            isSubmittingFeeHeadRef.current = false;
           }
         }}
       />

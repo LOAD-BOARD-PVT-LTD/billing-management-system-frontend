@@ -5,6 +5,11 @@ import type { LinkedFeeRule, LinkedFeeRulesSettings } from '@/features/settings/
 import type { ReceiptCancelWindow } from '@/features/settings/api/receipt-cancel-window.api';
 import type { FiscalYearSelectorSettings } from '@/features/settings/api/fiscal-year-selector.api';
 import type { InsuranceEligibilitySettings } from '@/features/settings/api/insurance-eligibility.api';
+import {
+  DEFAULT_MAHASANG_REPORT_SETTINGS,
+  normalizeMahasangReportSettings,
+  type MahasangReportSettings,
+} from '@/features/settings/utils/mahasang-report-settings';
 import type { ArrearsRuleSettings } from '@/features/vehicle/compliance/api/arrears-settings.api';
 import {
   DEFAULT_SMS_SETTINGS,
@@ -47,6 +52,7 @@ export interface GroupedSettingsContent {
   displacedTagging: {
     enabled: boolean;
   };
+  mahasangReport: MahasangReportSettings;
 }
 
 export interface GroupedSettingsDocument {
@@ -98,6 +104,7 @@ export const DEFAULT_GROUPED_SETTINGS: GroupedSettingsContent = {
   displacedTagging: {
     enabled: true,
   },
+  mahasangReport: DEFAULT_MAHASANG_REPORT_SETTINGS,
 };
 
 export function asSettingRecord(value: unknown): JsonRecord | null {
@@ -237,6 +244,7 @@ function isGroupedSettingContent(content: JsonRecord | null): content is JsonRec
     || content.notifications !== undefined
     || content.insurance !== undefined
     || content.receipts !== undefined
+    || content.reports !== undefined
     || content.vehicleManagement !== undefined
     || content.arrears !== undefined
     || content.linkedFeeRules !== undefined
@@ -245,6 +253,7 @@ function isGroupedSettingContent(content: JsonRecord | null): content is JsonRec
     || content.insuranceEligibility !== undefined
     || content.receiptCancelWindow !== undefined
     || content.displacedTagging !== undefined
+    || content.mahasangReport !== undefined
   );
 }
 
@@ -255,6 +264,7 @@ function mergeGroupedContent(content: JsonRecord): GroupedSettingsContent {
   const notificationsRaw = asSettingRecord(content.notifications);
   const insuranceOuterRaw = asSettingRecord(content.insurance);
   const receiptsRaw = asSettingRecord(content.receipts);
+  const reportsRaw = asSettingRecord(content.reports);
   const vehicleManagementRaw = asSettingRecord(content.vehicleManagement);
 
   const fiscalYearRaw = asSettingRecord(content.fiscalYear);
@@ -268,6 +278,7 @@ function mergeGroupedContent(content: JsonRecord): GroupedSettingsContent {
   const smsRaw = asSettingRecord(notificationsRaw?.sms) ?? asSettingRecord(content.smsSettings);
   const insuranceRaw = asSettingRecord(insuranceOuterRaw?.eligibility) ?? asSettingRecord(content.insuranceEligibility);
   const cancelRaw = asSettingRecord(receiptsRaw?.cancellation) ?? asSettingRecord(content.receiptCancelWindow);
+  const mahasangRaw = asSettingRecord(reportsRaw?.mahasang) ?? asSettingRecord(content.mahasangReport);
   const displacedRaw = asSettingRecord(vehicleManagementRaw?.displacedTagging) ?? asSettingRecord(content.displacedTagging);
 
   let smsSettings = DEFAULT_SMS_SETTINGS;
@@ -342,6 +353,7 @@ function mergeGroupedContent(content: JsonRecord): GroupedSettingsContent {
     displacedTagging: {
       enabled: typeof displacedRaw?.enabled === 'boolean' ? displacedRaw.enabled : true,
     },
+    mahasangReport: normalizeMahasangReportSettings(mahasangRaw),
   };
 }
 
@@ -596,6 +608,9 @@ function serializeGroupedInnerContent(settings: GroupedSettingsContent): JsonRec
     },
     receipts: {
       cancellation: settings.receiptCancelWindow,
+    },
+    reports: {
+      mahasang: settings.mahasangReport,
     },
     vehicleManagement: {
       displacedTagging: settings.displacedTagging,

@@ -4,6 +4,7 @@ import {
 	compareVehiclesForReconciliation,
 	isOwnerReconciliationDiff,
 	normalizeReconciliationText,
+	prepareFirstBillCacheSyncPayload,
 	prepareNewMemberPayload,
 	prepareOwnerChangePayload,
 	prepareTqmsUpdatePayload,
@@ -250,7 +251,7 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			const changed = diffs.filter((d) => d.isChanged);
 
 			assert.equal(changed.length, 0);
-			assert.equal(diffs.length, 9); // Includes owners array diff
+			assert.equal(diffs.length, 8); // Excludes sthaniya (branch); includes owners array diff
 		});
 
 		test('detects ownership change between Billing and TQMS', () => {
@@ -320,10 +321,15 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			const changedDiffs = diffs.filter((d) => d.isChanged);
 			const changedOwnerDiffs = diffs.filter((d) => isOwnerReconciliationDiff(d) && d.isChanged);
 			const branchDiff = diffs.find((d) => d.key === 'branch');
+			const ownersDiff = diffs.find((d) => d.key === 'owners');
 
+			assert.equal(branchDiff, undefined);
 			assert.equal(changedDiffs.length, 0);
 			assert.equal(changedOwnerDiffs.length, 0);
-			assert.equal(branchDiff?.isChanged, false);
+			assert.ok(ownersDiff);
+			assert.ok(!ownersDiff.billingValue.includes('शाखा'));
+			assert.ok(!ownersDiff.tqmsValue.includes('शाखा'));
+			assert.ok(!ownersDiff.tqmsValue.includes('Loadboard sthaniya'));
 		});
 	});
 
@@ -603,36 +609,72 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			});
 		});
 
-		test('reconciles cache changes even when there is no bill history', async () => {
+		test('skips reconciliation popup and uses latest TQMS details with needsCacheSync when no receipt has been generated yet', async () => {
 			apiClient.get = async <T>(): Promise<T> => ([{
-				cache_id: 'cache-101',
-				VehicleId: '101',
-				VehicleNumber: 'BA 01 KHA 1234',
+				cache_id: 'cache-1001',
+				VehicleId: '1001',
+				VehicleNumber: 'Province-5-25-32-JA-1001',
 				VehicleType: 'Old Bus',
 				Owners: [{ Name: 'Old Owner' }],
 			}] as T);
 			apiClient.post = async <T>(): Promise<T> => ({
 				Data: {
 					cache_results: [{
-						cache_id: 'cache-101',
-						VehicleId: '101',
-						VehicleNumber: 'BA 01 KHA 1234',
+						cache_id: 'cache-1001',
+						VehicleId: '1001',
+						VehicleNumber: 'Province-5-25-32-JA-1001',
 						VehicleType: 'Old Bus',
 						Owners: [{ Name: 'Old Owner' }],
 					}],
 					tqms_results: [{
-						VehicleId: '101',
-						VehicleNumber: 'BA 01 KHA 1234',
+						VehicleId: '1001',
+						VehicleNumber: 'Province-5-25-32-JA-1001',
 						VehicleType: 'Bus',
-						Owners: [{ Name: 'Current TQMS Owner' }],
+						Owners: [{ Name: 'Current TQMS Owner', Phone: '9841000001' }],
 					}],
 				},
 			} as T);
 
-			const result = await reconcileVehicleLookup('BA 01 KHA 1234', { receipts: [] });
-			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
-			assert.equal(result.billingVehicle.vehicleType, 'Old Bus');
-			assert.equal(result.tqmsVehicle.ownerName, 'Current TQMS Owner');
+			const result = await reconcileVehicleLookup('Province-5-25-32-JA-1001', { receipts: [] });
+			assert.equal(result.type, 'MATCHED');
+			if (result.type === 'MATCHED') {
+				assert.equal(result.needsCacheSync, true);
+				assert.equal(result.billingVehicle.id, 'cache-1001');
+				assert.equal(result.billingVehicle.vehicleType, 'Bus');
+				assert.equal(result.billingVehicle.ownerName, 'Current TQMS Owner');
+			}
+		});
+
+		test('prepareFirstBillCacheSyncPayload updates cache fields from TQMS while preserving metadata and externalContent', () => {
+			const resource = createMockResource(
+				'cache-1001',
+				{
+					VehicleNumber: 'Province-5-25-32-JA-1001',
+					VehicleType: 'Old Bus',
+					metadata: { smsPhone: '9811111111', tags: ['sangh'] },
+				},
+				{ customFlag: true },
+			);
+			const tqms = createMockBillingVehicle({
+				tqmsVehicleId: '101',
+				vehicleNumber: 'Province-5-25-32-JA-1001',
+				vehicleType: 'Bus',
+				tqmsVehicleTypeId: 'type-bus-new',
+				resourceContent: {
+					VehicleId: '101',
+					VehicleNumber: 'Province-5-25-32-JA-1001',
+					VehicleType: 'Bus',
+					Owners: [{ Name: 'Updated TQMS Owner', Phone: '9849999999' }],
+				},
+			});
+
+			const payload = prepareFirstBillCacheSyncPayload(resource, tqms);
+			assert.equal(payload.innerContent.VehicleNumber, 'Province-5-25-32-JA-1001');
+			assert.equal(payload.innerContent.VehicleType, 'Bus');
+			assert.equal(payload.innerContent.VehicleTypeId, 'type-bus-new');
+			assert.deepEqual(payload.innerContent.Owners, tqms.resourceContent.Owners);
+			assert.deepEqual(payload.innerContent.metadata, { smsPhone: '9811111111', tags: ['sangh'] });
+			assert.deepEqual(payload.externalContent, { customFlag: true });
 		});
 
 		test('returns MATCHED without reconciliation when only sthaniya (SanghBranch) changed in TQMS', async () => {
@@ -905,7 +947,9 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 				},
 			} as T);
 
-			const result = await reconcileVehicleLookup('Ga Pra-12-12-GHA-1223', { receipts: [] });
+			const result = await reconcileVehicleLookup('Ga Pra-12-12-GHA-1223', {
+				receipts: [createMockReceipt('101', 'Ga Pra-12-12-GHA-1221')],
+			});
 			assert.equal(result.type, 'RECONCILIATION_REQUIRED');
 			if (result.type === 'RECONCILIATION_REQUIRED') {
 				assert.equal(result.billingResource.id, '6490');

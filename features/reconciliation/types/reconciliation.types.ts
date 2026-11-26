@@ -59,6 +59,7 @@ export type ReconciliationLookupResult =
 			tqmsVehicle: BillingVehicle | null;
 			billingResource: VehicleResourceDocument;
 			diffs: ReconciliationFieldDiff[];
+			needsCacheSync?: boolean;
 	  }
 	| {
 			type: 'RECONCILIATION_REQUIRED';

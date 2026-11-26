@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ReceiptRecord } from '../features/receipts/model/receipt';
+import type { ReceiptRecord } from '@/features/receipts/model/receipt';
+import { createTestReceipt } from '@/tests/helpers/fixtures';
 
 describe('Batch 3: Memoization & Performance Optimizations', () => {
 	describe('Report Metrics & Page Totals Derivation', () => {
@@ -73,94 +74,46 @@ describe('Batch 3: Memoization & Performance Optimizations', () => {
 	});
 
 	describe('Membership History Filtering and Sorting', () => {
+		const buildVehicleReceipt = (
+			id: string,
+			vehicleId: string,
+			vehicleNumber: string,
+			ownerName: string,
+			billingDate: string,
+			createdAt: string,
+			totalAmount: number,
+		): ReceiptRecord => {
+			const base = createTestReceipt(id, {
+				receiptNumber: `REC-00${id.replace(/\D/gu, '') || '1'}`,
+				fiscalYear: '2081/82',
+				vehicleNumber,
+				customerName: ownerName,
+				billingDate,
+				paymentDate: billingDate,
+				totalAmount,
+			});
+			return {
+				...base,
+				bill: {
+					...base.bill,
+					createdAt,
+					content: {
+						...base.bill.content,
+						vehicle: {
+							...base.bill.content.vehicle,
+							id: vehicleId,
+							vehicleNumber,
+							ownerName,
+						},
+					},
+				},
+			};
+		};
+
 		const mockReceipts: ReceiptRecord[] = [
-			{
-				id: 'rec-1',
-				billingType: 'MEMBERSHIP',
-				receiptNumber: 'REC-001',
-				fiscalYear: '2081/82',
-				vehicleNumber: 'BA 1 KHA 1234',
-				finalDigits: '1234',
-				customerName: 'Ram',
-				organizationName: 'Sangh',
-				billingDate: '2081-01-15',
-				paymentDate: '2081-01-15',
-				validUntil: '',
-				paymentMethod: 'CASH',
-				status: 'PAID',
-				totalAmount: 500,
-				branchName: 'Kathmandu',
-				userName: 'admin',
-				printedCopyCount: 1,
-				bill: {
-					id: 'b-1',
-					receiptNumber: 'REC-001',
-					createdAt: '2024-04-28T10:00:00Z',
-					content: {
-						vehicle: { id: 'v-100', vehicleNumber: 'BA 1 KHA 1234', ownerName: 'Ram' } as any,
-						fiscalYearId: 'fy-81',
-						items: [{ feeHeadId: 'head-1', amount: 500, entityId: 'ent-1', description: 'Test Fee' }],
-					} as any,
-				},
-			},
-			{
-				id: 'rec-2',
-				billingType: 'MEMBERSHIP',
-				receiptNumber: 'REC-002',
-				fiscalYear: '2081/82',
-				vehicleNumber: 'BA 1 KHA 1234',
-				finalDigits: '1234',
-				customerName: 'Ram',
-				organizationName: 'Sangh',
-				billingDate: '2081-02-01',
-				paymentDate: '2081-02-01',
-				validUntil: '',
-				paymentMethod: 'CASH',
-				status: 'PAID',
-				totalAmount: 1500,
-				branchName: 'Kathmandu',
-				userName: 'admin',
-				printedCopyCount: 1,
-				bill: {
-					id: 'b-2',
-					receiptNumber: 'REC-002',
-					createdAt: '2024-05-14T10:00:00Z',
-					content: {
-						vehicle: { id: 'v-100', vehicleNumber: 'BA 1 KHA 1234', ownerName: 'Ram' } as any,
-						fiscalYearId: 'fy-81',
-						items: [{ feeHeadId: 'head-2', amount: 1500, entityId: 'ent-1', description: 'Annual Fee' }],
-					} as any,
-				},
-			},
-			{
-				id: 'rec-3',
-				billingType: 'MEMBERSHIP',
-				receiptNumber: 'REC-003',
-				fiscalYear: '2081/82',
-				vehicleNumber: 'NA 2 KHA 9999',
-				finalDigits: '9999',
-				customerName: 'Shyam',
-				organizationName: 'Sangh',
-				billingDate: '2081-01-20',
-				paymentDate: '2081-01-20',
-				validUntil: '',
-				paymentMethod: 'CASH',
-				status: 'PAID',
-				totalAmount: 500,
-				branchName: 'Kathmandu',
-				userName: 'admin',
-				printedCopyCount: 1,
-				bill: {
-					id: 'b-3',
-					receiptNumber: 'REC-003',
-					createdAt: '2024-05-03T10:00:00Z',
-					content: {
-						vehicle: { id: 'v-200', vehicleNumber: 'NA 2 KHA 9999', ownerName: 'Shyam' } as any,
-						fiscalYearId: 'fy-81',
-						items: [{ feeHeadId: 'head-1', amount: 500, entityId: 'ent-1', description: 'Test Fee' }],
-					} as any,
-				},
-			},
+			buildVehicleReceipt('rec-1', 'v-100', 'BA 1 KHA 1234', 'Ram', '2081-01-15', '2024-04-28T10:00:00Z', 500),
+			buildVehicleReceipt('rec-2', 'v-100', 'BA 1 KHA 1234', 'Ram', '2081-02-01', '2024-05-14T10:00:00Z', 1500),
+			buildVehicleReceipt('rec-3', 'v-200', 'NA 2 KHA 9999', 'Shyam', '2081-01-20', '2024-05-03T10:00:00Z', 500),
 		];
 
 		it('filters records strictly by matched vehicle identifier and sorts newest first', () => {

@@ -149,6 +149,49 @@ function parseVehicleRows(rows: unknown[], vehicleNumber: string): BillingVehicl
 		.filter((vehicle) => vehicle.vehicleNumber.toLocaleLowerCase().includes(query));
 }
 
+function getCacheTimestamp(record: JsonRecord): number | null {
+	const raw = record.updatedAt ?? record.updated_at ?? record.createdTime ?? record.createdAt ?? record.created_at;
+	if (typeof raw !== 'string' && typeof raw !== 'number') return null;
+	const parsed = Date.parse(String(raw));
+	return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getNumericCacheId(cacheId: string | null): number | null {
+	return cacheId && /^\d+$/u.test(cacheId) ? Number(cacheId) : null;
+}
+
+type CacheMatchEntry = {
+	record: JsonRecord;
+	vehicle: BillingVehicle;
+	cacheId: string | null;
+};
+
+function selectLatestCacheEntry(entries: CacheMatchEntry[]): CacheMatchEntry | null {
+	if (entries.length === 0) return null;
+	if (entries.length === 1) return entries[0];
+
+	const ranked = entries.map((entry, index) => ({
+		entry,
+		index,
+		timestamp: getCacheTimestamp(entry.record),
+		numericId: getNumericCacheId(entry.cacheId),
+	}));
+
+	ranked.sort((left, right) => {
+		if (left.timestamp !== null || right.timestamp !== null) {
+			if (left.timestamp === null) return 1;
+			if (right.timestamp === null) return -1;
+			if (left.timestamp !== right.timestamp) return right.timestamp - left.timestamp;
+		}
+		if (left.numericId !== null && right.numericId !== null && left.numericId !== right.numericId) {
+			return right.numericId - left.numericId;
+		}
+		return right.index - left.index;
+	});
+
+	return ranked[0]?.entry ?? null;
+}
+
 export function parseTqmsVehicleSearchMatches(
 	payload: unknown,
 	vehicleNumber: string,
@@ -194,11 +237,13 @@ export function parseTqmsVehicleSearchMatches(
 	return tqmsVehicles.map((tqmsVehicle) => {
 		const tqmsId = normalizedIdentity(tqmsVehicle.tqmsVehicleId);
 		const tqmsNumber = normalizedIdentity(tqmsVehicle.vehicleNumber);
-		const cache = caches.find(({ vehicle }) => (
-			tqmsId && normalizedIdentity(vehicle.tqmsVehicleId) === tqmsId
-		)) ?? caches.find(({ vehicle }) => (
-			normalizedIdentity(vehicle.vehicleNumber) === tqmsNumber
-		)) ?? null;
+		const idMatches = tqmsId
+			? caches.filter(({ vehicle }) => normalizedIdentity(vehicle.tqmsVehicleId) === tqmsId)
+			: [];
+		const numberMatches = idMatches.length > 0
+			? idMatches
+			: caches.filter(({ vehicle }) => normalizedIdentity(vehicle.vehicleNumber) === tqmsNumber);
+		const cache = selectLatestCacheEntry(numberMatches);
 		return {
 			tqmsVehicle,
 			cacheVehicle: cache?.vehicle ?? null,

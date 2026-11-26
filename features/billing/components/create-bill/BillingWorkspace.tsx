@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/auth-context';
 import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
@@ -21,14 +22,21 @@ import { useCreateBill } from '@/features/billing/hooks/useCreateBill';
 import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDetails';
 import { BillingHeader } from '@/features/billing/components/create-bill/BillingHeader';
 import { useToast } from '@/components/ui/use-toast';
-import { createVehicleResource, type VehicleResourceDocument } from '@/features/billing/api/vehicle-resource.api';
+import {
+  createVehicleResource,
+  updateVehicleResource,
+  type VehicleResourceDocument,
+} from '@/features/billing/api/vehicle-resource.api';
 import {
   VehicleReconciliationView,
   useVehicleReconciliation,
+  prepareFirstBillCacheSyncPayload,
+  recordReconciledVehicleSnapshot,
   type ReconciliationFieldDiff,
   type ReconciliationOption,
   type OwnerChangeType,
 } from '@/features/reconciliation';
+import { invalidateVehicleReconciliationCaches } from '@/features/reconciliation/utils/reconciliation-cache';
 import { DuplicateBillWarningDialog } from '@/features/billing/components/create-bill/DuplicateBillWarningDialog';
 import { VehicleCategoryMappingGate } from '@/features/billing/components/create-bill/VehicleCategoryMappingGate';
 import { BillingItems } from '@/features/billing/components/create-bill/BillingItems';
@@ -56,6 +64,7 @@ import {
 import { getBillValidationMessages } from '@/features/billing/utils/bill-validation';
 
 export function BillingWorkspace() {
+  const queryClient = useQueryClient();
   const { user: authUser } = useAuth();
   const { records: users } = useUsers();
   const billingRules = useBillingRules();
@@ -70,6 +79,10 @@ export function BillingWorkspace() {
   } = useVehicleBlacklist();
   const [selectedVehicle, setSelectedVehicle] = useState<BillingVehicle | null>(null);
   const [missingVehicleResourceId, setMissingVehicleResourceId] = useState<string | null>(null);
+  const [pendingVehicleCacheSync, setPendingVehicleCacheSync] = useState<{
+    billingResource: VehicleResourceDocument;
+    tqmsVehicle: BillingVehicle;
+  } | null>(null);
   const { details: tqmsVehicleDetails, reload: reloadTqmsVehicleDetails } = useTqmsVehicleDetails(
     selectedVehicle?.vehicleNumber ?? '',
   );
@@ -245,6 +258,7 @@ export function BillingWorkspace() {
   const handleClearVehicleSelection = useCallback(() => {
     setSelectedVehicle(null);
     setMissingVehicleResourceId(null);
+    setPendingVehicleCacheSync(null);
   }, []);
 
   const handleVehicleResourceStatusChange = useCallback((vehicleId: string | null) => {
@@ -257,6 +271,25 @@ export function BillingWorkspace() {
     setMissingVehicleResourceId((current) => (
       current === vehicle.tqmsVehicleId ? null : current
     ));
+    await invalidateVehicleReconciliationCaches(queryClient);
+  };
+
+  const syncPendingVehicleCacheIfNeeded = async (vehicle: BillingVehicle) => {
+    if (!pendingVehicleCacheSync) return;
+    if (pendingVehicleCacheSync.tqmsVehicle.tqmsVehicleId !== vehicle.tqmsVehicleId) return;
+    const { innerContent, externalContent } = prepareFirstBillCacheSyncPayload(
+      pendingVehicleCacheSync.billingResource,
+      pendingVehicleCacheSync.tqmsVehicle,
+    );
+    await updateVehicleResource(pendingVehicleCacheSync.billingResource, innerContent, externalContent);
+    recordReconciledVehicleSnapshot({
+      cacheId: pendingVehicleCacheSync.billingResource.id,
+      tqmsVehicleId: pendingVehicleCacheSync.tqmsVehicle.tqmsVehicleId || vehicle.tqmsVehicleId,
+      innerContent,
+      externalContent,
+    });
+    setPendingVehicleCacheSync(null);
+    await invalidateVehicleReconciliationCaches(queryClient);
   };
 
   const handleSmsPhoneChange = useCallback((phone: string) => {
@@ -392,6 +425,7 @@ export function BillingWorkspace() {
       }
 
       await restoreVehicleResourceIfMissing(pendingInput.vehicle);
+      await syncPendingVehicleCacheIfNeeded(pendingInput.vehicle);
       const bill = await createBill.create(pendingInput);
       setSavedBill(bill);
     } catch (error) {
@@ -413,6 +447,7 @@ export function BillingWorkspace() {
     try {
       if (!await verifyVehicleCanBeBilled(pendingSubmit.vehicle)) return;
       await restoreVehicleResourceIfMissing(pendingSubmit.vehicle);
+      await syncPendingVehicleCacheIfNeeded(pendingSubmit.vehicle);
       const bill = await createBill.create(pendingSubmit);
       setSavedBill(bill);
       setDuplicateMatches([]);
@@ -450,6 +485,7 @@ export function BillingWorkspace() {
 
       setSelectedVehicle(updatedVehicle);
       setReconciliationData(null);
+      await invalidateVehicleReconciliationCaches(queryClient);
 
       toast({
         title: 'सवारी विवरण मेलमिलाप सम्पन्न',
@@ -490,6 +526,7 @@ export function BillingWorkspace() {
         onBack={() => {
           setSavedBill(null);
           setSelectedVehicle(null);
+          setPendingVehicleCacheSync(null);
           setBillingDetails(null);
           setManualItems([]);
           setItemOverrides({});
@@ -528,6 +565,7 @@ export function BillingWorkspace() {
           onSmsPhoneChange={handleSmsPhoneChange}
           onVehicleResourceStatusChange={handleVehicleResourceStatusChange}
           loadReceipts={ensureBills}
+          onPendingVehicleCacheSync={setPendingVehicleCacheSync}
           onReconciliationRequired={setReconciliationData}
         />
 

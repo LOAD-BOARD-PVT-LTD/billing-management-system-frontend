@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { billingRulesApi } from '@/features/billing-rules/api/billingRulesApi';
 import { EMPTY_BILLING_RULE_CONFIG } from '@/features/billing-rules/model/defaults';
@@ -26,6 +26,8 @@ export function useBillingRules() {
     queryClient.setQueryData<BillingRuleResourceDocument>(billingRulesKeys.config(), nextDocument);
   }, [queryClient]);
 
+  const activeSaveRef = useRef<Promise<BillingRuleConfig> | null>(null);
+
   const saveMutation = useMutation({
     mutationFn: async (nextConfig: BillingRuleConfig) => {
       const current = queryClient.getQueryData<BillingRuleResourceDocument>(billingRulesKeys.config());
@@ -36,6 +38,22 @@ export function useBillingRules() {
       void queryClient.invalidateQueries({ queryKey: billingRulesKeys.config() });
     },
   });
+
+  const runSingleFlightSave = useCallback((nextConfig: BillingRuleConfig): Promise<BillingRuleConfig> => {
+    if (activeSaveRef.current) {
+      return activeSaveRef.current;
+    }
+    const promise = saveMutation
+      .mutateAsync(nextConfig)
+      .then((saved) => saved.config)
+      .finally(() => {
+        if (activeSaveRef.current === promise) {
+          activeSaveRef.current = null;
+        }
+      });
+    activeSaveRef.current = promise;
+    return promise;
+  }, [saveMutation]);
 
   const load = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: billingRulesKeys.config() });
@@ -50,8 +68,8 @@ export function useBillingRules() {
     isSaving: saveMutation.isPending,
     error: query.error instanceof Error ? query.error.message : saveMutation.error instanceof Error ? saveMutation.error.message : null,
     load,
-    save: async (nextConfig: BillingRuleConfig) => (await saveMutation.mutateAsync(nextConfig)).config,
-    update: async ({ config }: { id: string; config: BillingRuleConfig }) => (await saveMutation.mutateAsync(config)).config,
+    save: runSingleFlightSave,
+    update: ({ config: nextConfig }: { id: string; config: BillingRuleConfig }) => runSingleFlightSave(nextConfig),
     remove: async (id: string) => {
       const current = queryClient.getQueryData<BillingRuleResourceDocument>(billingRulesKeys.config());
       if (!current) throw new Error('Billing rule configuration is unavailable.');
@@ -59,7 +77,7 @@ export function useBillingRules() {
         ...current.config,
         rules: current.config.rules.map((rule) => rule.id === id ? { ...rule, status: 'INACTIVE' as const } : rule),
       };
-      await saveMutation.mutateAsync(nextConfig);
+      await runSingleFlightSave(nextConfig);
     },
   };
 }

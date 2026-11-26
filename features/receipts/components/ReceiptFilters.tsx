@@ -1,12 +1,16 @@
 'use client';
 
+import { useMemo } from 'react';
 import { FilterX, Search, SlidersHorizontal } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NepaliDatePicker } from '@/components/ui/nepali-date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { BranchRecord } from '@/features/administration/branches/types/branch.types';
+import type { UserRecord } from '@/features/administration/users/types/user.types';
 import type { ReceiptFilters as ReceiptFiltersState, ReceiptRecord } from '@/features/receipts/model/receipt';
+import { buildReceiptFilterOptions } from '@/features/receipts/utils/receipt-filter-options';
 
 function toLocalDateValue(date: Date | undefined) {
   if (!date) return '';
@@ -24,15 +28,27 @@ function fromLocalDateValue(value: string) {
 
 interface ReceiptFiltersProps {
   records: ReceiptRecord[];
+  branches?: readonly Pick<BranchRecord, 'name'>[];
+  users?: readonly Pick<UserRecord, 'name' | 'email'>[];
   filters: ReceiptFiltersState;
   onUpdate: <K extends keyof ReceiptFiltersState>(key: K, value: ReceiptFiltersState[K]) => void;
   onClear: () => void;
   isFiltered: boolean;
 }
 
-export function ReceiptFilters({ records, filters, onUpdate, onClear, isFiltered }: ReceiptFiltersProps) {
-  const branches = Array.from(new Set(records.map((record) => record.branchName))).sort();
-  const users = Array.from(new Set(records.map((record) => record.userName))).sort();
+export function ReceiptFilters({
+  records,
+  branches = [],
+  users = [],
+  filters,
+  onUpdate,
+  onClear,
+  isFiltered,
+}: ReceiptFiltersProps) {
+  const { branches: branchOptions, users: userOptions } = useMemo(
+    () => buildReceiptFilterOptions(records, branches, users),
+    [branches, records, users],
+  );
 
   return (
     <section aria-label="रसिद खोज तथा फिल्टर" className="rounded-lg border border-border/80 bg-card p-4 shadow-sm">
@@ -44,8 +60,8 @@ export function ReceiptFilters({ records, filters, onUpdate, onClear, isFiltered
       <div className="mt-3 border-t border-border pt-3">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground"><SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />फिल्टर</div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(10rem,1fr))_auto]">
-          <div className="space-y-1.5"><label htmlFor="receipt-branch" className="text-xs font-medium">शाखा</label><Select value={filters.branch} onValueChange={(value) => onUpdate('branch', value)}><SelectTrigger id="receipt-branch" className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">सबै शाखा</SelectItem>{branches.map((branch) => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent></Select></div>
-          <div className="space-y-1.5"><label htmlFor="receipt-user" className="text-xs font-medium">प्रयोगकर्ता</label><Select value={filters.user} onValueChange={(value) => onUpdate('user', value)}><SelectTrigger id="receipt-user" className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">सबै प्रयोगकर्ता</SelectItem>{users.map((user) => <SelectItem key={user} value={user}>{user}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1.5"><label htmlFor="receipt-branch" className="text-xs font-medium">शाखा</label><Select value={filters.branch} onValueChange={(value) => onUpdate('branch', value)}><SelectTrigger id="receipt-branch" className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">सबै शाखा</SelectItem>{branchOptions.map((branch) => <SelectItem key={branch} value={branch}>{branch}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-1.5"><label htmlFor="receipt-user" className="text-xs font-medium">प्रयोगकर्ता</label><Select value={filters.user} onValueChange={(value) => onUpdate('user', value)}><SelectTrigger id="receipt-user" className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">सबै प्रयोगकर्ता</SelectItem>{userOptions.map((user) => <SelectItem key={user} value={user}>{user}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><label htmlFor="receipt-status" className="text-xs font-medium">स्थिति</label><Select value={filters.status} onValueChange={(value) => onUpdate('status', value)}><SelectTrigger id="receipt-status" className="h-10"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">सबै स्थिति</SelectItem><SelectItem value="PAID">भुक्तानी</SelectItem><SelectItem value="PENDING">बाँकी</SelectItem><SelectItem value="CANCELLED">रद्द</SelectItem></SelectContent></Select></div>
           <div className="flex items-end"><Button type="button" variant="ghost" size="sm" disabled={!isFiltered} onClick={onClear} className="gap-2 text-muted-foreground"><FilterX className="h-4 w-4" aria-hidden="true" />फिल्टर हटाउनुहोस्</Button></div>
         </div>

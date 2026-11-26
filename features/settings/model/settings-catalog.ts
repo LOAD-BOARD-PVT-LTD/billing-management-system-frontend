@@ -99,6 +99,11 @@ export const SETTINGS_ENTRIES: SettingsEntry[] = [
     searchTerms: ['vat दर', 'vat rate', 'vat'],
   },
   {
+    id: 'mahasang-report-defaults', category: 'organization', title: 'महासंघ रिपोर्ट सवारी प्रकार समूह',
+    description: 'महासंघ रिपोर्टका लागि डिफल्ट सवारी प्रकार समूह तथा सूची व्यवस्थापन गर्नुहोस्।', icon: CarFront,
+    searchTerms: ['mahasang', 'महासंघ', 'report', 'रिपोर्ट', 'vehicle type', 'सवारी प्रकार', 'group', 'समूह'],
+  },
+  {
     id: 'system-users', category: 'system-security', title: 'प्रयोगकर्ता व्यवस्थापन',
     description: 'प्रयोगकर्ता व्यवस्थापनको विद्यमान मोड्युल प्रयोग गर्नुहोस्।', icon: Users,
     href: '/dashboard/users', actionLabel: 'प्रयोगकर्ता व्यवस्थापन खोल्नुहोस्',

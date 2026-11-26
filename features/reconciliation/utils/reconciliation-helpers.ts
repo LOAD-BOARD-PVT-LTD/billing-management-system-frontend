@@ -14,6 +14,144 @@ import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { hasVehicleBillingHistory } from './reconciliation-history';
 import { resolveTqmsVehicleOwners } from '@/features/billing/utils/resolve-tqms-vehicle-owners';
 
+type ReconciledSnapshotRecord = {
+	innerContent: Record<string, unknown>;
+	externalContent: Record<string, unknown>;
+	updatedAt: number;
+};
+
+const RECONCILED_SNAPSHOT_STORAGE_KEY = 'billing:reconciled-vehicle-snapshots';
+const reconciledSnapshotsByCacheId = new Map<string, ReconciledSnapshotRecord>();
+const reconciledSnapshotsByTqmsId = new Map<string, ReconciledSnapshotRecord>();
+
+function readSessionSnapshot(storageKey: string): ReconciledSnapshotRecord | null {
+	try {
+		if (typeof window === 'undefined' || !window.sessionStorage) return null;
+		const raw = window.sessionStorage.getItem(RECONCILED_SNAPSHOT_STORAGE_KEY);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw) as Record<string, ReconciledSnapshotRecord>;
+		return parsed?.[storageKey] ?? null;
+	} catch {
+		return null;
+	}
+}
+
+function writeSessionSnapshot(storageKeys: string[], entry: ReconciledSnapshotRecord): void {
+	try {
+		if (typeof window === 'undefined' || !window.sessionStorage) return;
+		const raw = window.sessionStorage.getItem(RECONCILED_SNAPSHOT_STORAGE_KEY);
+		const parsed = raw ? (JSON.parse(raw) as Record<string, ReconciledSnapshotRecord>) : {};
+		for (const key of storageKeys) {
+			parsed[key] = entry;
+		}
+		window.sessionStorage.setItem(RECONCILED_SNAPSHOT_STORAGE_KEY, JSON.stringify(parsed));
+	} catch {
+		// Ignore sessionStorage restrictions in private/headless contexts.
+	}
+}
+
+export function cleanVehicleInnerContent(raw: Record<string, unknown>): Record<string, unknown> {
+	const cleaned = { ...raw };
+	delete cleaned.cache_id;
+	delete cleaned.source;
+	delete cleaned.is_in_billing;
+	delete cleaned.is_in_tqms;
+	delete cleaned.external_content;
+	delete cleaned.externalContent;
+	return cleaned;
+}
+
+export function recordReconciledVehicleSnapshot(params: {
+	cacheId?: string | null;
+	tqmsVehicleId?: string | null;
+	innerContent: Record<string, unknown>;
+	externalContent: Record<string, unknown>;
+}): void {
+	const cacheId = String(params.cacheId ?? '').trim();
+	const tqmsId = String(params.tqmsVehicleId ?? '').trim().toLocaleLowerCase();
+	if (!cacheId && !tqmsId) return;
+
+	const entry: ReconciledSnapshotRecord = {
+		innerContent: cleanVehicleInnerContent(params.innerContent),
+		externalContent: { ...params.externalContent },
+		updatedAt: Date.now(),
+	};
+	const sessionKeys: string[] = [];
+	if (cacheId) {
+		reconciledSnapshotsByCacheId.set(cacheId, entry);
+		sessionKeys.push(`cache:${cacheId}`);
+	}
+	if (tqmsId) {
+		reconciledSnapshotsByTqmsId.set(tqmsId, entry);
+		sessionKeys.push(`tqms:${tqmsId}`);
+	}
+	writeSessionSnapshot(sessionKeys, entry);
+}
+
+export function getReconciledVehicleSnapshot(
+	cacheId: string | null | undefined,
+	tqmsVehicleId: string | null | undefined,
+): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } | null {
+	const normalizedCacheId = String(cacheId ?? '').trim();
+	const normalizedTqmsId = String(tqmsVehicleId ?? '').trim().toLocaleLowerCase();
+	const cached = (normalizedCacheId ? reconciledSnapshotsByCacheId.get(normalizedCacheId) : undefined)
+		?? (normalizedTqmsId ? reconciledSnapshotsByTqmsId.get(normalizedTqmsId) : undefined)
+		?? (normalizedCacheId ? readSessionSnapshot(`cache:${normalizedCacheId}`) : null)
+		?? (normalizedTqmsId ? readSessionSnapshot(`tqms:${normalizedTqmsId}`) : null);
+	if (!cached) return null;
+	return {
+		innerContent: cleanVehicleInnerContent(cached.innerContent),
+		externalContent: { ...cached.externalContent },
+	};
+}
+
+export function clearReconciledVehicleSnapshots(): void {
+	reconciledSnapshotsByCacheId.clear();
+	reconciledSnapshotsByTqmsId.clear();
+	try {
+		if (typeof window !== 'undefined' && window.sessionStorage) {
+			window.sessionStorage.removeItem(RECONCILED_SNAPSHOT_STORAGE_KEY);
+		}
+	} catch {
+		// Ignore sessionStorage restrictions.
+	}
+}
+
+function buildVehicleResourceEnvelope(
+	cacheId: string,
+	innerContent: Record<string, unknown>,
+	externalContent: Record<string, unknown>,
+): VehicleResourceDocument {
+	return {
+		id: cacheId,
+		resource: {
+			id: /^\d+$/u.test(cacheId) ? Number(cacheId) : cacheId,
+			resource_name: 'VehicleResource',
+			inner_content: innerContent,
+			external_content: externalContent,
+		},
+		innerContent,
+		externalContent,
+	};
+}
+
+function sanitizeUpdatedVehicleAliases(
+	innerContent: Record<string, unknown>,
+	tqmsVehicle: BillingVehicle,
+): void {
+	delete innerContent.owners;
+	delete innerContent.vehicleNumber;
+	delete innerContent.vehicleId;
+	delete innerContent.vehicleType;
+	delete innerContent.vehicleTypeId;
+	const normalizedNumber = String(
+		tqmsVehicle.resourceContent?.NormalizedVehicleNumber ?? tqmsVehicle.vehicleNumber,
+	).trim();
+	if (normalizedNumber) {
+		innerContent.NormalizedVehicleNumber = normalizedNumber;
+	}
+}
+
 export function normalizeReconciliationText(value: unknown): string {
 	if (value === null || value === undefined) return '';
 	const str = String(value).trim();
@@ -95,11 +233,9 @@ export function summarizeOwnersList(ownersInput: unknown): string {
 		const o = owners[0];
 		const name = String(o.Name ?? o.name ?? '').trim() || '—';
 		const phone = String(o.Phone ?? o.phone ?? '').trim();
-		const branch = String(o.SanghBranch ?? o.sanghBranch ?? '').trim();
 		const parts = [
 			`धनी/संचालक: ${name}`,
 			phone ? `फोन: ${phone}` : null,
-			branch ? `शाखा: ${branch}` : null,
 		].filter(Boolean);
 		return parts.join(', ');
 	}
@@ -109,10 +245,8 @@ export function summarizeOwnersList(ownersInput: unknown): string {
 			const role = idx === 0 ? 'संचालक' : idx === 1 ? 'सवारी धनी' : `धनी ${idx + 1}`;
 			const name = String(o.Name ?? o.name ?? '').trim() || '—';
 			const phone = String(o.Phone ?? o.phone ?? '').trim();
-			const branch = String(o.SanghBranch ?? o.sanghBranch ?? '').trim();
 			const details = [
 				phone ? `फोन: ${phone}` : null,
-				branch ? `शाखा: ${branch}` : null,
 			].filter(Boolean);
 			return `${idx + 1}. [${role}] ${name}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
 		})
@@ -187,14 +321,6 @@ export function compareVehiclesForReconciliation(
 			isChanged:
 				normalizeReconciliationText(billing.vehicleType) !==
 				normalizeReconciliationText(tqms.vehicleType),
-		},
-		{
-			key: 'branch',
-			label: 'संघ शाखा (Sangh Branch)',
-			billingValue: billing.branch.trim() || '—',
-			tqmsValue: tqms.branch.trim() || '—',
-			// Sthaniya (SanghBranch) changes in TQMS must not trigger vehicle or owner reconciliation.
-			isChanged: false,
 		},
 		{
 			key: 'ownerAddress',
@@ -313,25 +439,13 @@ export async function reconcileVehicleLookup(
 		if (!cacheId) {
 			throw new Error(`Billing cache record for TQMS VehicleId ${tqmsVehicle.tqmsVehicleId} is missing cache_id.`);
 		}
-		const innerContent = { ...match.cacheRecord };
+		const innerContent = cleanVehicleInnerContent(match.cacheRecord);
 		const externalContentValue = match.cacheRecord.external_content ?? match.cacheRecord.externalContent;
 		const externalContent = externalContentValue && typeof externalContentValue === 'object'
 			&& !Array.isArray(externalContentValue)
 			? externalContentValue as Record<string, unknown>
 			: {};
-		const resource = {
-			...match.cacheRecord,
-			id: /^\d+$/u.test(cacheId) ? Number(cacheId) : cacheId,
-			resource_name: 'VehicleResource',
-			inner_content: innerContent,
-			external_content: externalContent,
-		};
-		billingResource = {
-			id: cacheId,
-			resource,
-			innerContent,
-			externalContent,
-		};
+		billingResource = buildVehicleResourceEnvelope(cacheId, innerContent, externalContent);
 		const cachedBillingVehicle = vehicleResourceToBillingVehicle(
 			billingResource,
 			options?.fallbackSmsPhone,
@@ -347,6 +461,7 @@ export async function reconcileVehicleLookup(
 		};
 	}
 
+	const hasReceiptsContext = options?.receipts !== undefined;
 	const hasBillingHistory = hasVehicleBillingHistory(
 		options?.receipts ?? [],
 		[tqmsVehicle.tqmsVehicleId, billingVehicle?.tqmsVehicleId ?? ''],
@@ -361,8 +476,52 @@ export async function reconcileVehicleLookup(
 		};
 	}
 
-	const diffs = compareVehiclesForReconciliation(billingVehicle, tqmsVehicle);
-	const changedDiffs = diffs.filter((d) => d.isChanged);
+	let diffs = compareVehiclesForReconciliation(billingVehicle, tqmsVehicle);
+	let changedDiffs = diffs.filter((d) => d.isChanged);
+
+	if (changedDiffs.length > 0) {
+		const persistedSnapshot = getReconciledVehicleSnapshot(
+			billingResource.id,
+			tqmsVehicle.tqmsVehicleId || billingVehicle.tqmsVehicleId,
+		);
+		if (persistedSnapshot) {
+			const persistedResource = buildVehicleResourceEnvelope(
+				billingResource.id,
+				persistedSnapshot.innerContent,
+				persistedSnapshot.externalContent,
+			);
+			const persistedVehicle = vehicleResourceToBillingVehicle(
+				persistedResource,
+				billingVehicle.smsPhone || options?.fallbackSmsPhone,
+			);
+			billingResource = persistedResource;
+			billingVehicle = {
+				...persistedVehicle,
+				id: billingResource.id,
+				smsPhone: persistedVehicle.smsPhone
+					|| billingVehicle.smsPhone
+					|| options?.fallbackSmsPhone
+					|| persistedVehicle.phone,
+			};
+			diffs = compareVehiclesForReconciliation(billingVehicle, tqmsVehicle);
+			changedDiffs = diffs.filter((d) => d.isChanged);
+		}
+	}
+
+	if (changedDiffs.length > 0 && hasReceiptsContext && !hasBillingHistory) {
+		return {
+			type: 'MATCHED',
+			billingVehicle: {
+				...tqmsVehicle,
+				id: billingResource.id,
+				smsPhone: billingVehicle.smsPhone || tqmsVehicle.smsPhone,
+			},
+			tqmsVehicle,
+			billingResource,
+			diffs,
+			needsCacheSync: true,
+		};
+	}
 
 	if (changedDiffs.length === 0) {
 		return {
@@ -382,6 +541,36 @@ export async function reconcileVehicleLookup(
 		tqmsVehicle,
 		billingResource,
 		diffs,
+	};
+}
+
+export function prepareFirstBillCacheSyncPayload(
+	existingResource: VehicleResourceDocument,
+	tqmsVehicle: BillingVehicle,
+): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
+	const existingInner = existingResource.innerContent;
+	const existingMetadata = (
+		existingInner.metadata
+		&& typeof existingInner.metadata === 'object'
+		&& !Array.isArray(existingInner.metadata)
+	)
+		? existingInner.metadata as Record<string, unknown>
+		: undefined;
+
+	const innerContent: Record<string, unknown> = cleanVehicleInnerContent({
+		...existingInner,
+		...(tqmsVehicle.resourceContent || {}),
+		VehicleNumber: tqmsVehicle.vehicleNumber,
+		VehicleId: tqmsVehicle.tqmsVehicleId || existingInner.VehicleId,
+		VehicleType: tqmsVehicle.vehicleType,
+		VehicleTypeId: tqmsVehicle.tqmsVehicleTypeId || existingInner.VehicleTypeId,
+		...(existingMetadata ? { metadata: { ...existingMetadata } } : {}),
+	});
+	sanitizeUpdatedVehicleAliases(innerContent, tqmsVehicle);
+
+	return {
+		innerContent,
+		externalContent: { ...existingResource.externalContent },
 	};
 }
 
@@ -434,7 +623,7 @@ export function prepareTqmsUpdatePayload(
 	const syncedOwners = !ownerChangeType && branchChanged && !hasOwnerChanges && Array.isArray(existingOwners)
 		? syncOwnerBranchesFromTqms(existingOwners, tqmsOwners, tqmsVehicle.branch)
 		: undefined;
-	const innerContent: Record<string, unknown> = {
+	const innerContent: Record<string, unknown> = cleanVehicleInnerContent({
 		...existingResource.innerContent,
 		...tqmsContent,
 		...(syncedOwners !== undefined ? { Owners: syncedOwners } : {}),
@@ -442,7 +631,8 @@ export function prepareTqmsUpdatePayload(
 		VehicleId: tqmsVehicle.tqmsVehicleId || existingResource.innerContent.VehicleId,
 		VehicleType: tqmsVehicle.vehicleType,
 		VehicleTypeId: tqmsVehicle.tqmsVehicleTypeId || existingResource.innerContent.VehicleTypeId,
-	};
+	});
+	sanitizeUpdatedVehicleAliases(innerContent, tqmsVehicle);
 
 	const currentAudits = Array.isArray(existingResource.externalContent?.reconciliationAudit)
 		? (existingResource.externalContent.reconciliationAudit as ReconciliationAuditEntry[])
@@ -495,7 +685,10 @@ export function prepareOwnerChangePayload(
 	reason: string,
 ): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
 	const tqmsOwners = tqmsVehicle.resourceContent.Owners ?? tqmsVehicle.resourceContent.owners ?? [];
-	const innerContent: Record<string, unknown> = { ...existingResource.innerContent, Owners: tqmsOwners };
+	const innerContent: Record<string, unknown> = cleanVehicleInnerContent({
+		...existingResource.innerContent,
+		Owners: tqmsOwners,
+	});
 	delete innerContent.owners;
 	const changedFields = diffs.filter((diff) => isOwnerReconciliationDiff(diff) && diff.isChanged);
 	const auditEntries = Array.isArray(existingResource.externalContent?.reconciliationAudit)
@@ -542,14 +735,15 @@ export function prepareNewMemberPayload(
 	performedBy: string,
 	reason: string,
 ): { innerContent: Record<string, unknown>; externalContent: Record<string, unknown> } {
-	const innerContent: Record<string, unknown> = {
+	const innerContent: Record<string, unknown> = cleanVehicleInnerContent({
 		...existingResource.innerContent,
 		...(tqmsVehicle.resourceContent || {}),
 		VehicleNumber: tqmsVehicle.vehicleNumber,
 		VehicleId: tqmsVehicle.tqmsVehicleId || existingResource.innerContent.VehicleId,
 		VehicleType: tqmsVehicle.vehicleType,
 		VehicleTypeId: tqmsVehicle.tqmsVehicleTypeId || existingResource.innerContent.VehicleTypeId,
-	};
+	});
+	sanitizeUpdatedVehicleAliases(innerContent, tqmsVehicle);
 
 	const currentOwnershipHistory = Array.isArray(existingResource.externalContent?.ownershipHistory)
 		? (existingResource.externalContent.ownershipHistory as VehicleOwnershipHistoryEntry[])

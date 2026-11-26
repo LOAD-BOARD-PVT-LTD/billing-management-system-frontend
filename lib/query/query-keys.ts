@@ -30,6 +30,7 @@ export const settingsKeys = {
   fiscalYearSelector: () => [...settingsKeys.all, 'fiscal-year-selector'] as const,
   fiscalYearManagement: () => [...settingsKeys.all, 'fiscal-year-management'] as const,
   notificationManagement: () => [...settingsKeys.all, 'notification-management'] as const,
+  mahasangReport: () => [...settingsKeys.all, 'mahasang-report'] as const,
 };
 
 export const vehicleTypeKeys = {

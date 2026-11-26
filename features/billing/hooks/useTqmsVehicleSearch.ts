@@ -25,6 +25,7 @@ export function useTqmsVehicleSearch(query: string, enabled = true) {
 	const searchQuery = useQuery({
 		queryKey: billingKeys.tqmsVehicleSearch(debouncedQuery, branchFilter.branchName),
 		queryFn: ({ signal }) => searchTqmsVehicleMatches(debouncedQuery, signal, branchFilter.branchName),
+		staleTime: 0,
 		enabled: debouncedQuery.length >= MIN_QUERY_LENGTH && canSearch && !isDebouncing && canApplyBranchFilter,
 	});
 	const matches = canSearch && !isDebouncing && canApplyBranchFilter

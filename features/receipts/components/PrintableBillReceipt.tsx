@@ -9,7 +9,6 @@ import type { SavedBill } from '@/features/billing/model/bill.types';
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
 import { createReceiptPdfBlob } from '@/features/receipts/services/receipt-document.service';
 import { recordReceiptPrint } from '@/features/receipts/api/bill-resource.api';
-import { buildReceiptPdfUrl } from '@/features/receipts/utils/receipt-pdf-url';
 import { receiptsKeys } from '@/lib/query/query-keys';
 import { downloadDocument } from '@/shared/document-generation';
 
@@ -72,7 +71,7 @@ export function PrintableBillReceipt({
   }, [pdfState]);
 
   const openPreview = () => {
-    window.open(buildReceiptPdfUrl(bill.id, { copies: copyCount }), '_blank', 'noopener,noreferrer');
+    if (pdfState.status === 'ready') window.open(pdfState.url, '_blank', 'noopener,noreferrer');
   };
 
   const downloadPdf = async () => {

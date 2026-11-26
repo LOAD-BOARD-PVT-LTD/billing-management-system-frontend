@@ -13,6 +13,8 @@ import { useReceiptFilters } from '@/features/receipts/hooks/use-receipt-filters
 import type { ReceiptRecord, ReceiptSortDirection } from '@/features/receipts/model/receipt';
 import type { ReceiptColumnId } from '@/features/receipts/utils/receipt-table-columns';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
+import { useBranches } from '@/features/administration/branches/hooks/useBranches';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { cancelReceipt, correctReceipt, type ReceiptCorrection } from '@/features/receipts/api/bill-resource.api';
 import { useDownloadReceipt } from '@/features/receipts/hooks/use-download-receipt';
 import { usePrintReceipt } from '@/features/receipts/hooks/use-print-receipt';
@@ -51,6 +53,8 @@ function downloadCsv(rows: ReceiptRecord[], columns: ReceiptColumnId[], fiscalYe
 
 export function ReceiptList() {
 	const { records, isLoading, error, reload } = useReceipts();
+	const { records: branches } = useBranches();
+	const { records: users } = useUsers();
 	const { downloadReceipt: downloadReceiptFile } = useDownloadReceipt();
 	const { policy: cancelWindow, error: cancelWindowError } = useReceiptCancelWindow();
 	const { toast } = useToast();
@@ -62,7 +66,7 @@ export function ReceiptList() {
 	const [copyCount, setCopyCount] = useState(1);
 	const { printReceipt, printingReceiptId } = usePrintReceipt();
 	const { visibleColumns, applyColumns } = useReceiptColumns();
-	const { filters, updateFilter, clearFilters, filteredRecords, isFiltered } = useReceiptFilters(records, fiscalYear);
+	const { filters, updateFilter, clearFilters, filteredRecords, isFiltered } = useReceiptFilters(records, fiscalYear, users);
 
 	const sortedRecords = useMemo(() => {
 		if (!sortDirection) return filteredRecords;
@@ -161,7 +165,15 @@ export function ReceiptList() {
 				</div>
 			)}
 
-			<ReceiptFilters records={records} filters={filters} onUpdate={updateReceiptFilter} onClear={() => { clearFilters(); setPage(1); }} isFiltered={isFiltered} />
+			<ReceiptFilters
+				records={records}
+				branches={branches}
+				users={users}
+				filters={filters}
+				onUpdate={updateReceiptFilter}
+				onClear={() => { clearFilters(); setPage(1); }}
+				isFiltered={isFiltered}
+			/>
 
 			<section className="rounded-lg border border-border/80 bg-card p-3 shadow-sm sm:p-4" aria-label="रसिद तालिका">
 				<div className="mb-3 flex items-center justify-between gap-3">

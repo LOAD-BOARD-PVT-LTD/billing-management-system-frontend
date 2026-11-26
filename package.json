@@ -7,7 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import ./tests/setup.mjs --import jiti/register --test tests/**/*.test.ts"
+    "test": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/**/*.test.ts\"",
+    "test:architecture": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/architecture/*.test.ts\"",
+    "test:billing": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/billing/*.test.ts\"",
+    "test:dashboard": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/dashboard/*.test.ts\"",
+    "test:members": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/members/*.test.ts\"",
+    "test:receipts": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/receipts/*.test.ts\"",
+    "test:reconciliation": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/reconciliation/*.test.ts\"",
+    "test:reports": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/reports/*.test.ts\"",
+    "test:settings": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/settings/*.test.ts\"",
+    "test:vehicles": "node --import ./tests/setup.mjs --import jiti/register --test \"tests/vehicles/*.test.ts\""
   },
   "dependencies": {
     "@fontsource/noto-sans-devanagari": "^5.3.0",

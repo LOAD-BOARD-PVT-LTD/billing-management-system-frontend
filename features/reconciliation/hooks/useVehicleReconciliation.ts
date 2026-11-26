@@ -17,6 +17,7 @@ import {
 	prepareOwnerChangePayload,
 	prepareTqmsUpdatePayload,
 	reconcileVehicleLookup,
+	recordReconciledVehicleSnapshot,
 } from '../utils/reconciliation-helpers';
 
 export type ReconcileLookupOptions = {
@@ -92,6 +93,12 @@ export function useVehicleReconciliation() {
 						reason,
 					);
 					await updateVehicleResource(billingResource, innerContent, externalContent);
+					recordReconciledVehicleSnapshot({
+						cacheId: billingResource.id,
+						tqmsVehicleId: tqmsVehicle.tqmsVehicleId || billingVehicle.tqmsVehicleId,
+						innerContent,
+						externalContent,
+					});
 					return {
 						...billingVehicle,
 						ownerName: tqmsVehicle.ownerName,
@@ -116,6 +123,12 @@ export function useVehicleReconciliation() {
 						ownerChangeType,
 					);
 					await updateVehicleResource(billingResource, innerContent, externalContent);
+					recordReconciledVehicleSnapshot({
+						cacheId: billingResource.id,
+						tqmsVehicleId: tqmsVehicle.tqmsVehicleId || billingVehicle.tqmsVehicleId,
+						innerContent,
+						externalContent,
+					});
 					const ownersApplied = ownerChangeType !== null;
 					return {
 						...tqmsVehicle,
@@ -143,6 +156,12 @@ export function useVehicleReconciliation() {
 						reason,
 					);
 					await updateVehicleResource(billingResource, innerContent, externalContent);
+					recordReconciledVehicleSnapshot({
+						cacheId: billingResource.id,
+						tqmsVehicleId: tqmsVehicle.tqmsVehicleId || billingVehicle.tqmsVehicleId,
+						innerContent,
+						externalContent,
+					});
 
 					return {
 						...tqmsVehicle,

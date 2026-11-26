@@ -2,11 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import type { UserRecord } from '@/features/administration/users/types/user.types';
 import type { ReceiptFilters, ReceiptRecord } from '@/features/receipts/model/receipt';
+import {
+  matchesReceiptBranchFilter,
+  matchesReceiptUserFilter,
+} from '@/features/receipts/utils/receipt-filter-options';
 
 const EMPTY_FILTERS: ReceiptFilters = { search: '', dateFrom: '', dateTo: '', branch: 'all', user: 'all', status: 'all' };
 
-export function useReceiptFilters(records: ReceiptRecord[], fiscalYear: string) {
+export function useReceiptFilters(
+  records: ReceiptRecord[],
+  fiscalYear: string,
+  systemUsers: readonly Pick<UserRecord, 'name' | 'email'>[] = [],
+) {
   const [filters, setFilters] = useState<ReceiptFilters>(EMPTY_FILTERS);
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -21,10 +30,10 @@ export function useReceiptFilters(records: ReceiptRecord[], fiscalYear: string) 
       && (fiscalYear === 'all' || receipt.fiscalYear === fiscalYear)
       && (!filters.dateFrom || receipt.paymentDate >= filters.dateFrom)
       && (!filters.dateTo || receipt.paymentDate <= filters.dateTo)
-      && (filters.branch === 'all' || receipt.branchName === filters.branch)
-      && (filters.user === 'all' || receipt.userName === filters.user)
+      && matchesReceiptBranchFilter(receipt.branchName, filters.branch)
+      && matchesReceiptUserFilter(receipt, filters.user, systemUsers)
       && (filters.status === 'all' || receipt.status === filters.status);
-  }), [debouncedSearch, fiscalYear, filters.branch, filters.dateFrom, filters.dateTo, filters.status, filters.user, records]);
+  }), [debouncedSearch, fiscalYear, filters.branch, filters.dateFrom, filters.dateTo, filters.status, filters.user, records, systemUsers]);
 
   const updateFilter = <K extends keyof ReceiptFilters>(key: K, value: ReceiptFilters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));

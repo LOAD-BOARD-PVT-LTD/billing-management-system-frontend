@@ -8,7 +8,8 @@ export type ReconciliationComparisonTableProps = {
 };
 
 export function ReconciliationComparisonTable({ diffs, showChangedOnly = false }: ReconciliationComparisonTableProps) {
-	const visibleDiffs = showChangedOnly ? diffs.filter((diff) => diff.isChanged) : diffs;
+	const relevantDiffs = diffs.filter((diff) => diff.key !== 'branch');
+	const visibleDiffs = showChangedOnly ? relevantDiffs.filter((diff) => diff.isChanged) : relevantDiffs;
 
 	return (
 		<Card className="overflow-hidden border-border/80 shadow-none">

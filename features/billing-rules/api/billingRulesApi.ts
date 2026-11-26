@@ -17,7 +17,10 @@ import {
   asSettingRecord,
   parseSettingJson,
 } from '@/features/settings/api/grouped-settings.api';
-import { assertUniqueFeeHeadNames } from '@/features/billing-rules/utils/fee-head-name-validation';
+import {
+  assertUniqueFeeHeadNames,
+  buildFeeHeadIdentityKey,
+} from '@/features/billing-rules/utils/fee-head-name-validation';
 import { assertNoCrossScopeFeeHeadRules } from '@/features/billing-rules/schemas/billingRuleSchema';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import {
@@ -137,6 +140,8 @@ function mergeDocuments(documents: BillingRuleResourceDocument[]): BillingRuleRe
   };
 }
 
+const inFlightFeeHeadCreates = new Map<string, Promise<BillingRuleResourceDocument>>();
+
 export const billingRulesApi = {
   async list(): Promise<BillingRuleResourceDocument> {
     const [resources, settings] = await Promise.all([
@@ -227,9 +232,6 @@ export const billingRulesApi = {
   },
 
   async save(config: BillingRuleConfig, previousConfig: BillingRuleConfig): Promise<BillingRuleResourceDocument> {
-    assertUniqueFeeHeadNames(config.feeHeads, previousConfig.feeHeads);
-    assertNoCrossScopeFeeHeadRules(config);
-
     const fiscalYearIdentityByAlias = new Map<string, string>();
     for (const year of config.fiscalYears) {
       const identity = canonicalizeFiscalYearLabel(year.code)
@@ -247,6 +249,9 @@ export const billingRulesApi = {
         ?? canonicalizeFiscalYearLabel(trimmed)
         ?? trimmed;
     };
+
+    assertUniqueFeeHeadNames(config.feeHeads, previousConfig.feeHeads, resolveFiscalYearIdentity);
+    assertNoCrossScopeFeeHeadRules(config);
 
     const defaultYears = config.fiscalYears.filter((year) => year.isDefault === true);
     if (defaultYears.length > 1) throw new Error('आर्थिक वर्षमध्ये एउटा मात्र पूर्वनिर्धारित वर्ष छान्नुहोस्।');
@@ -268,9 +273,25 @@ export const billingRulesApi = {
       if (!feeHead.fiscalYearId && (!previousFeeHead || previousFeeHead.fiscalYearId !== null)) {
         throw new Error(`"${feeHead.name}" शुल्क शीर्षकको आर्थिक वर्ष छान्नुहोस्।`);
       }
-      const document = previousFeeHead
-        ? await updateBillingRuleFeeHead(feeHead.id, feeHead)
-        : await createBillingRuleFeeHead(feeHead);
+      let document: BillingRuleResourceDocument;
+      if (previousFeeHead) {
+        document = await updateBillingRuleFeeHead(feeHead.id, feeHead);
+      } else {
+        const identityKey = buildFeeHeadIdentityKey({
+          name: feeHead.name,
+          fiscalYearId: resolveFiscalYearIdentity(feeHead.fiscalYearId),
+        });
+        const existingCreate = inFlightFeeHeadCreates.get(identityKey);
+        if (existingCreate) {
+          document = await existingCreate;
+        } else {
+          const createPromise = createBillingRuleFeeHead(feeHead).finally(() => {
+            inFlightFeeHeadCreates.delete(identityKey);
+          });
+          inFlightFeeHeadCreates.set(identityKey, createPromise);
+          document = await createPromise;
+        }
+      }
       const savedFeeHead = {
         ...(document.config.feeHeads[0] ?? feeHead),
         displayOrder: document.config.feeHeads[0]?.displayOrder ?? feeHead.displayOrder,

@@ -52,6 +52,9 @@ type BillingHeaderProps = {
 	onSmsPhoneChange: (phone: string) => void;
 	onVehicleResourceStatusChange: (vehicleId: string | null) => void;
 	loadReceipts: () => Promise<ReceiptRecord[]>;
+	onPendingVehicleCacheSync?: (
+		pending: { billingResource: VehicleResourceDocument; tqmsVehicle: BillingVehicle } | null,
+	) => void;
 	onReconciliationRequired?: (data: {
 		billingVehicle: BillingVehicle;
 		tqmsVehicle: BillingVehicle;
@@ -68,6 +71,7 @@ export const BillingHeader = memo(function BillingHeader({
 	onSmsPhoneChange,
 	onVehicleResourceStatusChange,
 	loadReceipts,
+	onPendingVehicleCacheSync,
 	onReconciliationRequired,
 }: BillingHeaderProps) {
 	const [query, setQuery] = useState('');
@@ -157,6 +161,7 @@ export const BillingHeader = memo(function BillingHeader({
 			});
 
 			if (result.type === 'RESOURCE_MISSING') {
+				onPendingVehicleCacheSync?.(null);
 				onVehicleResourceStatusChange(result.tqmsVehicle.tqmsVehicleId);
 				if (result.tqmsVehicle.id !== selectedVehicle?.id) onSelectVehicle(result.tqmsVehicle);
 				toast({
@@ -170,14 +175,20 @@ export const BillingHeader = memo(function BillingHeader({
 
 			if (result.type === 'MATCHED') {
 				onVehicleResourceStatusChange(null);
+				onPendingVehicleCacheSync?.(
+					result.needsCacheSync && result.tqmsVehicle
+						? { billingResource: result.billingResource, tqmsVehicle: result.tqmsVehicle }
+						: null,
+				);
 				const vehicleToSelect = result.billingVehicle;
-				if (vehicleToSelect && vehicleToSelect.id !== selectedVehicle?.id) {
+				if (vehicleToSelect && (result.needsCacheSync || vehicleToSelect.id !== selectedVehicle?.id)) {
 					onSelectVehicle(vehicleToSelect);
 				}
 				return;
 			}
 
 			if (result.type === 'RECONCILIATION_REQUIRED') {
+				onPendingVehicleCacheSync?.(null);
 				onVehicleResourceStatusChange(null);
 				onReconciliationRequired?.({
 					billingVehicle: result.billingVehicle,
@@ -199,6 +210,7 @@ export const BillingHeader = memo(function BillingHeader({
 	const handleClear = () => {
 		setQuery('');
 		setIsOpen(false);
+		onPendingVehicleCacheSync?.(null);
 		onClearSelection();
 	};
 

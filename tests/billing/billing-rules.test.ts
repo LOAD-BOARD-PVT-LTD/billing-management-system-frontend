@@ -8,10 +8,11 @@ import {
 import { billingRulesApi } from '@/features/billing-rules/api/billingRulesApi';
 import { apiClient } from '@/lib/api/client';
 import type { BillingRuleConfig } from '@/features/billing-rules/model/types';
-import { assertUniqueFeeHeadNames } from '@/features/billing-rules/utils/fee-head-name-validation';
+import { assertUniqueFeeHeadNames, findDuplicateFeeHead } from '@/features/billing-rules/utils/fee-head-name-validation';
 import { sortFeeHeadsByDisplayOrder } from '@/features/billing-rules/utils/fee-head-order';
 import { billingRuleSchema, validateBillingRuleRecord } from '@/features/billing-rules/schemas/billingRuleSchema';
 import { getPeriodForFrequency, getPeriodLabel, validityOptionsByFrequency } from '@/features/billing-rules/utils/rule-period-policy';
+import { readWorkspaceFile } from '@/tests/helpers/source-assertions';
 
 describe('1. Billing Rule Configuration', () => {
   const originalGet = apiClient.get;
@@ -251,6 +252,82 @@ describe('1. Billing Rule Configuration', () => {
         /Road Tax.*Common र Vehicle Type/u,
       );
       assert.equal(writeCount, 0);
+    });
+
+    test('rejects duplicate fee head names across canonicalized Nepali/English fiscal years and invisible characters', () => {
+      assert.throws(
+        () => assertUniqueFeeHeadNames([
+          { id: 'fee-1', fiscalYearId: '2083/84', name: 'धरौटी सापट', status: 'ACTIVE' },
+          { id: 'fee-2', fiscalYearId: '२०८३/८४', name: 'धरौटी\u200B  सापट ', status: 'ACTIVE' },
+        ]),
+        /पहिले नै छ/u,
+      );
+
+      assert.throws(
+        () => assertUniqueFeeHeadNames([
+          { id: 'fee-1', fiscalYearId: '2083-84', name: 'नवीकरण शुल्क', status: 'ACTIVE' },
+          { id: 'fee-2', fiscalYearId: '2083/2084', name: 'नवीकरण शुल्क', status: 'ACTIVE' },
+        ]),
+        /पहिले नै छ/u,
+      );
+    });
+
+    test('findDuplicateFeeHead detects same-fiscal-year duplicates while ignoring self and other fiscal years', () => {
+      const existing = [
+        { id: 'fh-1', fiscalYearId: '2083/84', name: 'धरौटी सापट', status: 'ACTIVE' as const },
+        { id: 'fh-2', fiscalYearId: '2082/83', name: 'सदस्यता शुल्क', status: 'ACTIVE' as const },
+      ];
+
+      assert.equal(
+        findDuplicateFeeHead(existing, { id: 'new-1', fiscalYearId: '२०८३/८४', name: ' धरौटी   सापट ' })?.id,
+        'fh-1',
+      );
+      assert.equal(
+        findDuplicateFeeHead(existing, { id: 'fh-1', fiscalYearId: '2083/84', name: 'धरौटी सापट' }),
+        undefined,
+      );
+      assert.equal(
+        findDuplicateFeeHead(existing, { id: 'new-2', fiscalYearId: '2083/84', name: 'सदस्यता शुल्क' }),
+        undefined,
+      );
+    });
+
+    test('rejects reactivating an INACTIVE legacy duplicate while still allowing deactivation of a duplicate', () => {
+      const previousFeeHeads = [
+        { id: 'legacy-1', fiscalYearId: '2083/84', name: 'धरौटी सापट', status: 'ACTIVE' as const },
+        { id: 'legacy-2', fiscalYearId: '2083/84', name: 'धरौटी सापट', status: 'INACTIVE' as const },
+        { id: 'legacy-3', fiscalYearId: '2083/84', name: 'धरौटी सापट', status: 'ACTIVE' as const },
+      ];
+
+      assert.doesNotThrow(() => assertUniqueFeeHeadNames(
+        [
+          previousFeeHeads[0],
+          previousFeeHeads[1],
+          { ...previousFeeHeads[2], status: 'INACTIVE' },
+        ],
+        previousFeeHeads,
+      ));
+
+      assert.throws(
+        () => assertUniqueFeeHeadNames(
+          [
+            previousFeeHeads[0],
+            { ...previousFeeHeads[1], status: 'ACTIVE' },
+            previousFeeHeads[2],
+          ],
+          previousFeeHeads,
+        ),
+        /पहिले नै छ/u,
+      );
+    });
+
+    test('wires live duplicate fee-head validation in FeeHeadDialog and FeeHeadManager', () => {
+      const dialogSource = readWorkspaceFile('features', 'billing-rules', 'components', 'configuration', 'FeeHeadDialog.tsx');
+      const managerSource = readWorkspaceFile('features', 'billing-rules', 'components', 'configuration', 'FeeHeadManager.tsx');
+
+      assert.ok(dialogSource.includes('findDuplicateFeeHead'));
+      assert.ok(dialogSource.includes('Boolean(duplicateFeeHead)'));
+      assert.ok(managerSource.includes('existingFeeHeads={feeHeads}'));
     });
   });
 
@@ -805,6 +882,72 @@ describe('1. Billing Rule Configuration', () => {
       assert.equal(deletedIds.length, 1);
       assert.ok(deletedIds[0].includes('rule-delete'));
       assert.ok(!deletedIds[0].includes('rule-keep'));
+    });
+
+    test('deduplicates concurrent fee-head creation requests with the same name and fiscal year', async () => {
+      let postCount = 0;
+      let releaseFirstPost: () => void = () => {};
+      const deferredFirstPost = new Promise<void>((resolve) => {
+        releaseFirstPost = resolve;
+      });
+
+      apiClient.post = async <T>(_path: string, payload?: unknown): Promise<T> => {
+        postCount += 1;
+        await deferredFirstPost;
+        const record = payload as { inner_content: { name: string; fiscalYearId: string } };
+        return {
+          id: 901,
+          resource_name: 'BillingRuleResource',
+          inner_content: {
+            resourceType: 'FEE_HEAD',
+            name: record.inner_content.name,
+            fiscalYearId: record.inner_content.fiscalYearId,
+            status: 'ACTIVE',
+          },
+        } as T;
+      };
+
+      const previousConfig: BillingRuleConfig = {
+        version: 1,
+        feeHeads: [],
+        fiscalYears: [
+          { id: '2083/84', code: '2083/84', name: '2083/84', status: 'ACTIVE', isDefault: true, startDate: '', endDate: '' },
+        ],
+        rules: [],
+      };
+
+      const firstSave = billingRulesApi.save({
+        ...previousConfig,
+        feeHeads: [
+          { id: 'uuid-click-1', code: '', fiscalYearId: '2083/84', name: 'सदस्यता नवीकरण', status: 'ACTIVE' },
+        ],
+      }, previousConfig);
+
+      const secondSave = billingRulesApi.save({
+        ...previousConfig,
+        feeHeads: [
+          { id: 'uuid-click-2', code: '', fiscalYearId: '2083/84', name: '  सदस्यता   नवीकरण ', status: 'ACTIVE' },
+        ],
+      }, previousConfig);
+
+      await Promise.resolve();
+      releaseFirstPost();
+
+      const [firstResult, secondResult] = await Promise.all([firstSave, secondSave]);
+      assert.equal(postCount, 1);
+      assert.equal(firstResult.config.feeHeads[0]?.id, '901');
+      assert.equal(secondResult.config.feeHeads[0]?.id, '901');
+    });
+
+    test('enforces single-submit locking in FeeHeadDialog and FeeHeadManager', () => {
+      const dialogSource = readWorkspaceFile('features', 'billing-rules', 'components', 'configuration', 'FeeHeadDialog.tsx');
+      const managerSource = readWorkspaceFile('features', 'billing-rules', 'components', 'configuration', 'FeeHeadManager.tsx');
+
+      assert.ok(dialogSource.includes('isSubmittingRef'), 'FeeHeadDialog should use a synchronous ref guard');
+      assert.ok(dialogSource.includes('const busy = isSaving || isSubmitting;'), 'FeeHeadDialog should disable inputs and Save while busy');
+      assert.ok(dialogSource.includes('disabled={busy || !value.name.trim() || !value.fiscalYearId || Boolean(duplicateFeeHead)}'), 'Save button should stay disabled while saving or duplicate');
+      assert.ok(managerSource.includes('isSaving={isSaving}'), 'FeeHeadManager should forward isSaving to FeeHeadDialog');
+      assert.ok(managerSource.includes('isSubmittingFeeHeadRef'), 'FeeHeadManager should guard rapid repeated submissions');
     });
   });
 

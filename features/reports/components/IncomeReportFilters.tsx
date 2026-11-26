@@ -5,63 +5,26 @@ import { Button } from '@/components/ui/button';
 import { FiscalYearSelect } from '@/components/common/filters/FiscalYearSelect';
 import { NepaliDatePicker } from '@/components/ui/nepali-date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  fromReportDateValue,
+  ReportFilterSelect,
+  toReportDateValue,
+  type ReportFilterOption,
+} from '@/features/reports/components/ReportFiltersCard';
 import type { IncomeReportFilters as IncomeReportFilterValues } from '@/features/reports/types/income-report';
 import { toNepaliDigits } from '@/utils/numbers';
-
-function toDateValue(value: string): Date | undefined {
-  if (!value) return undefined;
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function fromDateValue(date: Date | undefined): string {
-  if (!date) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-type Option = { value: string; label: string };
 
 type IncomeReportFiltersProps = {
   filters: IncomeReportFilterValues;
   fiscalYears: string[];
   branches: string[];
   users: string[];
-  feeHeads: Option[];
+  feeHeads: ReportFilterOption[];
   isFiltered: boolean;
   onUpdate: (key: keyof IncomeReportFilterValues, value: string) => void;
   onClear: () => void;
   onGenerate?: () => void;
 };
-
-function FilterSelect({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  options: Option[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-foreground">{label}</label>
-      <Select value={value || 'all'} onValueChange={onChange}>
-        <SelectTrigger id={id} className="h-10"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">सबै</SelectItem>
-          {options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
 
 export function IncomeReportFilters({
   filters,
@@ -102,8 +65,8 @@ export function IncomeReportFilters({
             includeAllOption
           />
         </div>
-        <FilterSelect id="income-branch" label="शाखा" value={filters.branch} options={branches.map((value) => ({ value, label: value }))} onChange={(value) => onUpdate('branch', value)} />
-        <FilterSelect id="income-user" label="प्रयोगकर्ता" value={filters.user} options={users.map((value) => ({ value, label: value }))} onChange={(value) => onUpdate('user', value)} />
+        <ReportFilterSelect id="income-branch" label="शाखा" value={filters.branch} options={branches.map((value) => ({ value, label: value }))} onChange={(value) => onUpdate('branch', value)} />
+        <ReportFilterSelect id="income-user" label="प्रयोगकर्ता" value={filters.user} options={users.map((value) => ({ value, label: value }))} onChange={(value) => onUpdate('user', value)} />
         <div className="min-w-0 space-y-1.5">
           <label htmlFor="income-bill-type" className="text-xs font-medium text-foreground">बिलिङ प्रकार</label>
           <Select value="unavailable" disabled>
@@ -111,14 +74,14 @@ export function IncomeReportFilters({
             <SelectContent><SelectItem value="unavailable">API मा उपलब्ध छैन</SelectItem></SelectContent>
           </Select>
         </div>
-        <FilterSelect id="income-fee-head" label="आम्दानी शीर्षक" value={filters.feeHead} options={feeHeads} onChange={(value) => onUpdate('feeHead', value)} />
+        <ReportFilterSelect id="income-fee-head" label="आम्दानी शीर्षक" value={filters.feeHead} options={feeHeads} onChange={(value) => onUpdate('feeHead', value)} />
         <fieldset className="min-w-0 space-y-1.5">
           <legend className="text-xs font-medium text-foreground">बाट मिति</legend>
-          <NepaliDatePicker value={toDateValue(filters.dateFrom)} onChange={(date) => onUpdate('dateFrom', fromDateValue(date))} placeholder="मिति छान्नुहोस्" />
+          <NepaliDatePicker value={toReportDateValue(filters.dateFrom)} onChange={(date) => onUpdate('dateFrom', fromReportDateValue(date))} placeholder="मिति छान्नुहोस्" />
         </fieldset>
         <fieldset className="min-w-0 space-y-1.5">
           <legend className="text-xs font-medium text-foreground">सम्म मिति</legend>
-          <NepaliDatePicker value={toDateValue(filters.dateTo)} onChange={(date) => onUpdate('dateTo', fromDateValue(date))} placeholder="मिति छान्नुहोस्" />
+          <NepaliDatePicker value={toReportDateValue(filters.dateTo)} onChange={(date) => onUpdate('dateTo', fromReportDateValue(date))} placeholder="मिति छान्नुहोस्" />
         </fieldset>
       </div>
 
