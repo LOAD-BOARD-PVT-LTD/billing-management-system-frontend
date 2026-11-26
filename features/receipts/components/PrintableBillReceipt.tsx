@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, Eye, LoaderCircle, Plus, Printer, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { useOrganization } from '@/contexts/organization-context';
 import type { SavedBill } from '@/features/billing/model/bill.types';
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
 import { createReceiptPdfBlob } from '@/features/receipts/services/receipt-document.service';
@@ -45,11 +46,16 @@ export function PrintableBillReceipt({
   const printFrame = useRef<HTMLIFrameElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { organization } = useOrganization();
   const copyCount = Math.max(1, Math.min(5, Math.floor(copies)));
 
   const generatePdf = useCallback(async () => {
     try {
-      const blob = await createReceiptPdfBlob(bill, copyCount, { voided, branding });
+      const blob = await createReceiptPdfBlob(bill, copyCount, {
+        voided,
+        branding,
+        branches: organization.branches,
+      });
       if (blob.type !== 'application/pdf' || blob.size === 0) throw new Error('रसिद PDF तयार भएन।');
       const url = URL.createObjectURL(blob);
       setPdfState({ status: 'ready', url });
@@ -59,7 +65,7 @@ export function PrintableBillReceipt({
         message: error instanceof Error ? error.message : 'रसिदको PDF बनाउन सकिएन।',
       });
     }
-  }, [bill, copyCount, voided, branding]);
+  }, [bill, copyCount, voided, branding, organization.branches]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void generatePdf(), 0);
@@ -76,7 +82,12 @@ export function PrintableBillReceipt({
 
   const downloadPdf = async () => {
     try {
-      const blob = await createReceiptPdfBlob(bill, 1, { voided, branding, showCopyLabel: false });
+      const blob = await createReceiptPdfBlob(bill, 1, {
+        voided,
+        branding,
+        branches: organization.branches,
+        showCopyLabel: false,
+      });
       if (blob.type !== 'application/pdf' || blob.size === 0) throw new Error('रसिद PDF तयार भएन।');
       const url = URL.createObjectURL(blob);
       downloadDocument(url, `receipt-${bill.receiptNumber}`);

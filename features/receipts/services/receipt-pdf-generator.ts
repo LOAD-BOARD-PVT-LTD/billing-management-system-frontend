@@ -3,10 +3,10 @@ import { degrees, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, 
 import type { SavedBill } from '@/features/billing/model/bill.types';
 import { toNepaliDigits } from '@/utils/numbers';
 import { fontasyFromUnicode } from '@/utils/fontasy-himali/fromUnicode';
-import contacts from '@/shared/document-generation/data/document-contacts.json';
 import { formatAmountInNepaliWords, formatDocumentCount, formatDocumentCurrency } from '@/shared/document-generation/utils/format-currency';
 import { DEFAULT_COMPANY_BRANDING } from '@/shared/document-generation/components/CompanyBranding';
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
+import { organizationConfig, type OrganizationBranch } from '@/constants/organization';
 import { formatDocumentNepaliDate, formatDocumentTime } from '@/shared/document-generation/utils/format-date';
 import { BILL_FOOTER_LABELS, getBillFooterDetails } from '@/shared/document-generation/utils/bill-footer';
 import { getBillOwnerDisplayLines } from '@/features/receipts/utils/receipt-owners';
@@ -36,6 +36,7 @@ export type ReceiptAssetLoader = (assetPath: string, name: string) => Promise<Ui
 export interface ReceiptPdfOptions {
   voided?: boolean;
   branding?: Partial<CompanyBrandingOptions>;
+  branches?: readonly OrganizationBranch[];
   showCopyLabel?: boolean;
   copyNumberStart?: number;
   loadAsset: ReceiptAssetLoader;
@@ -378,6 +379,7 @@ function drawReceipt(
   copyCount: number,
   voided: boolean,
   brandingOverrides: Partial<CompanyBrandingOptions>,
+  branches: readonly OrganizationBranch[],
   showCopyLabel: boolean,
   viewedAt: string,
 ): void {
@@ -392,8 +394,8 @@ function drawReceipt(
   const contactX = PAGE_WIDTH - MARGIN - 120;
   const contactWidth = 118;
   drawLineText(page, 'सम्पर्क नम्बरहरू:', contactX, 31, 9, fonts, true);
-  contacts.forEach(({ label, phone }, index) => {
-    drawWrappedText(page, `${label}: ${phone}`, contactX, 45 + index * 12, contactWidth, 8.5, fonts);
+  branches.forEach(({ name, phoneNumbers }, index) => {
+    drawWrappedText(page, `${name}: ${phoneNumbers.join(', ')}`, contactX, 45 + index * 12, contactWidth, 8.5, fonts);
   });
 
   drawCenteredText(page, brand.name, centerX, 22, 19, fonts, true);
@@ -516,6 +518,7 @@ export async function createReceiptPdfBytes(
       copyCount,
       options.voided === true,
       options.branding ?? {},
+      options.branches ?? organizationConfig.branches,
       options.showCopyLabel !== false,
       viewedAt,
     );

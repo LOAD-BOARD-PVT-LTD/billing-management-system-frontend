@@ -1,3 +1,8 @@
+export interface OrganizationBranch {
+  name: string;
+  phoneNumbers: readonly string[];
+}
+
 export interface OrganizationConfig {
   organizationId?: string;
   nameNepali: string;
@@ -12,6 +17,7 @@ export interface OrganizationConfig {
   featureFlags?: {
     generalBilling?: boolean;
   };
+  branches?: readonly OrganizationBranch[];
 }
 
 export const organizationThemeDefaults = {
@@ -27,6 +33,13 @@ export const organizationConfig = {
   nameEnglish: 'Narayani Internal Billing',
   ...organizationThemeDefaults,
   currencySymbol: 'Rs.',
+  branches: [
+    { name: 'हेटौंडा', phoneNumbers: ['०५७ ५२०६७०'] },
+    { name: 'चितवन', phoneNumbers: ['०५६ ५९५२०८'] },
+    { name: 'बीरगंज', phoneNumbers: ['०५१ ४१९१०१'] },
+    { name: 'काठमाडौं', phoneNumbers: ['०१ ५१९५४७७'] },
+    { name: 'पथलैया', phoneNumbers: ['९८४५०५९४७५'] },
+  ],
   featureFlags: {
     generalBilling: process.env.NEXT_PUBLIC_ENABLE_GENERAL_BILLING === 'true',
   },

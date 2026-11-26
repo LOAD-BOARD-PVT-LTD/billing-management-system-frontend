@@ -2,6 +2,7 @@
 
 import type { SavedBill } from '@/features/billing/model/bill.types';
 import type { CompanyBrandingOptions } from '@/shared/document-generation/types/document.types';
+import type { OrganizationBranch } from '@/constants/organization';
 import { createReceiptPdfBytes } from './receipt-pdf-generator';
 
 async function fetchBrowserAsset(path: string, name: string): Promise<Uint8Array> {
@@ -18,6 +19,7 @@ export async function createReceiptPdfBlob(
   options: {
     voided?: boolean;
     branding?: Partial<CompanyBrandingOptions>;
+    branches?: readonly OrganizationBranch[];
     showCopyLabel?: boolean;
     copyNumberStart?: number;
   } = {},

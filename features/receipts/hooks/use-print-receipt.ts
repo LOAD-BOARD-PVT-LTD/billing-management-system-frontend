@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useToast } from '@/components/ui/use-toast';
+import { useOrganization } from '@/contexts/organization-context';
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
 import { recordReceiptPrint } from '@/features/receipts/api/bill-resource.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
@@ -16,6 +17,7 @@ export function usePrintReceipt() {
 	const queryClient = useQueryClient();
 	const { records: billingEntities } = useBillingEntities();
 	const { toast } = useToast();
+	const { organization } = useOrganization();
 
 	const printReceipt = async (receipt: ReceiptRecord, copies: number) => {
 		if (printingReceiptId) return;
@@ -35,6 +37,7 @@ export function usePrintReceipt() {
 			const blob = await createReceiptPdfBlob(receipt.bill, copies, {
 				voided: receipt.status === 'CANCELLED',
 				branding: resolveBillBranding(receipt.bill, billingEntities),
+				branches: organization.branches,
 				copyNumberStart: receipt.printedCopyCount + 1,
 			});
 			if (blob.type !== 'application/pdf' || blob.size === 0) throw new Error('रसिद PDF तयार भएन।');

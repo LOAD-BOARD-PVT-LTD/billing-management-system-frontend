@@ -1,12 +1,19 @@
-import contacts from '@/shared/document-generation/data/document-contacts.json';
+import { useOrganization } from '@/contexts/organization-context';
 import { fontasyFromUnicode } from '@/utils/fontasy-himali/fromUnicode';
 
 export function DocumentContacts() {
+  const { organization } = useOrganization();
+  const branches = organization.branches ?? [];
+
+  if (branches.length === 0) return null;
+
   return (
     <aside className="document-contact-list">
       <strong>{fontasyFromUnicode('सम्पर्क नम्बरहरू:')}</strong>
-      {contacts.map(({ label, phone }) => (
-        <span key={label}>{fontasyFromUnicode(`${label}: ${phone}`)}</span>
+      {branches.map(({ name, phoneNumbers }) => (
+        <span key={name}>
+          {fontasyFromUnicode(`${name}: ${phoneNumbers.join(', ')}`)}
+        </span>
       ))}
     </aside>
   );

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { useOrganization } from '@/contexts/organization-context';
 import { useBillingEntities } from '@/features/administration/billing-entities/hooks/useBillingEntities';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import { createReceiptPdfBlob } from '@/features/receipts/services/receipt-document.service';
@@ -11,6 +12,7 @@ export function useDownloadReceipt() {
 	const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
 	const { records: billingEntities } = useBillingEntities();
 	const { toast } = useToast();
+	const { organization } = useOrganization();
 
 	const downloadReceipt = async (receipt: ReceiptRecord) => {
 		if (downloadingReceiptId) return;
@@ -19,6 +21,7 @@ export function useDownloadReceipt() {
 			const blob = await createReceiptPdfBlob(receipt.bill, 1, {
 				voided: receipt.status === 'CANCELLED',
 				branding: resolveBillBranding(receipt.bill, billingEntities),
+				branches: organization.branches,
 				showCopyLabel: false,
 			});
 			if (blob.type !== 'application/pdf' || blob.size === 0) {

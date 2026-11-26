@@ -126,6 +126,7 @@ export function TqmsOwnerDirectoryPage() {
   const currentPage = Math.min(page, pageCount);
   const pageOwners = filteredOwners.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const vehicleCount = sanghVehicles.length;
+  const addOwnerUrl = getOptionalTqmsUrl('/admin/vehicle/owner/new');
 
   return (
     <section className="space-y-4 pb-6">
@@ -142,10 +143,20 @@ export function TqmsOwnerDirectoryPage() {
           </h2>
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-right">
-              <Button type="button" disabled variant="secondary" size="sm" className="h-9 gap-2">
-                <ExternalLink aria-hidden="true" className="size-4" /> Add Owner
-              </Button>
-              <p className="mt-1 text-[11px] text-muted-foreground">धनी अपडेट लिंक उपलब्ध छैन।</p>
+              {addOwnerUrl ? (
+                <Button asChild variant="secondary" size="sm" className="h-9 gap-2">
+                  <a href={addOwnerUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink aria-hidden="true" className="size-4" /> Add Owner
+                  </a>
+                </Button>
+              ) : (
+                <>
+                  <Button type="button" disabled variant="secondary" size="sm" className="h-9 gap-2">
+                    <ExternalLink aria-hidden="true" className="size-4" /> Add Owner
+                  </Button>
+                  <p className="mt-1 text-[11px] text-muted-foreground">TQMS URL कन्फिगर गरिएको छैन।</p>
+                </>
+              )}
             </div>
             <Button
               type="button"
