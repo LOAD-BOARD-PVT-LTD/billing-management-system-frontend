@@ -12,6 +12,7 @@ import {
 	Search,
 	Truck,
 	UserRound,
+	Users,
 	X,
 } from 'lucide-react';
 import { SearchableCombobox } from '@/components/ui/SearchableCombobox';
@@ -35,6 +36,7 @@ import {
 	type ReconciliationFieldDiff,
 } from '@/features/reconciliation';
 import { VehiclePhoneUpdateDialog } from './VehiclePhoneUpdateDialog';
+import { requiresDhaniOwnerSelection } from '@/features/billing/utils/resolve-tqms-vehicle-owners';
 import type { BillingVehicle } from '@/features/billing/model/types';
 import type { TqmsVehicleSearchMatch } from '@/features/billing/schemas/tqms-vehicle-search.schema';
 import type { VehiclePhoneUpdateInput } from '@/features/billing/schemas/vehicle-phone-update.schema';
@@ -51,6 +53,7 @@ type BillingHeaderProps = {
 	onClearSelection: () => void;
 	onSmsPhoneChange: (phone: string) => void;
 	onVehicleResourceStatusChange: (vehicleId: string | null) => void;
+	onOpenOwnerSelect?: () => void;
 	loadReceipts: () => Promise<ReceiptRecord[]>;
 	onPendingVehicleCacheSync?: (
 		pending: { billingResource: VehicleResourceDocument; tqmsVehicle: BillingVehicle } | null,
@@ -70,10 +73,20 @@ export const BillingHeader = memo(function BillingHeader({
 	onClearSelection,
 	onSmsPhoneChange,
 	onVehicleResourceStatusChange,
+	onOpenOwnerSelect,
 	loadReceipts,
 	onPendingVehicleCacheSync,
 	onReconciliationRequired,
 }: BillingHeaderProps) {
+	const canSelectDhaniOwner = selectedVehicle
+		? requiresDhaniOwnerSelection(
+			selectedVehicle.resourceContent?.Owners ?? selectedVehicle.resourceContent?.owners,
+		)
+		: false;
+	const operatorName = selectedVehicle?.operatorName?.trim();
+	const hasDistinctOperator = Boolean(
+		operatorName && operatorName !== selectedVehicle?.ownerName.trim(),
+	);
 	const [query, setQuery] = useState('');
 	const [isOpen, setIsOpen] = useState(false);
 	const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
@@ -372,6 +385,18 @@ export const BillingHeader = memo(function BillingHeader({
 							</PopoverContent>
 						</Popover>
 						<div className="flex flex-wrap gap-1">
+							{canSelectDhaniOwner && onOpenOwnerSelect ? (
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={onOpenOwnerSelect}
+									leftIcon={<Users className="h-3.5 w-3.5" />}
+									className="h-6 px-1.5 text-[11px]"
+								>
+									धनी छान्नुहोस्
+								</Button>
+							) : null}
 							<Button
 								type="button"
 								variant="outline"
@@ -397,7 +422,7 @@ export const BillingHeader = memo(function BillingHeader({
 						</div>
 					</div>
 
-					<div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 lg:grid-cols-5">
+					<div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 lg:grid-cols-6">
 						<div className="space-y-0.5">
 							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
 								<Truck className="h-3 w-3" /> सवारी प्रकार
@@ -421,6 +446,20 @@ export const BillingHeader = memo(function BillingHeader({
 								{selectedVehicle.ownerName || 'मालिकको विवरण उपलब्ध छैन'}
 							</p>
 						</div>
+
+						{hasDistinctOperator ? (
+							<div className="space-y-0.5">
+								<p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+									<UserRound className="h-3 w-3" /> संचालकको नाम
+								</p>
+								<p
+									className="truncate text-xs font-semibold text-foreground"
+									title={operatorName}
+								>
+									{operatorName}
+								</p>
+							</div>
+						) : null}
 
 						<div className="space-y-0.5">
 							<p className="flex items-center gap-1 text-[11px] text-muted-foreground">

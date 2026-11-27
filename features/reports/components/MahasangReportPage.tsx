@@ -3,7 +3,9 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { DataTableColumn } from '@/components/data-tables/DataTable';
+import { useAuth } from '@/contexts/auth-context';
 import { useBranches } from '@/features/administration/branches/hooks/useBranches';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 import { fetchMemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
@@ -37,8 +39,10 @@ import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { toNepaliDigits } from '@/utils/numbers';
 
 export function MahasangReportPage() {
+  const { user: authUser } = useAuth();
   const { records, isLoading, error } = useReceipts();
   const branchesQuery = useBranches();
+  const usersQuery = useUsers();
   const billingRules = useBillingRules();
   const vehicleTypesQuery = useVehicleTypes();
   const mahasangSettings = useMahasangReportSettings();
@@ -68,15 +72,23 @@ export function MahasangReportPage() {
       receipts: records,
       systemBranches: branchesQuery.records,
       billingRuleFeeHeads: billingRules.config.feeHeads,
+      fiscalYears: billingRules.config.fiscalYears,
+      selectedFiscalYear: filters.fiscalYear,
+      authUser,
+      systemUsers: usersQuery.records,
       vehicleTypeRecords: vehicleTypesQuery.records,
       memberVehicles: vehiclesQuery.data ?? [],
       settings: mahasangSettings.settings,
     }),
     [
+      authUser,
       billingRules.config.feeHeads,
+      billingRules.config.fiscalYears,
       branchesQuery.records,
+      filters.fiscalYear,
       mahasangSettings.settings,
       records,
+      usersQuery.records,
       vehicleTypesQuery.records,
       vehiclesQuery.data,
     ],

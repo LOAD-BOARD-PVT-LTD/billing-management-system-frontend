@@ -56,6 +56,13 @@ export function useIncomeReportFilters() {
       router.replace(updateIncomeReportBillingTitle(currentUrl, normalizedValue || 'all'), { scroll: false });
       return;
     }
+    if (key === 'fiscalYear') {
+      next.delete('feeHead');
+      next.delete('billingTitle');
+    }
+    if (key === 'branch') {
+      next.delete('user');
+    }
     const defaultValue = key === 'dateBasis'
       ? 'paymentDate'
       : key === 'fiscalYear'

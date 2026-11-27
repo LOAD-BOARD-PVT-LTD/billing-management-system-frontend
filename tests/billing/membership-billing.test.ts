@@ -1,5 +1,7 @@
 import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createElement } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { searchTqmsVehicles } from '@/features/vehicle/tqms/api/tqms-vehicle-search.api';
 import {
   parseTqmsVehicleSearchMatches,
@@ -13,10 +15,24 @@ import {
 	buildFeeHeadBillingItems,
 	calculateBillingRuleAmount,
 } from '@/features/billing/utils/build-fee-head-billing-items';
+import {
+  applySelectedDhaniOwner,
+  extractVehicleOwnersList,
+  requiresDhaniOwnerSelection,
+} from '@/features/billing/utils/resolve-tqms-vehicle-owners';
+import { BillingHeader } from '@/features/billing/components/create-bill/BillingHeader';
+import { VehicleOwnerSelectDialog } from '@/features/billing/components/create-bill/VehicleOwnerSelectDialog';
 import type { BillingRule, FeeHead } from '@/features/billing-rules/model/types';
 import { apiClient } from '@/lib/api/client';
+import { createQueryClient } from '@/lib/query/query-client';
 import type { BillingLine, BillingVehicle } from '@/features/billing/model/types';
 import type { BillDetails, MembershipBillInput } from '@/features/billing/model/bill.types';
+import { readWorkspaceFile } from '@/tests/helpers/source-assertions';
+import {
+  assertContainsText,
+  assertExcludesText,
+  renderComponentHtml,
+} from '@/tests/helpers/ui-test-utils';
 
 describe('2. Membership Billing Flow & Rules', () => {
   const originalPost = apiClient.post;
@@ -117,7 +133,7 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal('source' in match.tqmsVehicle.resourceContent, false);
     });
 
-    test('uses the owner marked isDhani for name and contact details, regardless of TQMS owner order', () => {
+    test('uses second owner as dhani name while keeping first (main) owner phone, address, and default active SMS phone', () => {
       const [vehicle] = parseTqmsVehicleSearchResponse([{
         VehicleId: 'V102',
         VehicleNumber: 'Ba 1 Ja 5678',
@@ -142,8 +158,9 @@ describe('2. Membership Billing Flow & Rules', () => {
 
       assert.equal(vehicle.ownerName, 'Dhani Name');
       assert.equal(vehicle.operatorName, 'Operator Name');
-      assert.equal(vehicle.phone, '9800000002');
-      assert.equal(vehicle.ownerAddress, 'Dhani Address');
+      assert.equal(vehicle.phone, '9800000001');
+      assert.equal(vehicle.smsPhone, '9800000001');
+      assert.equal(vehicle.ownerAddress, 'Operator Address');
       assert.equal(vehicle.branch, 'Dhani Branch');
     });
 
@@ -201,19 +218,144 @@ describe('2. Membership Billing Flow & Rules', () => {
       assert.equal(parsed[0].vehicleNumber, 'Na 2 Kha 9999');
     });
 
-    test('uses the main owner as member and keeps a distinct first owner as operator', () => {
+    test('uses the second owner as dhani name and keeps first owner as operator and contact source', () => {
       const parsed = parseTqmsVehicleSearchResponse([{
         VehicleId: 'V201',
         VehicleNumber: 'Ba 1 Ja 201',
         Owners: [
-          { Name: 'Operator Name', Type: 'Operator', Phone: '9800000000' },
-          { Name: 'Vehicle Owner', Type: 'Main Owner', Phone: '9811111111' },
+          { Name: 'Operator Name', Type: 'Operator', Phone: '9800000000', Address: 'Main Addr' },
+          { Name: 'Vehicle Owner', Type: 'Main Owner', Phone: '9811111111', Address: 'Second Addr' },
         ],
       }], '201');
 
       assert.equal(parsed[0].ownerName, 'Vehicle Owner');
       assert.equal(parsed[0].operatorName, 'Operator Name');
-      assert.equal(parsed[0].phone, '9811111111');
+      assert.equal(parsed[0].phone, '9800000000');
+      assert.equal(parsed[0].smsPhone, '9800000000');
+      assert.equal(parsed[0].ownerAddress, 'Main Addr');
+    });
+
+    test('supports selecting any owner as billing receipt dhani while preserving main owner contact details', () => {
+      const [vehicle] = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V202',
+        VehicleNumber: 'Ba 1 Ja 202',
+        VehicleType: 'Bus',
+        Owners: [
+          { Name: 'First Main Owner', Phone: '9800000001', Address: 'Birgunj' },
+          { Name: 'Second Dhani', Phone: '9800000002', Address: 'Hetauda' },
+          { Name: 'Third Co-Owner', Phone: '9800000003', Address: 'Chitwan' },
+        ],
+      }], '202');
+
+      const ownersList = extractVehicleOwnersList(vehicle.resourceContent.Owners);
+      assert.equal(ownersList.length, 3);
+      assert.equal(vehicle.ownerName, 'Second Dhani');
+      assert.equal(vehicle.operatorName, 'First Main Owner');
+
+      const chosenThird = applySelectedDhaniOwner(vehicle, 2);
+      assert.equal(chosenThird.ownerName, 'Third Co-Owner');
+      assert.equal(chosenThird.operatorName, 'First Main Owner');
+      assert.equal(chosenThird.phone, '9800000001');
+      assert.equal(chosenThird.ownerAddress, 'Birgunj');
+      assert.equal(chosenThird.smsPhone, '9800000001');
+
+      const chosenFirst = applySelectedDhaniOwner(vehicle, 0);
+      assert.equal(chosenFirst.ownerName, 'First Main Owner');
+      assert.equal(chosenFirst.operatorName, 'Second Dhani');
+      assert.equal(chosenFirst.phone, '9800000001');
+      assert.equal(chosenFirst.ownerAddress, 'Birgunj');
+    });
+
+    test('requires dhani owner selection only when there are more than two owners', () => {
+      assert.equal(requiresDhaniOwnerSelection([]), false);
+      assert.equal(requiresDhaniOwnerSelection([{ Name: 'Single Owner' }]), false);
+      assert.equal(
+        requiresDhaniOwnerSelection([{ Name: 'Operator One' }, { Name: 'Dhani Two' }]),
+        false,
+      );
+      assert.equal(
+        requiresDhaniOwnerSelection([
+          { Name: 'Main Owner' },
+          { Name: 'Second Dhani' },
+          { Name: 'Third Co-Owner' },
+        ]),
+        true,
+      );
+    });
+
+    test('renders BillingHeader with sanchalak label without dhani selection button for two-owner vehicles, and shows it for three-plus owners', () => {
+      const [twoOwnerVehicle] = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V203',
+        VehicleNumber: 'ME-12-PHA-1213',
+        VehicleType: 'Truck',
+        Owners: [
+          { Name: 'Ram Main Owner', Phone: '9841000001', Address: 'Hetauda' },
+          { Name: 'Shyam Dhani', Phone: '9841000002', Address: 'Chitwan' },
+        ],
+      }], 'ME-12-PHA-1213');
+
+      const queryClient = createQueryClient();
+      const twoOwnerHtml = renderComponentHtml(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(BillingHeader, {
+            selectedVehicle: twoOwnerVehicle,
+            onSelectVehicle: () => {},
+            onClearSelection: () => {},
+            onSmsPhoneChange: () => {},
+            onVehicleResourceStatusChange: () => {},
+            onOpenOwnerSelect: () => {},
+            loadReceipts: async () => [],
+          }),
+        ),
+      );
+
+      assertContainsText(twoOwnerHtml, 'धनीको नाम');
+      assertContainsText(twoOwnerHtml, 'Shyam Dhani');
+      assertContainsText(twoOwnerHtml, 'संचालकको नाम');
+      assertContainsText(twoOwnerHtml, 'Ram Main Owner');
+      assertContainsText(twoOwnerHtml, 'धनीको फोन');
+      assertContainsText(twoOwnerHtml, '9841000001');
+      assertContainsText(twoOwnerHtml, 'सक्रिय SMS नम्बर');
+      assertContainsText(twoOwnerHtml, 'धनीको ठेगाना');
+      assertContainsText(twoOwnerHtml, 'Hetauda');
+      assertExcludesText(twoOwnerHtml, 'धनी छान्नुहोस्');
+
+      const [threeOwnerVehicle] = parseTqmsVehicleSearchResponse([{
+        VehicleId: 'V204',
+        VehicleNumber: 'ME-12-PHA-1214',
+        VehicleType: 'Truck',
+        Owners: [
+          { Name: 'Ram Main Owner', Phone: '9841000001', Address: 'Hetauda' },
+          { Name: 'Shyam Dhani', Phone: '9841000002', Address: 'Chitwan' },
+          { Name: 'Hari Co-Owner', Phone: '9841000003', Address: 'Birgunj' },
+        ],
+      }], 'ME-12-PHA-1214');
+
+      const threeOwnerHtml = renderComponentHtml(
+        createElement(
+          QueryClientProvider,
+          { client: queryClient },
+          createElement(BillingHeader, {
+            selectedVehicle: threeOwnerVehicle,
+            onSelectVehicle: () => {},
+            onClearSelection: () => {},
+            onSmsPhoneChange: () => {},
+            onVehicleResourceStatusChange: () => {},
+            onOpenOwnerSelect: () => {},
+            loadReceipts: async () => [],
+          }),
+        ),
+      );
+      assertContainsText(threeOwnerHtml, 'धनी छान्नुहोस्');
+
+      const workspaceSource = readWorkspaceFile('features', 'billing', 'components', 'create-bill', 'BillingWorkspace.tsx');
+      assert.ok(workspaceSource.includes('requiresDhaniOwnerSelection'));
+      assert.ok(workspaceSource.includes('VehicleOwnerSelectDialog'));
+      assert.ok(workspaceSource.includes('triggerOwnerSafeguardIfNeeded'));
+      assert.ok(workspaceSource.includes('applySelectedDhaniOwner'));
+      assert.ok(typeof VehicleOwnerSelectDialog === 'function');
     });
 
     test('throws when search results payload is malformed/unsupported format', () => {

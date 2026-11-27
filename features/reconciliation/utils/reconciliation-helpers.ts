@@ -367,10 +367,17 @@ export function vehicleResourceToBillingVehicle(
 	const externalMetadata = (resource.externalContent.metadata && typeof resource.externalContent.metadata === 'object' && !Array.isArray(resource.externalContent.metadata))
 		? resource.externalContent.metadata as Record<string, unknown>
 		: undefined;
+	const tagSmsPhone = Array.isArray(innerMetadata?.tags)
+		? innerMetadata.tags
+			.filter((tag): tag is string => typeof tag === 'string' && tag.trim().toLocaleLowerCase().startsWith('sms:'))
+			.map((tag) => tag.trim().slice(4).trim())
+			.find(Boolean)
+		: undefined;
 	const savedSmsPhone = innerMetadata?.smsPhone
 		?? resourceMetadata?.smsPhone
 		?? externalMetadata?.smsPhone
-		?? resource.externalContent.smsPhone;
+		?? resource.externalContent.smsPhone
+		?? tagSmsPhone;
 	const smsPhone = (typeof savedSmsPhone === 'string' && savedSmsPhone.trim())
 		? savedSmsPhone.trim()
 		: fallbackSmsPhone || resolved.phone;

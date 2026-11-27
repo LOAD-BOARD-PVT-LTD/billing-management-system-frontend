@@ -103,4 +103,25 @@ describe('Receipt filter options (branches & users)', () => {
     assert.equal(matchesReceiptBranchFilter('Hetauda ', 'hetauda'), true);
     assert.equal(matchesReceiptBranchFilter('Chitwan', 'Pokhara'), false);
   });
+
+  it('scopes receipt user options to the selected branch when a branch is selected and shows all users for all', () => {
+    const systemBranches = [
+      { id: 'b1', name: 'मुख्य कार्यालय' },
+      { id: 'b2', name: 'चितवन शाखा' },
+    ];
+    const systemUsers = [
+      { name: 'Admin', email: 'admin@sangh.com', branchId: 'b1', branchName: 'मुख्य कार्यालय' },
+      { name: 'Chitwan Staff', email: 'chitwan@sangh.com', branchId: 'b2', branchName: 'चितवन शाखा' },
+    ];
+    const receipts = [
+      createTestReceipt('1', { branchName: 'चितवन शाखा', userName: 'Chitwan Staff' }),
+      createTestReceipt('2', { branchName: 'मुख्य कार्यालय', userName: 'Admin' }),
+    ];
+
+    const allOptions = buildReceiptFilterOptions(receipts, systemBranches, systemUsers, 'all');
+    assert.deepEqual(allOptions.users, ['Admin', 'Chitwan Staff']);
+
+    const chitwanOptions = buildReceiptFilterOptions(receipts, systemBranches, systemUsers, 'चितवन शाखा');
+    assert.deepEqual(chitwanOptions.users, ['Chitwan Staff']);
+  });
 });

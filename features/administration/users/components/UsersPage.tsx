@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, Plus, RefreshCw, Users, X } from 'lucide-react';
+import { AlertCircle, Plus, RefreshCw, Users } from 'lucide-react';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useUsers } from '../hooks/useUsers';
 import { useBranches } from '@/features/administration/branches/hooks/useBranches';
@@ -72,10 +73,7 @@ export function UsersPage() {
     toast({ title: t('users.toast.updatedTitle'), description: fields.email });
   };
   const openCreateForm = () => {
-    if (createOpen || editingUser) {
-      closeForm();
-      return;
-    }
+    setEditingUser(null);
     setCreateOpen(true);
   };
   const openEditForm = (user: UserRecord) => {
@@ -86,6 +84,7 @@ export function UsersPage() {
     setCreateOpen(false);
     setEditingUser(null);
   };
+  const formDialogOpen = createOpen || editingUser !== null;
 
   return (
     <section className="mx-auto w-full max-w-7xl space-y-5 pb-8">
@@ -104,29 +103,28 @@ export function UsersPage() {
             <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
             {t('users.refresh')}
           </Button>
-          <Button
-            type="button"
-            variant={createOpen || editingUser ? 'outline' : 'default'}
-            onClick={openCreateForm}
-          >
-            {createOpen || editingUser
-              ? <X className="mr-2 h-4 w-4" aria-hidden="true" />
-              : <Plus className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {createOpen || editingUser ? t('actions.cancel') : t('users.new')}
+          <Button type="button" onClick={openCreateForm}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            {t('users.new')}
           </Button>
         </div>
       </header>
 
-      {(createOpen || editingUser) && (
-        <Card className="overflow-hidden">
-          <div className="border-b border-border px-5 py-4 sm:px-6">
-            <h2 className="font-semibold">{t(editingUser ? 'users.updateTitle' : 'users.createTitle')}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+      <Dialog
+        open={formDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !isCreating && !isUpdating) closeForm();
+        }}
+      >
+        <DialogContent className="flex max-h-[min(88vh,calc(100dvh-2rem))] max-w-2xl flex-col overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-6 py-4 text-left">
+            <DialogTitle>{t(editingUser ? 'users.updateTitle' : 'users.createTitle')}</DialogTitle>
+            <DialogDescription>
               {t(editingUser ? 'users.updateDescription' : 'users.createDescription')}
-            </p>
-          </div>
+            </DialogDescription>
+          </DialogHeader>
           <UserForm
-            key={editingUser?.id ?? 'create-user'}
+            key={`${editingUser?.id ?? 'create-user'}-${formDialogOpen ? 'open' : 'closed'}`}
             user={editingUser ?? undefined}
             isSaving={isCreating || isUpdating}
             branches={branches}
@@ -136,8 +134,8 @@ export function UsersPage() {
             onUpdate={handleUpdate}
             onCancel={closeForm}
           />
-        </Card>
-      )}
+        </DialogContent>
+      </Dialog>
 
       <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
         {t('users.limitedActionsNote')}

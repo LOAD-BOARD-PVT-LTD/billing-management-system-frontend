@@ -4,6 +4,9 @@ import { useMemo, useState } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/auth-context';
+import { useBranches } from '@/features/administration/branches/hooks/useBranches';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
 import { IncomeReportFilters } from '@/features/reports/components/IncomeReportFilters';
 import { ReportPageShell } from '@/features/reports/components/ReportPageShell';
 import { useIncomeReportFilters } from '@/features/reports/hooks/use-income-report-filters';
@@ -16,6 +19,12 @@ import { mapIncomeReportRows } from '@/features/reports/services/income-report.s
 import { createFeeHeadWiseReportTemplate } from '@/features/reports/templates/report-templates';
 import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { filterIncomeReportRows, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import {
+  buildReportBranchOptions,
+  buildReportFeeHeadOptions,
+  buildReportFiscalYearOptions,
+  buildReportUserOptions,
+} from '@/features/reports/utils/report-filter-options';
 import { formatReportAmount, formatReportDate } from '@/features/reports/utils/report-format';
 import { toNepaliDigits } from '@/utils/numbers';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -102,6 +111,9 @@ function FeeHeadList({ feeHeads, allFeeHeads }: { feeHeads: FeeHead[]; allFeeHea
 }
 
 export function FeeHeadWiseReportPage() {
+  const { user: authUser } = useAuth();
+  const branchesQuery = useBranches();
+  const usersQuery = useUsers();
   const receiptsQuery = useReceipts();
   const billingRules = useBillingRules();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
@@ -112,27 +124,39 @@ export function FeeHeadWiseReportPage() {
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
   const rawRows = useMemo(() => mapIncomeReportRows(receiptsQuery.records), [receiptsQuery.records]);
-  const optionFiscalYears = Array.from(new Set([
-    ...billingRules.config.fiscalYears.map((year) => year.name),
-    ...receiptsQuery.records.map((receipt) => receipt.fiscalYear),
-  ].filter(Boolean))).sort((first, second) => first.localeCompare(second, 'ne'));
-  const branches = Array.from(new Set(receiptsQuery.records.map((receipt) => receipt.branchName).filter(Boolean)))
-    .sort((first, second) => first.localeCompare(second, 'ne'));
-  const users = Array.from(new Set(receiptsQuery.records.map((receipt) => receipt.userName).filter(Boolean)))
-    .sort((first, second) => first.localeCompare(second, 'ne'));
+  const optionFiscalYears = useMemo(() => buildReportFiscalYearOptions({
+    fiscalYears: billingRules.config.fiscalYears,
+    receipts: receiptsQuery.records,
+  }), [billingRules.config.fiscalYears, receiptsQuery.records]);
+  const branches = useMemo(() => buildReportBranchOptions({
+    receipts: receiptsQuery.records,
+    systemBranches: branchesQuery.records,
+    authUser,
+    systemUsers: usersQuery.records,
+  }), [authUser, branchesQuery.records, receiptsQuery.records, usersQuery.records]);
+  const users = useMemo(() => buildReportUserOptions({
+    receipts: receiptsQuery.records,
+    systemUsers: usersQuery.records,
+    systemBranches: branchesQuery.records,
+    selectedBranch: filters.branch,
+  }), [branchesQuery.records, filters.branch, receiptsQuery.records, usersQuery.records]);
 
   const selectedFiscalYear = resolveFiscalYear(billingRules.config.fiscalYears, filters.fiscalYear);
   const configuredFeeHeads = useMemo(() => billingRules.config.feeHeads
     .filter((feeHead) => !selectedFiscalYear || feeHead.fiscalYearId === selectedFiscalYear.id),
   [billingRules.config.feeHeads, selectedFiscalYear]);
-  const feeHeadOptions = configuredFeeHeads.map((feeHead) => ({
-    value: feeHead.id,
-    label: feeHead.name,
-  }));
+  const feeHeadOptions = useMemo(() => buildReportFeeHeadOptions({
+    billingRuleFeeHeads: billingRules.config.feeHeads,
+    fiscalYears: billingRules.config.fiscalYears,
+    receipts: receiptsQuery.records,
+    selectedFiscalYear: filters.fiscalYear,
+  }), [billingRules.config.feeHeads, billingRules.config.fiscalYears, filters.fiscalYear, receiptsQuery.records]);
 
   const filteredReceipts = useMemo(() => {
     if (!validDateRange) return [];
-    const matchingReceiptIds = new Set(filterIncomeReportRows(rawRows, filters).map((row) => row.receiptId));
+    const matchingReceiptIds = new Set(
+      filterIncomeReportRows(rawRows, filters, usersQuery.records).map((row) => row.receiptId),
+    );
     return receiptsQuery.records
       .filter((receipt) => matchingReceiptIds.has(receipt.id))
       .filter((receipt) => (
@@ -143,7 +167,7 @@ export function FeeHeadWiseReportPage() {
       ))
       .sort((first, second) => second.billingDate.localeCompare(first.billingDate)
         || second.receiptNumber.localeCompare(first.receiptNumber, 'ne'));
-  }, [filters, rawRows, receiptsQuery.records, selectedFiscalYear, validDateRange]);
+  }, [filters, rawRows, receiptsQuery.records, selectedFiscalYear, usersQuery.records, validDateRange]);
 
   const allRows = useMemo(() => makeReportRows(filteredReceipts, configuredFeeHeads), [filteredReceipts, configuredFeeHeads]);
   const visibleFeeHeads = useMemo(() => {

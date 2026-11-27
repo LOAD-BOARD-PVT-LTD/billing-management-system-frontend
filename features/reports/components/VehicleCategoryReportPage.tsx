@@ -9,6 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
 import { ReportPageShell } from '@/features/reports/components/ReportPageShell';
+import { useAuth } from '@/contexts/auth-context';
+import { useBranches } from '@/features/administration/branches/hooks/useBranches';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
+import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 import { useIncomeReportFilters } from '@/features/reports/hooks/use-income-report-filters';
 import { useReportHeaderDetails } from '@/features/reports/hooks/use-report-header-details';
 import { useReceipts } from '@/features/receipts/hooks/use-receipts';
@@ -19,6 +23,11 @@ import { formatReportAmount, formatReportDate, normalizeReportKey } from '@/feat
 import { createVehicleCategoryReportTemplate } from '@/features/reports/templates/report-templates';
 import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import { hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import {
+  buildReportBranchOptions,
+  buildReportFeeHeadOptions,
+  buildReportFiscalYearOptions,
+} from '@/features/reports/utils/report-filter-options';
 import type { IncomeReportFilters } from '@/features/reports/types/income-report';
 import { toNepaliDigits } from '@/utils/numbers';
 
@@ -258,6 +267,10 @@ function getRowTotals(rows: VehicleIncomeRow[]) {
 }
 
 export function VehicleCategoryReportPage() {
+  const { user: authUser } = useAuth();
+  const branchesQuery = useBranches();
+  const usersQuery = useUsers();
+  const billingRules = useBillingRules();
   const receiptsQuery = useReceipts();
   const vehicleTypeQuery = useVehicleTypes();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
@@ -271,14 +284,22 @@ export function VehicleCategoryReportPage() {
   const header = useReportHeaderDetails('सवारी वर्गअनुसार मासिक आम्दानी रिपोर्ट', filters.dateFrom, filters.dateTo);
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
-  const fiscalYears = Array.from(new Set(receiptsQuery.records.map((receipt) => receipt.fiscalYear).filter(Boolean)))
-    .sort((first, second) => first.localeCompare(second, 'ne'));
-  const branches = Array.from(new Set(receiptsQuery.records.map((receipt) => receipt.branchName).filter(Boolean)))
-    .sort((first, second) => first.localeCompare(second, 'ne'));
-  const feeHeads = Array.from(new Map(receiptsQuery.records.flatMap((receipt) => receipt.bill.content.items)
-    .filter((item) => item.feeHeadId)
-    .map((item) => [item.feeHeadId, { value: item.feeHeadId, label: item.title || item.feeHeadId }])).values())
-    .sort((first, second) => first.label.localeCompare(second.label, 'ne'));
+  const fiscalYears = useMemo(() => buildReportFiscalYearOptions({
+    fiscalYears: billingRules.config.fiscalYears,
+    receipts: receiptsQuery.records,
+  }), [billingRules.config.fiscalYears, receiptsQuery.records]);
+  const branches = useMemo(() => buildReportBranchOptions({
+    receipts: receiptsQuery.records,
+    systemBranches: branchesQuery.records,
+    authUser,
+    systemUsers: usersQuery.records,
+  }), [authUser, branchesQuery.records, receiptsQuery.records, usersQuery.records]);
+  const feeHeads = useMemo(() => buildReportFeeHeadOptions({
+    billingRuleFeeHeads: billingRules.config.feeHeads,
+    fiscalYears: billingRules.config.fiscalYears,
+    receipts: receiptsQuery.records,
+    selectedFiscalYear: filters.fiscalYear,
+  }), [billingRules.config.feeHeads, billingRules.config.fiscalYears, filters.fiscalYear, receiptsQuery.records]);
   const categories = Array.from(new Set(vehicleTypeQuery.records.map((record) => record.category)))
     .sort((first, second) => first.localeCompare(second, 'ne'));
   const availableTypes = Array.from(new Set(vehicleTypeQuery.records

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { UserRecord } from '@/features/administration/users/types/user.types';
 import type { ReceiptFilters, ReceiptRecord } from '@/features/receipts/model/receipt';
 import {
-  matchesReceiptBranchFilter,
-  matchesReceiptUserFilter,
-} from '@/features/receipts/utils/receipt-filter-options';
+  buildReceiptSearchIndex,
+  filterReceiptRecords,
+} from '@/features/receipts/utils/receipt-search';
 
 const EMPTY_FILTERS: ReceiptFilters = { search: '', dateFrom: '', dateTo: '', branch: 'all', user: 'all', status: 'all' };
 
@@ -20,24 +20,38 @@ export function useReceiptFilters(
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setDebouncedSearch(filters.search.trim().toLocaleLowerCase()), 250);
+    const timeout = window.setTimeout(
+      () => setDebouncedSearch(filters.search),
+      filters.search.trim() ? 150 : 0,
+    );
     return () => window.clearTimeout(timeout);
   }, [filters.search]);
 
-  const filteredRecords = useMemo(() => records.filter((receipt) => {
-    const searchable = `${receipt.vehicleNumber} ${receipt.receiptNumber} ${receipt.customerName} ${receipt.billingType === 'MEMBERSHIP' ? receipt.bill.content.vehicle.operatorName ?? '' : ''}`.toLocaleLowerCase();
-    return (!debouncedSearch || searchable.includes(debouncedSearch))
-      && (fiscalYear === 'all' || receipt.fiscalYear === fiscalYear)
-      && (!filters.dateFrom || receipt.paymentDate >= filters.dateFrom)
-      && (!filters.dateTo || receipt.paymentDate <= filters.dateTo)
-      && matchesReceiptBranchFilter(receipt.branchName, filters.branch)
-      && matchesReceiptUserFilter(receipt, filters.user, systemUsers)
-      && (filters.status === 'all' || receipt.status === filters.status);
-  }), [debouncedSearch, fiscalYear, filters.branch, filters.dateFrom, filters.dateTo, filters.status, filters.user, records, systemUsers]);
+  const effectiveSearch = filters.search.trim() ? debouncedSearch : '';
+
+  const searchIndexMap = useMemo(() => {
+    const map = new Map<ReceiptRecord, ReturnType<typeof buildReceiptSearchIndex>>();
+    for (const receipt of records) {
+      map.set(receipt, buildReceiptSearchIndex(receipt));
+    }
+    return map;
+  }, [records]);
+
+  const filteredRecords = useMemo(() => filterReceiptRecords({
+    records,
+    filters: { ...filters, search: effectiveSearch },
+    fiscalYear,
+    systemUsers,
+    searchIndexMap,
+  }), [effectiveSearch, filters, fiscalYear, records, searchIndexMap, systemUsers]);
 
   const updateFilter = <K extends keyof ReceiptFilters>(key: K, value: ReceiptFilters[K]) => {
     setFilters((current) => ({ ...current, [key]: value }));
   };
+
+  const flushSearch = useCallback(() => {
+    setDebouncedSearch(filters.search);
+  }, [filters.search]);
 
   const clearFilters = () => {
     setFilters(EMPTY_FILTERS);
@@ -46,5 +60,5 @@ export function useReceiptFilters(
 
   const isFiltered = Object.entries(filters).some(([key, value]) => key === 'search' ? Boolean(value.trim()) : value !== 'all' && Boolean(value));
 
-  return { filters, updateFilter, clearFilters, filteredRecords, isFiltered };
+  return { filters, updateFilter, flushSearch, clearFilters, filteredRecords, isFiltered };
 }

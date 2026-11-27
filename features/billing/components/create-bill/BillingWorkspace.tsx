@@ -23,10 +23,17 @@ import { useTqmsVehicleDetails } from '@/features/billing/hooks/useTqmsVehicleDe
 import { BillingHeader } from '@/features/billing/components/create-bill/BillingHeader';
 import { useToast } from '@/components/ui/use-toast';
 import {
+  buildSmsPhoneMetadata,
   createVehicleResource,
   updateVehicleResource,
   type VehicleResourceDocument,
 } from '@/features/billing/api/vehicle-resource.api';
+import {
+  applySelectedDhaniOwner,
+  extractVehicleOwnersList,
+  requiresDhaniOwnerSelection,
+} from '@/features/billing/utils/resolve-tqms-vehicle-owners';
+import { VehicleOwnerSelectDialog } from '@/features/billing/components/create-bill/VehicleOwnerSelectDialog';
 import {
   VehicleReconciliationView,
   useVehicleReconciliation,
@@ -117,6 +124,10 @@ export function BillingWorkspace() {
     billingResource: VehicleResourceDocument;
     diffs: ReconciliationFieldDiff[];
     receipts: ReceiptRecord[];
+  } | null>(null);
+  const [ownerSelectDialog, setOwnerSelectDialog] = useState<{
+    mode: 'initial' | 'change';
+    selectedIndex: number;
   } | null>(null);
   const { applyDecision, isApplying: isSubmittingReconciliation } = useVehicleReconciliation();
   const selectedVehicleIsBlacklisted = Boolean(
@@ -239,6 +250,29 @@ export function BillingWorkspace() {
     ]);
   }, [billingEntities]);
 
+  const getSelectedOwnerIndex = useCallback((vehicle: BillingVehicle): number => {
+    const owners = extractVehicleOwnersList(
+      vehicle.resourceContent?.Owners ?? vehicle.resourceContent?.owners,
+    );
+    if (owners.length <= 1) return 0;
+    const targetName = vehicle.ownerName.trim().toLocaleLowerCase();
+    const matchedIndex = owners.findIndex(
+      (owner) => owner.name.trim().toLocaleLowerCase() === targetName,
+    );
+    return matchedIndex >= 0 ? matchedIndex : 1;
+  }, []);
+
+  const triggerOwnerSafeguardIfNeeded = useCallback((vehicle: BillingVehicle) => {
+    if (requiresDhaniOwnerSelection(vehicle.resourceContent?.Owners ?? vehicle.resourceContent?.owners)) {
+      setOwnerSelectDialog({
+        mode: 'initial',
+        selectedIndex: getSelectedOwnerIndex(vehicle),
+      });
+      return;
+    }
+    setOwnerSelectDialog(null);
+  }, [getSelectedOwnerIndex]);
+
   const handleSelectVehicle = useCallback((vehicle: BillingVehicle) => {
     setSelectedVehicle(vehicle);
     setBillingMonths(
@@ -253,12 +287,14 @@ export function BillingWorkspace() {
     setSelectedItemIds(new Set());
     setSuppressedLinkedItemIds(new Set());
     setDiscount(0);
-  }, []);
+    triggerOwnerSafeguardIfNeeded(vehicle);
+  }, [triggerOwnerSafeguardIfNeeded]);
 
   const handleClearVehicleSelection = useCallback(() => {
     setSelectedVehicle(null);
     setMissingVehicleResourceId(null);
     setPendingVehicleCacheSync(null);
+    setOwnerSelectDialog(null);
   }, []);
 
   const handleVehicleResourceStatusChange = useCallback((vehicleId: string | null) => {
@@ -293,7 +329,54 @@ export function BillingWorkspace() {
   };
 
   const handleSmsPhoneChange = useCallback((phone: string) => {
-    setSelectedVehicle((current) => (current ? { ...current, smsPhone: phone } : current));
+    const nextPhone = phone.trim();
+    setSelectedVehicle((current) => {
+      if (!current) return current;
+      const existingMeta = (
+        current.resourceContent?.metadata
+        && typeof current.resourceContent.metadata === 'object'
+        && !Array.isArray(current.resourceContent.metadata)
+      )
+        ? current.resourceContent.metadata as Record<string, unknown>
+        : {};
+      return {
+        ...current,
+        smsPhone: nextPhone,
+        resourceContent: {
+          ...current.resourceContent,
+          metadata: buildSmsPhoneMetadata(existingMeta, nextPhone, current.phone),
+        },
+      };
+    });
+    setPendingVehicleCacheSync((current) => {
+      if (!current) return current;
+      const existingMeta = (
+        current.billingResource.innerContent.metadata
+        && typeof current.billingResource.innerContent.metadata === 'object'
+        && !Array.isArray(current.billingResource.innerContent.metadata)
+      )
+        ? current.billingResource.innerContent.metadata as Record<string, unknown>
+        : {};
+      const nextMeta = buildSmsPhoneMetadata(existingMeta, nextPhone, current.tqmsVehicle.phone);
+      return {
+        ...current,
+        billingResource: {
+          ...current.billingResource,
+          innerContent: {
+            ...current.billingResource.innerContent,
+            metadata: nextMeta,
+          },
+        },
+        tqmsVehicle: {
+          ...current.tqmsVehicle,
+          smsPhone: nextPhone,
+          resourceContent: {
+            ...current.tqmsVehicle.resourceContent,
+            metadata: nextMeta,
+          },
+        },
+      };
+    });
   }, []);
 
   const handleReloadBills = useCallback(() => {
@@ -485,6 +568,7 @@ export function BillingWorkspace() {
 
       setSelectedVehicle(updatedVehicle);
       setReconciliationData(null);
+      triggerOwnerSafeguardIfNeeded(updatedVehicle);
       await invalidateVehicleReconciliationCaches(queryClient);
 
       toast({
@@ -527,6 +611,7 @@ export function BillingWorkspace() {
           setSavedBill(null);
           setSelectedVehicle(null);
           setPendingVehicleCacheSync(null);
+          setOwnerSelectDialog(null);
           setBillingDetails(null);
           setManualItems([]);
           setItemOverrides({});
@@ -543,6 +628,29 @@ export function BillingWorkspace() {
 
   return (
     <>
+      {selectedVehicle && ownerSelectDialog ? (
+        <VehicleOwnerSelectDialog
+          key={`${selectedVehicle.id}-${ownerSelectDialog.mode}-${ownerSelectDialog.selectedIndex}`}
+          open
+          vehicle={selectedVehicle}
+          owners={extractVehicleOwnersList(
+            selectedVehicle.resourceContent?.Owners ?? selectedVehicle.resourceContent?.owners,
+          )}
+          initialSelectedIndex={ownerSelectDialog.selectedIndex}
+          isInitialSafeguard={ownerSelectDialog.mode === 'initial'}
+          onConfirm={(selectedIndex) => {
+            setSelectedVehicle((current) => (
+              current ? applySelectedDhaniOwner(current, selectedIndex) : current
+            ));
+            setOwnerSelectDialog(null);
+          }}
+          onCancel={() => {
+            const wasInitial = ownerSelectDialog.mode === 'initial';
+            setOwnerSelectDialog(null);
+            if (wasInitial) handleClearVehicleSelection();
+          }}
+        />
+      ) : null}
       <DuplicateBillWarningDialog
         open={duplicateMatches.length > 0}
         matches={duplicateMatches}
@@ -564,6 +672,14 @@ export function BillingWorkspace() {
           onClearSelection={handleClearVehicleSelection}
           onSmsPhoneChange={handleSmsPhoneChange}
           onVehicleResourceStatusChange={handleVehicleResourceStatusChange}
+          onOpenOwnerSelect={selectedVehicle && requiresDhaniOwnerSelection(
+            selectedVehicle.resourceContent?.Owners ?? selectedVehicle.resourceContent?.owners,
+          ) ? () => {
+            setOwnerSelectDialog({
+              mode: 'change',
+              selectedIndex: getSelectedOwnerIndex(selectedVehicle),
+            });
+          } : undefined}
           loadReceipts={ensureBills}
           onPendingVehicleCacheSync={setPendingVehicleCacheSync}
           onReconciliationRequired={setReconciliationData}

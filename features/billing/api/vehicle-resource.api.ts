@@ -268,6 +268,13 @@ export async function createVehicleResource(vehicle: BillingVehicle): Promise<vo
 	if (!vehicle.tqmsVehicleId.trim()) {
 		throw new Error('A TQMS VehicleId is required to create VehicleResource.');
 	}
+	const existingMetadata = asRecord(vehicle.resourceContent?.metadata) ?? {};
+	const smsPhone = (vehicle.smsPhone ?? '').trim();
+	const mainPhone = (vehicle.phone ?? '').trim();
+	const hasCustomSmsPhone = Boolean(smsPhone && smsPhone !== mainPhone);
+	const metadata = hasCustomSmsPhone
+		? buildSmsPhoneMetadata(existingMetadata, smsPhone, mainPhone)
+		: undefined;
 	await apiClient.post<unknown>(endpoints.resources.vehicle.create(), {
 		resource_name: 'VehicleResource',
 		inner_content: {
@@ -276,6 +283,7 @@ export async function createVehicleResource(vehicle: BillingVehicle): Promise<vo
 			VehicleNumber: vehicle.vehicleNumber,
 			VehicleType: vehicle.vehicleType,
 			...(vehicle.tqmsVehicleTypeId ? { VehicleTypeId: vehicle.tqmsVehicleTypeId } : {}),
+			...(metadata ? { metadata } : {}),
 		},
 		external_content: null,
 	});
@@ -304,20 +312,46 @@ export async function updateVehicleResource(
 	);
 }
 
+export function buildSmsPhoneMetadata(
+	metadata: Record<string, unknown>,
+	smsPhone: string,
+	mainOwnerPhone = '',
+): Record<string, unknown> {
+	const nextPhone = (smsPhone ?? '').trim();
+	const basePhone = (mainOwnerPhone ?? '').trim();
+	const currentTags = getMetadataTags(metadata).filter(
+		(tag) => !tag.toLocaleLowerCase().startsWith('sms:'),
+	);
+	const nextTags = nextPhone && nextPhone !== basePhone
+		? [...currentTags, `sms:${nextPhone}`]
+		: currentTags;
+
+	return {
+		...metadata,
+		smsPhone: nextPhone,
+		tags: [...new Set(nextTags)],
+	};
+}
+
 export async function updateVehicleSmsPhone(
 	vehicle: BillingVehicle,
 	input: VehiclePhoneUpdateInput,
 ): Promise<void> {
 	const resource = await readVehicleResource(vehicle.tqmsVehicleId, vehicle.vehicleNumber);
 	const metadata = getVehicleMetadata(resource);
+	const ownersRaw = resource.innerContent.Owners ?? resource.innerContent.owners;
+	const firstOwner = Array.isArray(ownersRaw) ? asRecord(ownersRaw[0]) : null;
+	const rawFirstOwnerPhone = firstOwner?.Phone ?? firstOwner?.phone;
+	const firstOwnerPhone = typeof rawFirstOwnerPhone === 'string' || typeof rawFirstOwnerPhone === 'number'
+		? String(rawFirstOwnerPhone).trim()
+		: '';
+	const mainOwnerPhone = firstOwnerPhone || (vehicle.phone ?? '').trim();
+
 	await updateVehicleResource(
 		resource,
 		{
 			...resource.innerContent,
-			metadata: {
-				...metadata,
-				smsPhone: input.phone.trim(),
-			},
+			metadata: buildSmsPhoneMetadata(metadata, input.phone, mainOwnerPhone),
 		},
 		resource.externalContent,
 	);

@@ -28,10 +28,11 @@ function fromLocalDateValue(value: string) {
 
 interface ReceiptFiltersProps {
   records: ReceiptRecord[];
-  branches?: readonly Pick<BranchRecord, 'name'>[];
-  users?: readonly Pick<UserRecord, 'name' | 'email'>[];
+  branches?: readonly (Pick<BranchRecord, 'name'> & { id?: string })[];
+  users?: readonly (Pick<UserRecord, 'name' | 'email'> & { branchId?: string | null; branchName?: string | null })[];
   filters: ReceiptFiltersState;
   onUpdate: <K extends keyof ReceiptFiltersState>(key: K, value: ReceiptFiltersState[K]) => void;
+  onSearchCommit?: () => void;
   onClear: () => void;
   isFiltered: boolean;
 }
@@ -42,18 +43,38 @@ export function ReceiptFilters({
   users = [],
   filters,
   onUpdate,
+  onSearchCommit,
   onClear,
   isFiltered,
 }: ReceiptFiltersProps) {
   const { branches: branchOptions, users: userOptions } = useMemo(
-    () => buildReceiptFilterOptions(records, branches, users),
-    [branches, records, users],
+    () => buildReceiptFilterOptions(records, branches, users, filters.branch),
+    [branches, filters.branch, records, users],
   );
 
   return (
     <section aria-label="रसिद खोज तथा फिल्टर" className="rounded-lg border border-border/80 bg-card p-4 shadow-sm">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(15rem,1.6fr)_repeat(2,minmax(10rem,0.75fr))]">
-        <div className="space-y-1.5"><label htmlFor="receipt-search" className="text-xs font-medium">खोज</label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="receipt-search" type="search" value={filters.search} onChange={(event) => onUpdate('search', event.target.value)} placeholder="सवारी नं. / रसिद नं. / नाम" className="h-10 pl-9" /></div></div>
+        <div className="space-y-1.5">
+          <label htmlFor="receipt-search" className="text-xs font-medium">खोज</label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input
+              id="receipt-search"
+              type="search"
+              value={filters.search}
+              onChange={(event) => onUpdate('search', event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onSearchCommit?.();
+                }
+              }}
+              placeholder="रसिद नं. / सवारी नं. / धनी-संचालक नाम / फोन..."
+              className="h-10 pl-9"
+            />
+          </div>
+        </div>
         <fieldset className="min-w-0 space-y-1.5"><legend className="text-xs font-medium">भु. मिति (बाट)</legend><NepaliDatePicker value={fromLocalDateValue(filters.dateFrom)} onChange={(date) => onUpdate('dateFrom', toLocalDateValue(date))} placeholder="मिति छान्नुहोस्..." /></fieldset>
         <fieldset className="min-w-0 space-y-1.5"><legend className="text-xs font-medium">भु. मिति (सम्म)</legend><NepaliDatePicker value={fromLocalDateValue(filters.dateTo)} onChange={(date) => onUpdate('dateTo', toLocalDateValue(date))} placeholder="मिति छान्नुहोस्..." /></fieldset>
       </div>

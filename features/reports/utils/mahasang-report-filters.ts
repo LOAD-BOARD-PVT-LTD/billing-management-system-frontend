@@ -1,12 +1,20 @@
 import type { BranchRecord } from '@/features/administration/branches/types/branch.types';
+import type { UserRecord } from '@/features/administration/users/types/user.types';
+import type { FiscalYear } from '@/features/billing-rules/model/types';
 import type { MemberVehicleDetails } from '@/features/members/api/member-vehicle.api';
 import type { ReceiptRecord } from '@/features/receipts/model/receipt';
 import type { ReportFilterOption } from '@/features/reports/components/ReportFiltersCard';
 import type { IncomeReportFilters } from '@/features/reports/types/income-report';
 import { hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import {
+  buildReportBranchOptions,
+  buildReportFeeHeadOptions,
+  buildReportFiscalYearOptions,
+} from '@/features/reports/utils/report-filter-options';
 import { normalizeReportKey } from '@/features/reports/utils/report-format';
 import type { MahasangReportSettings } from '@/features/settings/api/mahasang-report-settings.api';
 import type { VehicleTypeRecord } from '@/features/vehicle/type/types/vehicle-type.types';
+import type { User } from '@/types/auth';
 
 export interface MahasangReportFilterValues extends IncomeReportFilters {
   vehicleTypes: string[];
@@ -22,8 +30,12 @@ function normalizeOptionText(value: string | null | undefined): string {
 
 export function buildMahasangFilterOptions(params: {
   receipts: readonly ReceiptRecord[];
-  systemBranches?: readonly Pick<BranchRecord, 'name'>[];
-  billingRuleFeeHeads?: readonly { id: string; title?: string; name?: string }[];
+  systemBranches?: readonly (Pick<BranchRecord, 'name'> & { id?: string })[];
+  billingRuleFeeHeads?: readonly { id: string; title?: string; name?: string; fiscalYearId?: string | null }[];
+  fiscalYears?: readonly Pick<FiscalYear, 'id' | 'name' | 'code'>[];
+  selectedFiscalYear?: string;
+  authUser?: Pick<User, 'id' | 'email' | 'name' | 'role'> | null;
+  systemUsers?: readonly Pick<UserRecord, 'id' | 'email' | 'name' | 'branchId' | 'branchName'>[];
   vehicleTypeRecords?: readonly Pick<VehicleTypeRecord, 'vehicleTypes'>[];
   memberVehicles?: readonly Pick<MemberVehicleDetails, 'tqmsVehicleType'>[];
   settings?: MahasangReportSettings | null;
@@ -37,62 +49,33 @@ export function buildMahasangFilterOptions(params: {
     receipts,
     systemBranches = [],
     billingRuleFeeHeads = [],
+    fiscalYears: configuredFiscalYears = [],
+    selectedFiscalYear = 'all',
+    authUser,
+    systemUsers = [],
     vehicleTypeRecords = [],
     memberVehicles = [],
     settings,
   } = params;
 
-  const fiscalYears = Array.from(
-    new Set(receipts.map((receipt) => receipt.fiscalYear.trim()).filter(Boolean)),
-  ).sort((left, right) => left.localeCompare(right, 'ne'));
+  const fiscalYears = buildReportFiscalYearOptions({
+    fiscalYears: configuredFiscalYears,
+    receipts,
+  });
 
-  const branchByKey = new Map<string, string>();
-  for (const branch of systemBranches) {
-    const trimmed = normalizeOptionText(branch.name);
-    if (!trimmed) continue;
-    const key = normalizeBranchKey(trimmed);
-    if (!branchByKey.has(key)) branchByKey.set(key, trimmed);
-  }
-  for (const receipt of receipts) {
-    const trimmed = normalizeOptionText(receipt.branchName);
-    if (!trimmed || trimmed === '—') continue;
-    const key = normalizeBranchKey(trimmed);
-    if (!branchByKey.has(key)) branchByKey.set(key, trimmed);
-  }
-  const branches = Array.from(branchByKey.values()).sort((left, right) =>
-    left.localeCompare(right, 'ne'),
-  );
+  const branches = buildReportBranchOptions({
+    receipts,
+    systemBranches: systemBranches.map((branch) => ({ id: branch.id ?? '', name: branch.name })),
+    authUser,
+    systemUsers,
+  });
 
-  const feeHeadByKey = new Map<string, ReportFilterOption>();
-  for (const head of billingRuleFeeHeads) {
-    const id = normalizeOptionText(head.id);
-    const title = normalizeOptionText(head.title ?? head.name);
-    if (!id && !title) continue;
-    const key = id || normalizeReportKey(title);
-    if (!feeHeadByKey.has(key)) {
-      feeHeadByKey.set(key, {
-        value: id || title,
-        label: title || id,
-      });
-    }
-  }
-  for (const receipt of receipts) {
-    for (const item of receipt.bill.content.items) {
-      const id = normalizeOptionText(item.feeHeadId);
-      const title = normalizeOptionText(item.title);
-      if (!id && !title) continue;
-      const key = id || normalizeReportKey(title);
-      if (!feeHeadByKey.has(key)) {
-        feeHeadByKey.set(key, {
-          value: id || title,
-          label: title || id,
-        });
-      }
-    }
-  }
-  const feeHeads = Array.from(feeHeadByKey.values()).sort((left, right) =>
-    left.label.localeCompare(right.label, 'ne'),
-  );
+  const feeHeads = buildReportFeeHeadOptions({
+    billingRuleFeeHeads,
+    fiscalYears: configuredFiscalYears,
+    receipts,
+    selectedFiscalYear,
+  });
 
   const vehicleTypeByKey = new Map<string, string>();
   const addVehicleType = (raw: string | null | undefined) => {

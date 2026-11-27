@@ -54,7 +54,7 @@ export function VehiclePhoneUpdateDialog({
 					<label className="block space-y-1.5 text-sm font-medium">
 						धनीको हालको नम्बर
 						<Input value={vehicle.phone} readOnly className="bg-muted/40" />
-						<span className="block text-xs font-normal text-muted-foreground">यो TQMS बाट आएको धनीको फोन नम्बर हो र परिवर्तन हुँदैन।</span>
+						<span className="block text-xs font-normal text-muted-foreground">यो TQMS बाट आएको मुख्य धनीको फोन नम्बर हो र परिवर्तन हुँदैन।</span>
 					</label>
 
 					<label className="block space-y-1.5 text-sm font-medium">
@@ -68,7 +68,7 @@ export function VehiclePhoneUpdateDialog({
 							placeholder="९८XXXXXXXX"
 							required
 						/>
-						<span className="block text-xs font-normal text-muted-foreground">यो नम्बर छुट्टै SMS नम्बरका रूपमा VehicleResource को external content मा सुरक्षित हुनेछ।</span>
+						<span className="block text-xs font-normal text-muted-foreground">यो नम्बर सक्रिय SMS नम्बरका रूपमा VehicleResource को metadata र tags मा सुरक्षित हुनेछ।</span>
 					</label>
 
 					{error && (

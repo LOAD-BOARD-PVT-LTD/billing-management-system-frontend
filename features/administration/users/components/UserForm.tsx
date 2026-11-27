@@ -28,6 +28,36 @@ const EMPTY_USER: UserFormValues = {
   status: 'Active',
 };
 
+export function clearUserFormFieldError(
+  current: UserFormErrors,
+  key: UserFormField,
+): UserFormErrors {
+  if (!(key in current)) return current;
+  const next = { ...current };
+  delete next[key];
+  return next;
+}
+
+export function getUserFormErrorMessages(errors: UserFormErrors): string[] {
+  return Object.values(errors).filter((message): message is string => Boolean(message));
+}
+
+export function buildInitialUserFormValues(user?: UserRecord): UserFormValues {
+  if (!user) return EMPTY_USER;
+  const normalizedRole = user.role.trim().toLowerCase();
+  const knownRole = [Role.Admin, Role.User, Role.Operator].find(
+    (role) => role.toLowerCase() === normalizedRole,
+  );
+  return {
+    ...EMPTY_USER,
+    name: user.name,
+    email: user.email,
+    role: knownRole ?? (user.role as UserFields['role']),
+    branchId: user.branchId ? String(user.branchId) : '',
+    status: user.status?.toLowerCase() === 'inactive' ? 'Inactive' : 'Active',
+  };
+}
+
 function errorsFromIssues(issues: Array<{ path: PropertyKey[]; message: string }>): UserFormErrors {
   return issues.reduce<UserFormErrors>((errors, issue) => {
     const field = issue.path[0];
@@ -57,18 +87,7 @@ export function UserForm({
   onUpdate?: (fields: UserUpdateFields) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState<UserFormValues>(() => {
-    if (!user) return EMPTY_USER;
-    const knownRole = [Role.Admin, Role.User, Role.Operator].find((role) => role === user.role.toLowerCase());
-    return {
-      ...EMPTY_USER,
-      name: user.name,
-      email: user.email,
-      role: knownRole ?? user.role as UserFields['role'],
-      branchId: user.branchId ?? '',
-      status: user.status?.toLowerCase() === 'inactive' ? 'Inactive' : 'Active',
-    };
-  });
+  const [form, setForm] = useState<UserFormValues>(() => buildInitialUserFormValues(user));
   const [errors, setErrors] = useState<UserFormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -76,7 +95,7 @@ export function UserForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const availableBranches = branches.filter((branch) => (
-    branch.status === 'ACTIVE' || branch.id === user?.branchId
+    branch.status === 'ACTIVE' || String(branch.id) === String(user?.branchId ?? '')
   ));
   const roleOptions = [
     { value: Role.Admin, label: t('roles.admin') },
@@ -92,7 +111,7 @@ export function UserForm({
       const result = user ? userUpdateSchema.safeParse(next) : userFormSchema.safeParse(next);
       setErrors(errorsFromIssues(result.success ? [] : result.error.issues));
     } else {
-      setErrors((current) => ({ ...current, [key]: undefined }));
+      setErrors((current) => clearUserFormFieldError(current, key));
     }
   };
 
@@ -145,6 +164,7 @@ export function UserForm({
   const fieldError = (field: UserFormField) => errors[field]
     ? <p id={`user-${field}-error`} className="text-xs text-destructive">{errors[field]}</p>
     : null;
+  const errorMessages = getUserFormErrorMessages(errors);
   const canSubmit = !isSaving && !isLoadingBranches && !branchesError && availableBranches.length > 0;
 
   return (
@@ -291,7 +311,7 @@ export function UserForm({
                   </SelectTrigger>
                   <SelectContent>
                     {availableBranches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id}>{branch.name} ({branch.code})</SelectItem>
+                      <SelectItem key={String(branch.id)} value={String(branch.id)}>{branch.name} ({branch.code})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -317,11 +337,11 @@ export function UserForm({
           </TabsContent>
         </Tabs>
 
-        {Object.keys(errors).length > 0 && (
+        {errorMessages.length > 0 && (
           <div role="alert" aria-live="polite" className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             <p className="font-medium">{t('users.validation.createBlockedTitle')}</p>
             <ul className="mt-1 list-inside list-disc space-y-0.5">
-              {Object.values(errors).filter((message): message is string => Boolean(message)).map((message) => <li key={message}>{message}</li>)}
+              {errorMessages.map((message) => <li key={message}>{message}</li>)}
             </ul>
           </div>
         )}

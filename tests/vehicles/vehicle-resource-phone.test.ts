@@ -30,6 +30,7 @@ describe('VehicleResource owner phone update', () => {
 							{ Name: 'Operator', isSanchalk: true, Phone: '9800000001' },
 							{ Name: 'Dhani', isDhani: true, Phone: '9800000002' },
 						],
+						metadata: { tags: ['sangh'] },
 					},
 					external_content: { existing: 'kept' },
 				},
@@ -49,8 +50,8 @@ describe('VehicleResource owner phone update', () => {
 			vehicleType: 'Taxi',
 			ownerName: 'Dhani',
 			operatorName: 'Operator',
-			phone: '9800000002',
-			smsPhone: '9800000002',
+			phone: '9800000001',
+			smsPhone: '9800000001',
 			ownerAddress: '',
 			branch: '',
 			fiscalYear: '',
@@ -79,13 +80,18 @@ describe('VehicleResource owner phone update', () => {
 		);
 		assert.equal(updatedBody?.resource_name, 'VehicleResource');
 		assert.deepEqual(updatedBody?.external_content && (updatedBody.external_content as Record<string, unknown>).existing, 'kept');
-		assert.equal(
-			((updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>).smsPhone,
-			'9811111111',
-		);
+		const savedMetadata = (updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>;
+		assert.equal(savedMetadata.smsPhone, '9811111111');
+		assert.deepEqual(savedMetadata.tags, ['sangh', 'sms:9811111111']);
+
+		// Resetting back to main owner phone clears the custom sms:<phone> tag while keeping other tags
+		await updateVehicleSmsPhone(vehicle, { phone: '9800000001' });
+		const resetMetadata = (updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>;
+		assert.equal(resetMetadata.smsPhone, '9800000001');
+		assert.deepEqual(resetMetadata.tags, ['sangh']);
 	});
 
-	it('updates the active SMS phone even if VehicleResource has no owner data', async () => {
+	it('updates the active SMS phone and tag even if VehicleResource has no owner data', async () => {
 		let writeCount = 0;
 		let updatedBody: Record<string, unknown> | undefined;
 		apiClient.get = async <T>(): Promise<T> => ([{
@@ -105,9 +111,8 @@ describe('VehicleResource owner phone update', () => {
 
 		await updateVehicleSmsPhone(vehicle, { phone: '9811111111' });
 		assert.equal(writeCount, 1);
-		assert.equal(
-			((updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>).smsPhone,
-			'9811111111',
-		);
+		const savedMetadata = (updatedBody?.inner_content as Record<string, unknown>).metadata as Record<string, unknown>;
+		assert.equal(savedMetadata.smsPhone, '9811111111');
+		assert.deepEqual(savedMetadata.tags, ['sms:9811111111']);
 	});
 });

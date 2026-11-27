@@ -1,4 +1,6 @@
+import type { UserRecord } from '@/features/administration/users/types/user.types';
 import type { IncomeReportFilters, IncomeReportRow } from '@/features/reports/types/income-report';
+import { matchesReportUserFilter } from '@/features/reports/utils/report-filter-options';
 
 export const INCOME_REPORT_FILTER_KEYS = [
   'fiscalYear',
@@ -28,6 +30,7 @@ export function hasValidIncomeReportDateRange(filters: IncomeReportFilters): boo
 export function filterIncomeReportRows(
   rows: IncomeReportRow[],
   filters: IncomeReportFilters,
+  systemUsers: readonly Pick<UserRecord, 'name' | 'email'>[] = [],
 ): IncomeReportRow[] {
   if (!hasValidIncomeReportDateRange(filters)) return [];
 
@@ -35,7 +38,7 @@ export function filterIncomeReportRows(
     const date = filters.dateBasis === 'billingDate' ? row.billingDate : row.paymentDate;
     return (filters.fiscalYear === 'all' || row.fiscalYear === filters.fiscalYear)
       && (filters.branch === 'all' || row.branchName === filters.branch)
-      && (filters.user === 'all' || row.userName === filters.user)
+      && matchesReportUserFilter(row.userName, filters.user, systemUsers)
       && (filters.feeHead === 'all' || row.feeHeadId === filters.feeHead || row.feeTitle === filters.feeHead)
       && (!filters.dateFrom || date >= filters.dateFrom)
       && (!filters.dateTo || date <= filters.dateTo);

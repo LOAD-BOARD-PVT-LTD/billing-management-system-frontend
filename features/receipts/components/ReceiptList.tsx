@@ -66,7 +66,7 @@ export function ReceiptList() {
 	const [copyCount, setCopyCount] = useState(1);
 	const { printReceipt, printingReceiptId } = usePrintReceipt();
 	const { visibleColumns, applyColumns } = useReceiptColumns();
-	const { filters, updateFilter, clearFilters, filteredRecords, isFiltered } = useReceiptFilters(records, fiscalYear, users);
+	const { filters, updateFilter, flushSearch, clearFilters, filteredRecords, isFiltered } = useReceiptFilters(records, fiscalYear, users);
 
 	const sortedRecords = useMemo(() => {
 		if (!sortDirection) return filteredRecords;
@@ -90,6 +90,9 @@ export function ReceiptList() {
 	const pageRecords = sortedRecords.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 	const updateReceiptFilter = <K extends keyof typeof filters>(key: K, value: (typeof filters)[K]) => {
 		updateFilter(key, value);
+		if (key === 'branch') {
+			updateFilter('user', 'all');
+		}
 		setPage(1);
 	};
 	const printSelectedReceipt = (receipt: ReceiptRecord) => printReceipt(receipt, copyCount);
@@ -171,6 +174,7 @@ export function ReceiptList() {
 				users={users}
 				filters={filters}
 				onUpdate={updateReceiptFilter}
+				onSearchCommit={flushSearch}
 				onClear={() => { clearFilters(); setPage(1); }}
 				isFiltered={isFiltered}
 			/>

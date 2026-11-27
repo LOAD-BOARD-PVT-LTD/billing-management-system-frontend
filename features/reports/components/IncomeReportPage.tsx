@@ -5,6 +5,10 @@ import { AlertCircle, Download, FileDown, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DataTablePagination } from '@/components/data-tables/DataTablePagination';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/auth-context';
+import { useBranches } from '@/features/administration/branches/hooks/useBranches';
+import { useUsers } from '@/features/administration/users/hooks/useUsers';
+import { useBillingRules } from '@/features/billing-rules/hooks/useBillingRules';
 import { IncomeReportColumnMenu } from '@/features/reports/components/IncomeReportColumnMenu';
 import { IncomeReportFilters } from '@/features/reports/components/IncomeReportFilters';
 import { ReportHeader } from '@/features/reports/components/ReportHeader';
@@ -15,6 +19,12 @@ import { useIncomeReportFilters } from '@/features/reports/hooks/use-income-repo
 import { useReportHeaderDetails } from '@/features/reports/hooks/use-report-header-details';
 import { buildAmdaniExportRows, createAmdaniReportTemplate } from '@/features/reports/templates/amdani-report.template';
 import { filterIncomeReportRows, getIncomeReportExportLabel, hasValidIncomeReportDateRange } from '@/features/reports/utils/income-report-filters';
+import {
+  buildReportBranchOptions,
+  buildReportFeeHeadOptions,
+  buildReportFiscalYearOptions,
+  buildReportUserOptions,
+} from '@/features/reports/utils/report-filter-options';
 import { exportReportExcel, exportReportPdf } from '@/shared/report-export';
 import type { IncomeReportFilters as IncomeReportFilterValues, IncomeReportRow } from '@/features/reports/types/income-report';
 import type { SortDirection } from '@/components/data-tables/DataTableColumnHeader';
@@ -55,6 +65,10 @@ function SummaryCard({ label, value, description, accent }: { label: string; val
 }
 
 export function IncomeReportPage() {
+  const { user: authUser } = useAuth();
+  const branchesQuery = useBranches();
+  const usersQuery = useUsers();
+  const billingRules = useBillingRules();
   const { rows, receipts, isLoading, error, reload } = useIncomeReport();
   const { filters, updateFilter, clearFilters, isFiltered } = useIncomeReportFilters();
   const header = useReportHeaderDetails('दैनिक आम्दानी', filters.dateFrom, filters.dateTo);
@@ -67,7 +81,10 @@ export function IncomeReportPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const validDateRange = hasValidIncomeReportDateRange(filters);
 
-  const filteredRows = useMemo(() => filterIncomeReportRows(rows, filters), [rows, filters]);
+  const filteredRows = useMemo(
+    () => filterIncomeReportRows(rows, filters, usersQuery.records),
+    [filters, rows, usersQuery.records],
+  );
   const receiptRows = useMemo(() => {
     const uniqueByReceipt = new Map<string, IncomeReportRow>();
     for (const row of filteredRows) {
@@ -98,16 +115,39 @@ export function IncomeReportPage() {
       .map((row, index) => ({ ...row, displayNumber: (currentPage - 1) * PAGE_SIZE + index + 1 }));
   }, [sortedRows, currentPage]);
 
-  const { fiscalYears, branches, users, feeHeads } = useMemo(() => {
-    const fYears = Array.from(new Set(rows.map((row) => row.fiscalYear).filter(Boolean))).sort();
-    const brs = Array.from(new Set(rows.map((row) => row.branchName).filter(Boolean))).sort();
-    const usrs = Array.from(new Set(rows.map((row) => row.userName).filter(Boolean))).sort();
-    const fHeads = Array.from(new Map(rows
-      .filter((row) => row.feeHeadId)
-      .map((row) => [row.feeHeadId, { value: row.feeHeadId, label: row.feeTitle ? `${row.feeTitle} (${row.feeHeadId})` : row.feeHeadId }])).values())
-      .sort((first, second) => first.label.localeCompare(second.label, 'ne'));
-    return { fiscalYears: fYears, branches: brs, users: usrs, feeHeads: fHeads };
-  }, [rows]);
+  const { fiscalYears, branches, users, feeHeads } = useMemo(() => ({
+    fiscalYears: buildReportFiscalYearOptions({
+      fiscalYears: billingRules.config.fiscalYears,
+      receipts,
+    }),
+    branches: buildReportBranchOptions({
+      receipts,
+      systemBranches: branchesQuery.records,
+      authUser,
+      systemUsers: usersQuery.records,
+    }),
+    users: buildReportUserOptions({
+      receipts,
+      systemUsers: usersQuery.records,
+      systemBranches: branchesQuery.records,
+      selectedBranch: filters.branch,
+    }),
+    feeHeads: buildReportFeeHeadOptions({
+      billingRuleFeeHeads: billingRules.config.feeHeads,
+      fiscalYears: billingRules.config.fiscalYears,
+      receipts,
+      selectedFiscalYear: filters.fiscalYear,
+    }),
+  }), [
+    authUser,
+    billingRules.config.feeHeads,
+    billingRules.config.fiscalYears,
+    branchesQuery.records,
+    filters.branch,
+    filters.fiscalYear,
+    receipts,
+    usersQuery.records,
+  ]);
 
   const totalIncome = useMemo(() => summaryTotal(filteredRows), [filteredRows]);
   const totalTransactions = useMemo(() => summaryTransactions(filteredRows), [filteredRows]);

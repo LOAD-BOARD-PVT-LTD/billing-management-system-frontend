@@ -29,12 +29,12 @@ function createMockBillingVehicle(overrides: Partial<BillingVehicle> = {}): Bill
 		tqmsVehicleTypeId: 'type-bus',
 		vehicleNumber: 'BA 01 KHA 1234',
 		vehicleType: 'Bus',
-		// First is sanchalak (Hari Thapa), second is sawari dhani (Ram Bahadur)
+		// First is sanchalak & main owner contact (Hari Thapa), second is sawari dhani name (Ram Bahadur)
 		operatorName: 'Hari Thapa',
 		ownerName: 'Ram Bahadur',
-		phone: '9841234567',
-		smsPhone: '9841234567',
-		ownerAddress: 'Kathmandu',
+		phone: '9800000000',
+		smsPhone: '9800000000',
+		ownerAddress: 'Lalitpur',
 		branch: 'Lalitpur Branch, Kathmandu Branch',
 		fiscalYear: '2081/82',
 		billingDate: '2026-05-01',
@@ -190,7 +190,7 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(resolved.branch, 'Chitwan Branch');
 		});
 
-		test('when two owners are present: first is sanchalak and second is sawari dhani', () => {
+		test('when two owners are present: first is sanchalak and main contact, second is sawari dhani', () => {
 			const owners = [
 				{
 					Name: 'Sanchalak First Person',
@@ -209,8 +209,8 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			const resolved = resolveVehicleOwners(owners);
 			assert.equal(resolved.sanchalakName, 'Sanchalak First Person'); // First is sanchalak
 			assert.equal(resolved.sawariDhaniName, 'Sawari Dhani Second Person'); // Second is sawari dhani
-			assert.equal(resolved.phone, '9841999999'); // Primary phone is sawari dhani
-			assert.equal(resolved.ownerAddress, 'Kathmandu');
+			assert.equal(resolved.phone, '9801000000'); // Main owner (first) phone
+			assert.equal(resolved.ownerAddress, 'Pokhara'); // Main owner (first) address
 		});
 	});
 
@@ -343,12 +343,12 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(vehicle.tqmsVehicleTypeId, 'type-bus');
 			assert.equal(vehicle.vehicleNumber, 'BA 01 KHA 1234');
 			assert.equal(vehicle.vehicleType, 'Bus');
-			// First is sanchalak, second is sawari dhani
+			// First is sanchalak & main owner contact, second is sawari dhani name
 			assert.equal(vehicle.operatorName, 'Hari Thapa');
 			assert.equal(vehicle.ownerName, 'Ram Bahadur');
-			assert.equal(vehicle.phone, '9841234567');
-			assert.equal(vehicle.smsPhone, '9841234567');
-			assert.equal(vehicle.ownerAddress, 'Kathmandu');
+			assert.equal(vehicle.phone, '9800000000');
+			assert.equal(vehicle.smsPhone, '9800000000');
+			assert.equal(vehicle.ownerAddress, 'Lalitpur');
 		});
 
 		test('respects single owner rule where ownerName and operatorName are identical', () => {
@@ -369,12 +369,19 @@ describe('Vehicle Reconciliation Utility Suite', () => {
 			assert.equal(vehicle.phone, '9841555555');
 		});
 
-		test('uses saved external SMS phone without replacing the TQMS owner phone', () => {
+		test('uses saved external SMS phone or sms tag without replacing the TQMS main owner phone', () => {
 			const resource = createMockResource('res-sms', {}, { smsPhone: '9811111111' });
 			const vehicle = vehicleResourceToBillingVehicle(resource);
 
-			assert.equal(vehicle.phone, '9841234567');
+			assert.equal(vehicle.phone, '9800000000');
 			assert.equal(vehicle.smsPhone, '9811111111');
+
+			const taggedResource = createMockResource('res-sms-tag', {
+				metadata: { tags: ['sangh', 'sms:9822222222'] },
+			});
+			const taggedVehicle = vehicleResourceToBillingVehicle(taggedResource);
+			assert.equal(taggedVehicle.phone, '9800000000');
+			assert.equal(taggedVehicle.smsPhone, '9822222222');
 		});
 	});
 

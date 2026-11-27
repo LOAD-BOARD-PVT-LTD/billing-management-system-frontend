@@ -42,12 +42,24 @@ function collectUniqueOptions(
 
 export function buildReceiptFilterOptions(
   records: readonly Pick<ReceiptRecord, 'branchName' | 'userName'>[],
-  systemBranches: readonly Pick<BranchRecord, 'name'>[] = [],
-  systemUsers: readonly Pick<UserRecord, 'name' | 'email'>[] = [],
+  systemBranches: readonly (Pick<BranchRecord, 'name'> & { id?: string })[] = [],
+  systemUsers: readonly (Pick<UserRecord, 'name' | 'email'> & { branchId?: string | null; branchName?: string | null })[] = [],
+  selectedBranch = 'all',
 ): { branches: string[]; users: string[] } {
   const branches = collectUniqueOptions(
     systemBranches.map((branch) => branch.name),
     records.map((record) => record.branchName),
+  );
+
+  const isBranchScoped = Boolean(selectedBranch && selectedBranch !== 'all');
+  const branchKey = normalizeOptionKey(selectedBranch);
+  const matchingBranchIds = new Set(
+    isBranchScoped
+      ? systemBranches
+        .filter((branch) => normalizeOptionKey(branch.name) === branchKey)
+        .map((branch) => String(branch.id ?? '').trim())
+        .filter(Boolean)
+      : [],
   );
 
   const primaryUserLabels: string[] = [];
@@ -58,15 +70,27 @@ export function buildReceiptFilterOptions(
     const email = user.email.trim();
     const primary = displayName || email;
     if (!isDisplayableOption(primary)) continue;
-    primaryUserLabels.push(primary);
+
     if (displayName && email && normalizeOptionKey(email) !== normalizeOptionKey(displayName)) {
       aliasedEmailKeys.add(normalizeOptionKey(email));
     }
+
+    if (isBranchScoped) {
+      const matchesBranchName = Boolean(user.branchName && normalizeOptionKey(user.branchName) === branchKey);
+      const matchesBranchId = Boolean(user.branchId && matchingBranchIds.has(user.branchId.trim()));
+      if (!matchesBranchName && !matchesBranchId) continue;
+    }
+
+    primaryUserLabels.push(primary);
   }
+
+  const scopedRecords = isBranchScoped
+    ? records.filter((record) => normalizeOptionKey(record.branchName) === branchKey)
+    : records;
 
   const users = collectUniqueOptions(
     primaryUserLabels,
-    records.map((record) => record.userName),
+    scopedRecords.map((record) => record.userName),
     aliasedEmailKeys,
   );
 
